@@ -1,4 +1,4 @@
-# Basic LCD menu support
+﻿# Basic LCD menu support
 #
 # Based on the RaspberryPiLcdMenu from Alan Aufderheide, February 2013
 # Copyright (C) 2018  Janar Sööt <janar.soot@gmail.com>
@@ -10,11 +10,11 @@ class error(Exception):
     pass
 
 class MenuItemBack:
-    def __init__(self):
-        pass
+    def __init__(self, name):
+        self.name = name
     
     def get_name(self):
-        return ".."
+        return self.name
 
 class MenuItemClass:
     def __init__(self, config):
@@ -26,7 +26,7 @@ class MenuItemClass:
 
 class MenuCommand(MenuItemClass):
     def __init__(self, config):
-        super().__init__(config)
+        MenuItemClass.__init__(self, config)
         self.gcode = config.get('gcode', None)
         self.parameter = config.get('parameter', None)
         self.parameter_choice = config.get('parameter_choice', None)
@@ -65,7 +65,7 @@ class MenuCommand(MenuItemClass):
 
 class MenuInput(MenuCommand):
     def __init__(self, config):
-        super().__init__(config)
+        MenuCommand.__init__(self, config)
         self.input_value = None
         self.input_min = config.getfloat('input_min', sys.float_info.min)
         self.input_max = config.getfloat('input_max', sys.float_info.max)
@@ -84,8 +84,9 @@ class MenuInput(MenuCommand):
         args = self.get_format_args()
         if len(args) > 0:
             try:
+                logging.info("args0 type: %s", type(args[0]))
                 self.input_value = float(args[0])
-            except ValueError:
+            except:
                 self.input_value = None
     
     def reset_value(self):
@@ -101,13 +102,13 @@ class MenuInput(MenuCommand):
 
 class MenuGroup(MenuItemClass):
     def __init__(self, config):
-        super().__init__(config)
+        MenuItemClass.__init__(self, config)
         self.items = config.get('items', '')
         self.enter_gcode = config.get('enter_gcode', None)
         self.leave_gcode = config.get('leave_gcode', None)
 
     def get_items(self):
-        list = [MenuItemBack] # always add back as first item        
+        list = [ MenuItemBack('..') ] # always add back as first item
         for name in self.items.split(','):
             list.append(self.manager.lookup_menuitem(name.strip()))
         return list
@@ -132,9 +133,15 @@ class Menu:
         self.current_group = None
         self.printer = config.get_printer()
         self.gcode = self.printer.lookup_object('gcode')
-        self.root = config.get('menu')
+        self.root = config.get('root')
         self.rows = config.getint('rows', 4)
         self.cols = config.getint('cols', 20)
+
+        self.gcode.register_command('MENU_PRINT', self.cmd_MENU_PRINT, desc=self.cmd_MENU_PRINT_help)        
+        self.gcode.register_command('MENU_UP', self.cmd_MENU_UP, desc=self.cmd_MENU_UP_help)        
+        self.gcode.register_command('MENU_DOWN', self.cmd_MENU_DOWN, desc=self.cmd_MENU_DOWN_help)        
+        self.gcode.register_command('MENU_SELECT', self.cmd_MENU_SELECT, desc=self.cmd_MENU_SELECT_help)        
+        self.gcode.register_command('MENU_BEGIN', self.cmd_MENU_BEGIN, desc=self.cmd_MENU_BEGIN_help)        
 
     def is_running(self):
         return self.running
@@ -154,6 +161,9 @@ class Menu:
             obj = self.printer.lookup_object(m)
             if obj is not None:
                 self.info[m] = obj.get_status(eventtime)
+                if m == 'toolhead':
+                    pos = obj.toolhead.get_position()
+                    self.info[m].update({'xpos':pos[0], 'ypos':pos[1], 'zpos':pos[2]})
 
     def push_groupstack(self, group):
         if not isinstance(group, MenuGroup):
@@ -176,7 +186,7 @@ class Menu:
             return self.groupstack[len(self.groupstack)-1]
         return None
 
-    def update(self, eventtime):
+    def update(self):
         lines = []
         if self.running and isinstance(self.current_group, MenuGroup):
             if self.first:
@@ -323,6 +333,27 @@ class Menu:
             raise self.printer.config_error(
                 "Unknown menuitem '%s'" % (name,))
         return self.menuitems[name]
+
+    cmd_MENU_PRINT_help = "menu print screen"
+    def cmd_MENU_PRINT(self, params):
+        for line in self.update():
+            self.gcode.respond_info(line)
+
+    cmd_MENU_BEGIN_help = "menu begin"
+    def cmd_MENU_BEGIN(self, params):
+        self.begin()
+
+    cmd_MENU_UP_help = "menu up"
+    def cmd_MENU_UP(self, params):
+        self.up()
+
+    cmd_MENU_DOWN_help = "menu_down"
+    def cmd_MENU_DOWN(self, params):
+        self.down()
+
+    cmd_MENU_SELECT_help = "menu select"
+    def cmd_MENU_SELECT(self, params):
+        self.select()
 
 def load_config_prefix(config):
     name = " ".join(config.get_name().split()[1:])
