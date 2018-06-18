@@ -4,281 +4,331 @@
 # Copyright (C) 2018  Janar Sööt <janar.soot@gmail.com>
 #
 # This file may be distributed under the terms of the GNU GPLv3 license.
-import logging
+import logging, sys, ast
 
 class error(Exception):
     pass
 
-class MenuActionBack:
-    def __init__(self, name, parent):
-        self.name = name
-        self.parent = parent
+class MenuItemBack:
+    def __init__(self):
+        pass
+    
+    def get_name(self):
+        return ".."
 
-class MenuItem:
+class MenuItemClass:
     def __init__(self, config):
+        self.manager = config.get_printer().lookup_object("menu")
         self.name = config.get('name')
-        self.gcode = config.get('gcode', None)
+    
+    def get_name(self):
+        return self.name
 
-class MenuInput:
+class MenuCommand(MenuItemClass):
     def __init__(self, config):
-        self.name = config.get('name')
+        super().__init__(config)
         self.gcode = config.get('gcode', None)
-        self.input = config.get('input', '')
-        self.value = 0.
-        self.min = config.getfloat('min', 0.)
-        self.max = config.getfloat('max', 0.)
-        self.step = config.getfloat('step', 0.)
+        self.parameter = config.get('parameter', None)
+        self.parameter_choice = config.get('parameter_choice', None)
+        
+    def get_format_args(self, value = None):
+        args = []
+        if self.parameter:            
+            if value is None:
+                value = self.manager.parse_parameter(self.parameter)
+            args.append(value)
+            if self.parameter_choice is not None:
+                list = []
+                try:
+                    list = ast.literal_eval(self.parameter_choice)
+                except:
+                    pass
+                if value in list:
+                    args.append(list[value])
 
-class MenuGroup:
-    def __init__(self, config = None, parent = None):
-        self.parent = parent
-        self.items = []
-        self.name = config.get('name')
+        return args
+
+    def _get_formatted(self, literal, value = None):
+        args = self.get_format_args(value)
+        if type(literal) == str and len(args) > 0:
+            try:
+                literal = literal.format(*args)
+            except:
+                pass
+        return literal
+
+    def get_name(self):
+        return self._get_formatted(self.name)
+
+    def get_gcode(self):
+        return self._get_formatted(self.gcode)
+
+class MenuInput(MenuCommand):
+    def __init__(self, config):
+        super().__init__(config)
+        self.input_value = None
+        self.input_min = config.getfloat('input_min', sys.float_info.min)
+        self.input_max = config.getfloat('input_max', sys.float_info.max)
+        self.input_step = config.getfloat('input_step', 0.)
+    
+    def get_name(self):        
+        return self._get_formatted(self.name, self.input_value)
+
+    def get_gcode(self):
+        return self._get_formatted(self.gcode, self.input_value)
+    
+    def is_editing(self):
+        return self.input_value is not None
+
+    def init_value(self):
+        args = self.get_format_args()
+        if len(args) > 0:
+            try:
+                self.input_value = float(args[0])
+            except ValueError:
+                self.input_value = None
+    
+    def reset_value(self):
+        self.input_value = None
+
+    def inc_value(self):
+        self.input_value += abs(self.input_step) 
+        self.input_value = min(self.input_max, max(self.input_min, self.input_value))
+
+    def dec_value(self):
+        self.input_value -= abs(self.input_step) 
+        self.input_value = min(self.input_max, max(self.input_min, self.input_value))
+
+class MenuGroup(MenuItemClass):
+    def __init__(self, config):
+        super().__init__(config)
+        self.items = config.get('items', '')
         self.enter_gcode = config.get('enter_gcode', None)
         self.leave_gcode = config.get('leave_gcode', None)
 
-def processMenu(config, item, currentItem):
-    thisGroup = None
-    section_name = "menu " + item.strip()
+    def get_items(self):
+        list = [MenuItemBack] # always add back as first item        
+        for name in self.items.split(','):
+            list.append(self.manager.lookup_menuitem(name.strip()))
+        return list
 
-    if config.has_section(section_name):
-        menuConfig = config.getsection(section_name)
-    else:
-        raise config.error("Unable to parse menu '%s'" % (section_name))
+    def get_enter_gcode(self):
+        return self.enter_gcode
 
-    # first item (root)
-    if currentItem is None:
-        currentItem = MenuGroup(menuConfig, None)
-        thisGroup = currentItem
+    def get_leave_gcode(self):
+        return self.leave_gcode
 
-    if isinstance(currentItem, MenuGroup):
-        if(menuConfig.get('items', None) is not None):
-            if thisGroup is None:
-                thisGroup = MenuGroup(menuConfig, currentItem)
-                currentItem.items.append(thisGroup)
-            
-            items =  menuConfig.get('items', '').split(',')
-            if len(items) > 0:
-                thisGroup.items.append(MenuActionBack(thisGroup.name, thisGroup.parent))
-                for name in items:
-                    processMenu(config, name, thisGroup)
+menu_items = { 'command': MenuCommand, 'input': MenuInput, 'group': MenuGroup }
 
-        elif menuConfig.get('input', None) is not None and menuConfig.getfloat('step', 0.) != 0:
-            thisInput = MenuInput(menuConfig)
-            currentItem.items.append(thisInput)
-
-        else:
-            thisItem = MenuItem(menuConfig)
-            currentItem.items.append(thisItem)
-    return currentItem
-
-
-class LCDMenu:
+class Menu:
     def __init__(self, config):
-        self.printer = config.get_printer()
-        self.display = self.printer.lookup_object('display')
-        self.lcd = self.display.lcd_chip
-        self.rows = 4 # should come from display config
-        self.cols = 20 # should come from display config
+        self.first = True
+        self.running = False
+        self.menuitems = {}
+        self.groupstack = []
         self.info = {}
-        # Load printer objects        
+        self.current_top = 0
+        self.current_selected = 0
+        self.current_group = None
+        self.printer = config.get_printer()
         self.gcode = self.printer.lookup_object('gcode')
-        self.toolhead = self.printer.lookup_object('toolhead')
-        self.fan = self.printer.lookup_object('fan', None)
-        self.extruder0 = self.printer.lookup_object('extruder0', None)
-        self.extruder1 = self.printer.lookup_object('extruder1', None)
-        self.heater_bed = self.printer.lookup_object('heater_bed', None)
+        self.root = config.get('menu')
+        self.rows = config.getint('rows', 4)
+        self.cols = config.getint('cols', 20)
 
-        self.prepare()
-
-    def isRunning(self):
+    def is_running(self):
         return self.running
 
-    def updateInfo(self, eventtime):
-        self.info = {
-            'gcode': self.gcode.get_status(eventtime),
-            'toolhead': self.toolhead.get_status(eventtime)
-        }
-        if self.extruder0 is not None:
-            self.info['extruder0'] = self.extruder0.get_status(eventtime)
-        
-        if self.extruder1 is not None:
-            self.info['extruder1'] = self.extruder1.get_status(eventtime)
-        
-        if self.heater_bed is not None:
-            self.info['heater_bed'] = self.heater_bed.get_status(eventtime)
-
-        if self.fan is not None:
-            self.info['fan'] = self.fan.get_status(eventtime)
-
-    def prepare(self,  root = None):
-        self.firstEntry = True
+    def begin(self):
+        self.first = True
         self.running = True
-        self.curGroup = root
-        self.curInput = None
-        self.curTopItem = 0
-        self.curSelectedItem = 0
+        self.groupstack = []        
+        self.current_top = 0
+        self.current_selected = 0
+        self.push_groupstack(self.lookup_menuitem(self.root))
 
-    def update(self, eventtime):        
+    def update_info(self, eventtime):
+        self.info = {}     
+        # Load printer objects
+        for m in ['gcode', 'toolhead', 'fan', 'extruder0', 'extruder1', 'heater_bed']:
+            obj = self.printer.lookup_object(m)
+            if obj is not None:
+                self.info[m] = obj.get_status(eventtime)
 
-        if not isinstance(self.curGroup, MenuGroup):
-	        raise ValueError('Expected resource of type MenuGroup')
+    def push_groupstack(self, group):
+        if not isinstance(group, MenuGroup):
+            raise error("Wrong menuitem type for group, expected MenuGroup")
+        self.groupstack.append(group)            
+        self.current_group = group
 
-        if self.firstEntry is True and self.curGroup.enter_gcode is not None:
-            print "enter gcode:" + self.curGroup.enter_gcode
-            self.firstEntry = False
+    def pop_groupstack(self):
+        if len(self.groupstack) > 0:
+            group = self.groupstack.pop()
+            if not isinstance(group, MenuGroup):
+                raise error("Wrong menuitem type for group, expected MenuGroup")
+            self.current_group = group
+        else:
+            group = None
+        return group
 
-        if self.curTopItem > len(self.curGroup.items) - self.rows:
-            self.curTopItem = len(self.curGroup.items) - self.rows
-        if self.curTopItem < 0:
-            self.curTopItem = 0
+    def peek_groupstack(self):
+        if len(self.groupstack) > 0:
+            return self.groupstack[len(self.groupstack)-1]
+        return None
 
-        y = 0
-        for row in range(self.curTopItem, self.curTopItem + self.rows):
-            str = ""
-            if row < len(self.curGroup.items):
-                if row == self.curSelectedItem:
-                    if isinstance(self.curGroup.items[row], MenuInput) and isinstance(self.curInput, MenuInput):
-                        str += '*'
+    def update(self, eventtime):
+        lines = []
+        if self.running and isinstance(self.current_group, MenuGroup):
+            if self.first:
+                self.run_script(self.current_group.get_enter_gcode())
+                self.first = False
+
+            items = self.current_group.get_items()
+
+            if self.current_top > len(items) - self.rows:
+                self.current_top = len(items) - self.rows
+            if self.current_top < 0:
+                self.current_top = 0
+
+            for row in range(self.current_top, self.current_top + self.rows):
+                str = ""
+                if row < len(items):
+                    if row == self.current_selected:
+                        if isinstance(items[row], MenuInput) and items[row].is_editing():
+                            str += '*'
+                        else:
+                            str += '>'
                     else:
+                        str += ' '
+                    
+                    str += items[row].get_name()[:self.cols-2].ljust(self.cols-2)
+                                
+                    if isinstance(items[row], MenuGroup):
                         str += '>'
-                else:
-                    str += ' '
-
-                try:
-                    if isinstance(self.curGroup.items[row], MenuInput) and isinstance(self.curInput, MenuInput):
-                        name = self.curInput.name.format(self.curInput.value)
-                    elif isinstance(self.curGroup.items[row], MenuInput):
-                        value = self.parseInputFloat(self.curGroup.items[row].input)
-                        name = self.curGroup.items[row].name.format(value)
                     else:
-                        name = self.curGroup.items[row].name.format(**self.info)
-                except:
-                    name = '-----'
-                finally:
-                    str += name[:self.cols-2].ljust(self.cols-2)
-                            
-                if isinstance(self.curGroup.items[row], MenuActionBack):
-                    str += '^'
-                elif isinstance(self.curGroup.items[row], MenuGroup):
-                    str += '>'
-                else:
-                    str += ' '
+                        str += ' '
 
-            self.lcd.write(0, y, str.ljust(self.cols))
-            y += 1
-
-        #self.lcd.update()
+                lines.append(str.ljust(self.cols))
+        return lines
 
     def up(self):
-        if not isinstance(self.curGroup, MenuGroup):
-	        raise ValueError('Expected resource of type MenuGroup')
-
-        if isinstance(self.curInput, MenuInput):
-            self.curInput.value += abs(self.curInput.step) 
-            self.curInput.value = min(self.curInput.max, max(self.curInput.min, self.curInput.value))
-        else:
-            if self.curSelectedItem == 0:
-                return
-            elif self.curSelectedItem > self.curTopItem:
-                self.curSelectedItem -= 1
+        if self.running and isinstance(self.current_group, MenuGroup):
+            item = self.current_group.get_items()[self.current_selected]
+            if isinstance(item, MenuInput) and item.is_editing():
+                item.inc_value()
             else:
-                self.curTopItem -= 1
-                self.curSelectedItem -= 1
+                if self.current_selected == 0:
+                    return
+                elif self.current_selected > self.current_top:
+                    self.current_selected -= 1
+                else:
+                    self.current_top -= 1
+                    self.current_selected -= 1
 
     def down(self):
-        if not isinstance(self.curGroup, MenuGroup):
-	        raise ValueError('Expected resource of type MenuGroup')
-
-        if isinstance(self.curInput, MenuInput):
-            self.curInput.value -= abs(self.curInput.step) 
-            self.curInput.value = min(self.curInput.max, max(self.curInput.min, self.curInput.value))
-        else:
-            if self.curSelectedItem + 1 == len(self.curGroup.items):
-                return
-            elif self.curSelectedItem < self.curTopItem + self.rows - 1:
-                self.curSelectedItem += 1
+        if self.running and isinstance(self.current_group, MenuGroup):
+            items = self.current_group.get_items()
+            if isinstance(items[self.current_selected], MenuInput) and items[self.current_selected].is_editing():
+                items[self.current_selected].dec_value()
             else:
-                self.curTopItem += 1
-                self.curSelectedItem += 1
+                if self.current_selected + 1 == len(items):
+                    return
+                elif self.current_selected < self.current_top + self.rows - 1:
+                    self.current_selected += 1
+                else:
+                    self.current_top += 1
+                    self.current_selected += 1
 
     def back(self):
-        if not isinstance(self.curGroup, MenuGroup):
-	        raise ValueError('Expected resource of type MenuGroup')
-        
-        if isinstance(self.curInput, MenuInput):
-            return
+        if self.running and isinstance(self.current_group, MenuGroup):
+            items = self.current_group.get_items()
+            if isinstance(items[self.current_selected], MenuInput) and items[self.current_selected].is_editing():
+                return
 
-        if isinstance(self.curGroup.parent, MenuGroup):
-            # find the current in the parent
-            itemno = 0
-            index = 0
-            for item in self.curGroup.parent.items:
-                if self.curGroup == item:
-                    index = itemno
+            parent = self.peek_groupstack()
+            if isinstance(parent, MenuGroup):
+                # find the current in the parent
+                itemno = 0
+                index = 0
+                items = parent.get_items()
+                for item in items:
+                    if self.current_group == item:
+                        index = itemno
+                    else:
+                        itemno += 1
+
+                self.run_script(self.current_group.get_leave_gcode())
+                self.pop_groupstack()
+                if index < len(items):
+                    self.current_top = index
+                    self.current_selected = index
                 else:
-                    itemno += 1
-
-            if self.curGroup.leave_gcode is not None:
-                print "leave gcode:" + self.curGroup.leave_gcode
-
-            if index < len(self.curGroup.parent.items):
-                self.curGroup = self.curGroup.parent
-                self.curTopItem = index
-                self.curSelectedItem = index
+                    self.current_top = 0
+                    self.current_selected = 0
+                
+                self.run_script(self.current_group.get_enter_gcode())
             else:
-                self.curGroup = self.curGroup.parent
-                self.curTopItem = 0
-                self.curSelectedItem = 0
-            
-            if self.curGroup.enter_gcode is not None:
-                print "enter gcode:" + self.curGroup.enter_gcode
-        else:
-            if self.curGroup.leave_gcode is not None:
-                print "leave gcode:" + self.curGroup.leave_gcode
-            self.running = False
+                self.run_script(self.current_group.get_leave_gcode())
+                self.running = False
 
     def select(self):
-        if not isinstance(self.curGroup, MenuGroup):
-	        raise ValueError('Expected resource of type MenuGroup')
+        if self.running and isinstance(self.current_group, MenuGroup):
+            items = self.current_group.get_items()
+            if isinstance(items[self.current_selected], MenuGroup):
+                self.run_script(self.current_group.get_leave_gcode())
+                self.push_groupstack(items[self.current_selected])
+                self.current_top = 0
+                self.current_selected = 0
+                self.run_script(self.current_group.get_enter_gcode())
 
-        if isinstance(self.curGroup.items[self.curSelectedItem], MenuGroup):
-            if self.curGroup.leave_gcode is not None:
-                print "leave gcode:" + self.curGroup.leave_gcode
-            self.curGroup = self.curGroup.items[self.curSelectedItem]
-            self.curTopItem = 0
-            self.curSelectedItem = 0
-            if self.curGroup.enter_gcode is not None:
-                print "enter gcode:" + self.curGroup.enter_gcode
+            elif isinstance(items[self.current_selected], MenuInput):
+                if items[self.current_selected].is_editing():
+                    self.run_script(items[self.current_selected].get_gcode())
+                    items[self.current_selected].reset_value()
+                else:
+                    items[self.current_selected].init_value()
 
-        elif isinstance(self.curGroup.items[self.curSelectedItem], MenuInput):
-            if isinstance(self.curInput, MenuInput):
-                if self.curInput.gcode is not None:
-                    print "gcode:" + self.curInput.gcode.format(self.curInput.value)
-                self.curInput.value = 0.
-                self.curInput = None                
-            else:
-                self.curInput = self.curGroup.items[self.curSelectedItem]
-                self.curInput.value = self.parseInputFloat(self.curInput.input)
+            elif isinstance(items[self.current_selected], MenuCommand):
+                self.run_script(items[self.current_selected].get_gcode())
 
-        elif isinstance(self.curGroup.items[self.curSelectedItem], MenuItem):
-            item = self.curGroup.items[self.curSelectedItem]
-            if item.gcode is not None:
-                print "gcode:" + item.gcode
+            elif isinstance(items[self.current_selected], MenuItemBack):
+                self.back()
 
-        elif isinstance(self.curGroup.items[self.curSelectedItem], MenuActionBack):
-            self.back()
+    def run_script(self, script):
+        if script is not None:        
+            try:
+                self.gcode.run_script(script)
+            except:
+                pass
 
-    def parseInputFloat(self, input):
-        value = 0.
-        try:
-            value = float(input)
-        except ValueError:
-            k1,k2 = input.split('.')[:2]
-            if self.info[k1] and self.info[k1][k2]:
-                if type(self.info[k1][k2]) != str:
-                    value = float( self.info[k1][k2] )
+    def parse_parameter(self, parameter):
+        value = None
+        if parameter:
+            try:
+                value = float(parameter)
+            except ValueError:
+                key1, key2 = parameter.split('.')[:2]
+                if key1 and key2 and self.info and key1 in self.info:
+                    value = self.info[key1].get(key2)
         return value
 
+    def add_menuitem(self, name, menu):
+        if name in self.menuitems:
+            raise self.printer.config_error(
+                "Menu object '%s' already created" % (name,))        
+        self.menuitems[name] = menu
+
+    def lookup_menuitem(self, name):
+        if name not in self.menuitems:
+            raise self.printer.config_error(
+                "Unknown menuitem '%s'" % (name,))
+        return self.menuitems[name]
+
+def load_config_prefix(config):
+    name = " ".join(config.get_name().split()[1:])
+    item = config.getchoice('type', menu_items)(config)
+    menu = config.get_printer().lookup_object("menu")
+    menu.add_menuitem(name, item)
+
 def load_config(config):
-    return LCDMenu(config)
+    return Menu(config)
