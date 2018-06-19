@@ -27,26 +27,38 @@ class MenuItemClass:
 class MenuCommand(MenuItemClass):
     def __init__(self, config):
         MenuItemClass.__init__(self, config)
-        self.gcode = config.get('gcode', None)
-        self.parameter = config.get('parameter', None)
-        self.parameter_choice = config.get('parameter_choice', None)
-        
+        self.gcode = config.get('gcode', None)        
+        self.parameter, self.options, self.typecast = self.parse_parameter(config.get('parameter', ''))
+
+    def parse_parameter(self, str = ''):
+        # endstop.xmax@f['OFF','ON']
+        conv = {'f': float, 'i': int, 'b': bool, 's': str}
+        t = str.split('@', 1)
+        p = t[0] if t[0] else None
+        o = None
+        c = None
+        if len(t) > 1 and t[1] and t[1][0] in conv:
+            try:
+                o = ast.literal_eval(t[1][1:])
+                c = conv[t[1][0]]
+            except:
+                pass
+        return [p, o, c]
+
     def get_format_args(self, value = None):
-        args = []
+        option = None
         if self.parameter:            
             if value is None:
-                value = self.manager.parse_parameter(self.parameter)
-            args.append(value)
-            if self.parameter_choice is not None:
-                list = []
-                try:
-                    list = ast.literal_eval(self.parameter_choice)
+                value = self.manager.get_value(self.parameter)
+            if self.options is not None:
+                try:                    
+                    if callable(self.typecast):
+                        option = self.options[self.typecast(value)]
+                    else:
+                        option = self.options[value]
                 except:
                     pass
-                if value in list:
-                    args.append(list[value])
-
-        return args
+        return [value, option]
 
     def _get_formatted(self, literal, value = None):
         args = self.get_format_args(value)
@@ -69,7 +81,7 @@ class MenuInput(MenuCommand):
         self.input_value = None
         self.input_min = config.getfloat('input_min', sys.float_info.min)
         self.input_max = config.getfloat('input_max', sys.float_info.max)
-        self.input_step = config.getfloat('input_step', 0.)
+        self.input_step = config.getfloat('input_step', above=0.)
     
     def get_name(self):        
         return self._get_formatted(self.name, self.input_value)
@@ -311,7 +323,7 @@ class Menu:
             except:
                 pass
 
-    def parse_parameter(self, parameter):
+    def get_value(self, parameter):
         value = None
         if parameter:
             try:
