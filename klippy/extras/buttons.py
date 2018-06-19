@@ -7,10 +7,15 @@ import logging
 
 QUERY_TIME = .005
 
+class error(Exception):
+    pass
+
 class PrinterButtons:
     def __init__(self, config):
         ppins = config.get_printer().lookup_object('pins')
         mcu = None
+        self.last_pressed = []
+        self.button_list = {}
         self.pin_list = []
         for pin in config.get('pins').split(','):
             pin_params = ppins.lookup_pin('digital_in', pin.strip())
@@ -58,13 +63,33 @@ class PrinterButtons:
         # Report via log..
         logging.debug("state: %d: %s (%d %d: %s)", new_count, repr(new_buttons),
                       self.ack_count, params['ack_count'], repr(buttons))
-        out = []
+        out_pins = []
+        out_btns = []
         for b in new_buttons:
             b = ord(b)
-            out.append(','.join([
-                pin for i, (pin, pull_up, invert) in enumerate(self.pin_list)
-                if ((b>>i) & 1) ^ invert]))
-        logging.info("buttons=%s", ' '.join(out))
+            pressed_pins = [pin for i, (pin, pull_up, invert) in enumerate(self.pin_list) if ((b>>i) & 1) ^ invert]
+            pressed_buttons = [k for k, v in self.button_list.items() if v in pressed_pins]
+            self.last_pressed = list(set().union(self.last_pressed, pressed_buttons))
+            out_pins.append(','.join(pressed_pins))
+            out_btns.append(','.join(pressed_buttons))
+        logging.info("buttons_pins=%s", ' '.join(out_pins))
+        logging.info("buttons_btns=%s", ' '.join(out_btns))
+
+    def check_button(self, name):
+        if name not in self.button_list:
+            raise error("Button '%s' is not registered" % (name,))        
+        if name in self.last_pressed:
+            self.last_pressed.remove(name)
+            return True
+        return False
+                        
+    def register_button(self, name, btnpin):
+        if name in self.button_list:
+            raise error("Button '%s' is already registred" % (name,))        
+        if any(btnpin in pin for (pin, pull_up, invert) in self.pin_list):
+            raise error("Pin '%s' is not defined as button" % (btnpin,))
+        
+        self.button_list[name] = btnpin
 
 def load_config(config):
     return PrinterButtons(config)
