@@ -31,9 +31,9 @@ class MenuCommand(MenuItemClass):
         self.parameter, self.options, self.typecast = self.parse_parameter(config.get('parameter', ''))
 
     def parse_parameter(self, str = ''):
-        # endstop.xmax@f['OFF','ON']
+        # endstop.xmax:f['OFF','ON']
         conv = {'f': float, 'i': int, 'b': bool, 's': str}
-        t = str.split('@', 1)
+        t = str.split(':', 1)
         p = t[0] if t[0] else None
         o = None
         c = None
