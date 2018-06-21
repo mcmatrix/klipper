@@ -537,6 +537,7 @@ class PrinterLCD:
         if click_button and self.menu and not self.menu.is_running():
             # lets start and populate the menu items
             self.menu.begin(eventtime)
+            click_button = None
 
         if self.menu and self.menu.is_running():
             need_for_speed = True            
