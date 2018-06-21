@@ -94,9 +94,16 @@ class PrinterButtons:
     def register_button(self, name, btnpin):
         if name in self.button_list:
             raise error("Button '%s' is already registred" % (name,))        
-        if any(btnpin in pin for (pin, pull_up, invert) in self.pin_list):
-            raise error("Pin '%s' is not defined as button" % (btnpin,))        
-        self.button_list[name] = (btnpin, Queue.Queue(1))
+
+        pin_exists = False
+        for pin, pull_up, invert in self.pin_list:
+            if pin == btnpin:
+                pin_exists = True
+                                
+        if pin_exists:
+            self.button_list[name] = (btnpin, Queue.Queue(1))
+        else:
+            raise error("Pin '%s' is not defined as button" % (btnpin,))
 
 def load_config(config):
     return PrinterButtons(config)
