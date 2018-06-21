@@ -20,7 +20,7 @@ class MenuItemClass:
     def __init__(self, config):
         self.manager = config.get_printer().lookup_object("menu")
         self.name = config.get('name')
-        self.enable = config.get('enable')
+        self.enable = config.get('enable', repr(True))
     
     def get_name(self):
         return self.name
