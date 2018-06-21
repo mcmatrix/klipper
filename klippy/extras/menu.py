@@ -20,9 +20,20 @@ class MenuItemClass:
     def __init__(self, config):
         self.manager = config.get_printer().lookup_object("menu")
         self.name = config.get('name')
+        self.enable = config.get('enable')
     
     def get_name(self):
         return self.name
+
+    def is_enabled(self):
+        enabled = False
+        try:
+            enabled = not not ast.literal_eval(self.enable)
+        except:
+            value = self.manager.get_value(self.enable)
+            enabled = not not value
+        return enabled
+         
 
 class MenuCommand(MenuItemClass):
     def __init__(self, config):
@@ -115,15 +126,18 @@ class MenuInput(MenuCommand):
 class MenuGroup(MenuItemClass):
     def __init__(self, config):
         MenuItemClass.__init__(self, config)
-        self.items = config.get('items', '')
+        self.items = []
+        self._items = config.get('items', '')
         self.enter_gcode = config.get('enter_gcode', None)
         self.leave_gcode = config.get('leave_gcode', None)
 
-    def get_items(self):
-        list = [ MenuItemBack('..') ] # always add back as first item
-        for name in self.items.split(','):
-            list.append(self.manager.lookup_menuitem(name.strip()))
-        return list
+    def populate_items(self):
+        self.items = [] # empty list
+        self.items.append(MenuItemBack('..')) # always add back as first item
+        for name in self._items.split(','):
+            item = self.manager.lookup_menuitem(name.strip())
+            if item.is_enabled():
+                self.items.append(item)
 
     def get_enter_gcode(self):
         return self.enter_gcode
@@ -139,7 +153,8 @@ class Menu:
         self.running = False
         self.menuitems = {}
         self.groupstack = []
-        self.info = {}
+        self.info_objs = {}
+        self.info_dict = {}
         self.current_top = 0
         self.current_selected = 0
         self.current_group = None
@@ -148,34 +163,43 @@ class Menu:
         self.root = config.get('root')
         self.rows = config.getint('rows', 4)
         self.cols = config.getint('cols', 20)
-
-        self.gcode.register_command('MENU_PRINT', self.cmd_MENU_PRINT, desc=self.cmd_MENU_PRINT_help)        
-        self.gcode.register_command('MENU_UP', self.cmd_MENU_UP, desc=self.cmd_MENU_UP_help)        
-        self.gcode.register_command('MENU_DOWN', self.cmd_MENU_DOWN, desc=self.cmd_MENU_DOWN_help)        
-        self.gcode.register_command('MENU_SELECT', self.cmd_MENU_SELECT, desc=self.cmd_MENU_SELECT_help)        
-        self.gcode.register_command('MENU_BEGIN', self.cmd_MENU_BEGIN, desc=self.cmd_MENU_BEGIN_help)        
+    
+    def printer_state(self, state):
+        if state == 'ready':
+            # Load printer objects
+            self.info_objs = {}
+            for name in ['gcode', 'toolhead', 'fan', 'extruder0', 'extruder1', 'heater_bed', 'virtual_sdcard']:
+                obj = self.printer.lookup_object(name, None)
+                if obj is not None:
+                    self.info_objs[name] = obj
 
     def is_running(self):
         return self.running
 
-    def begin(self):
+    def begin(self, eventtime):
         self.first = True
         self.running = True
         self.groupstack = []        
         self.current_top = 0
         self.current_selected = 0
         self.push_groupstack(self.lookup_menuitem(self.root))
+        self.update_info(eventtime)
+        self.populate_menu()
+
+    def populate_menu(self):
+        for name, item in self.menuitems:
+            if isinstance(item, MenuGroup):
+                item.populate_items()
 
     def update_info(self, eventtime):
-        self.info = {}     
-        # Load printer objects
-        for m in ['gcode', 'toolhead', 'fan', 'extruder0', 'extruder1', 'heater_bed']:
-            obj = self.printer.lookup_object(m)
-            if obj is not None:
-                self.info[m] = obj.get_status(eventtime)
-                if m == 'toolhead':
-                    pos = obj.toolhead.get_position()
-                    self.info[m].update({'xpos':pos[0], 'ypos':pos[1], 'zpos':pos[2]})
+        self.info_dict = {}        
+        # get info
+        for name, obj in self.info_objs:
+            self.info_dict[name] = obj.get_status(eventtime)
+            # get additional info
+            if name == 'toolhead':
+                pos = obj.toolhead.get_position()
+                self.info_dict[name].update({'xpos':pos[0], 'ypos':pos[1], 'zpos':pos[2]})
 
     def push_groupstack(self, group):
         if not isinstance(group, MenuGroup):
@@ -205,27 +229,25 @@ class Menu:
                 self.run_script(self.current_group.get_enter_gcode())
                 self.first = False
 
-            items = self.current_group.get_items()
-
-            if self.current_top > len(items) - self.rows:
-                self.current_top = len(items) - self.rows
+            if self.current_top > len(self.current_group.items) - self.rows:
+                self.current_top = len(self.current_group.items) - self.rows
             if self.current_top < 0:
                 self.current_top = 0
 
             for row in range(self.current_top, self.current_top + self.rows):
                 str = ""
-                if row < len(items):
+                if row < len(self.current_group.items):
                     if row == self.current_selected:
-                        if isinstance(items[row], MenuInput) and items[row].is_editing():
+                        if isinstance(self.current_group.items[row], MenuInput) and self.current_group.items[row].is_editing():
                             str += '*'
                         else:
                             str += '>'
                     else:
                         str += ' '
                     
-                    str += items[row].get_name()[:self.cols-2].ljust(self.cols-2)
+                    str += self.current_group.items[row].get_name()[:self.cols-2].ljust(self.cols-2)
                                 
-                    if isinstance(items[row], MenuGroup):
+                    if isinstance(self.current_group.items[row], MenuGroup):
                         str += '>'
                     else:
                         str += ' '
@@ -234,10 +256,9 @@ class Menu:
         return lines
 
     def up(self):
-        if self.running and isinstance(self.current_group, MenuGroup):
-            item = self.current_group.get_items()[self.current_selected]
-            if isinstance(item, MenuInput) and item.is_editing():
-                item.inc_value()
+        if self.running and isinstance(self.current_group, MenuGroup):            
+            if isinstance(self.current_group.items[self.current_selected], MenuInput) and self.current_group.items[self.current_selected].is_editing():
+                self.current_group.items[self.current_selected].inc_value()
             else:
                 if self.current_selected == 0:
                     return
@@ -248,12 +269,11 @@ class Menu:
                     self.current_selected -= 1
 
     def down(self):
-        if self.running and isinstance(self.current_group, MenuGroup):
-            items = self.current_group.get_items()
-            if isinstance(items[self.current_selected], MenuInput) and items[self.current_selected].is_editing():
-                items[self.current_selected].dec_value()
+        if self.running and isinstance(self.current_group, MenuGroup):            
+            if isinstance(self.current_group.items[self.current_selected], MenuInput) and self.current_group.items[self.current_selected].is_editing():
+                self.current_group.items[self.current_selected].dec_value()
             else:
-                if self.current_selected + 1 == len(items):
+                if self.current_selected + 1 == len(self.current_group.items):
                     return
                 elif self.current_selected < self.current_top + self.rows - 1:
                     self.current_selected += 1
@@ -263,8 +283,7 @@ class Menu:
 
     def back(self):
         if self.running and isinstance(self.current_group, MenuGroup):
-            items = self.current_group.get_items()
-            if isinstance(items[self.current_selected], MenuInput) and items[self.current_selected].is_editing():
+            if isinstance(self.current_group.items[self.current_selected], MenuInput) and self.current_group.items[self.current_selected].is_editing():
                 return
 
             parent = self.peek_groupstack()
@@ -272,8 +291,7 @@ class Menu:
                 # find the current in the parent
                 itemno = 0
                 index = 0
-                items = parent.get_items()
-                for item in items:
+                for item in parent.items:
                     if self.current_group == item:
                         index = itemno
                     else:
@@ -281,7 +299,7 @@ class Menu:
 
                 self.run_script(self.current_group.get_leave_gcode())
                 self.pop_groupstack()
-                if index < len(items):
+                if index < len(self.current_group.items):
                     self.current_top = index
                     self.current_selected = index
                 else:
@@ -295,25 +313,24 @@ class Menu:
 
     def select(self):
         if self.running and isinstance(self.current_group, MenuGroup):
-            items = self.current_group.get_items()
-            if isinstance(items[self.current_selected], MenuGroup):
+            if isinstance(self.current_group.items[self.current_selected], MenuGroup):
                 self.run_script(self.current_group.get_leave_gcode())
-                self.push_groupstack(items[self.current_selected])
+                self.push_groupstack(self.current_group.items[self.current_selected])
                 self.current_top = 0
                 self.current_selected = 0
                 self.run_script(self.current_group.get_enter_gcode())
 
-            elif isinstance(items[self.current_selected], MenuInput):
-                if items[self.current_selected].is_editing():
-                    self.run_script(items[self.current_selected].get_gcode())
-                    items[self.current_selected].reset_value()
+            elif isinstance(self.current_group.items[self.current_selected], MenuInput):
+                if self.current_group.items[self.current_selected].is_editing():
+                    self.run_script(self.current_group.items[self.current_selected].get_gcode())
+                    self.current_group.items[self.current_selected].reset_value()
                 else:
-                    items[self.current_selected].init_value()
+                    self.current_group.items[self.current_selected].init_value()
 
-            elif isinstance(items[self.current_selected], MenuCommand):
-                self.run_script(items[self.current_selected].get_gcode())
+            elif isinstance(self.current_group.items[self.current_selected], MenuCommand):
+                self.run_script(self.current_group.items[self.current_selected].get_gcode())
 
-            elif isinstance(items[self.current_selected], MenuItemBack):
+            elif isinstance(self.current_group.items[self.current_selected], MenuItemBack):
                 self.back()
 
     def run_script(self, script):
@@ -323,15 +340,16 @@ class Menu:
             except:
                 pass
 
-    def get_value(self, parameter):
+    def get_value(self, literal):
         value = None
-        if parameter:
+        if literal:
             try:
-                value = float(parameter)
+                value = float(literal)
             except ValueError:
-                key1, key2 = parameter.split('.')[:2]
-                if key1 and key2 and self.info and key1 in self.info:
-                    value = self.info[key1].get(key2)
+                key1, key2 = literal.split('.')[:2]
+                if(type(self.info_dict) == dict and key1 and key2 and
+                   key1 in self.info_dict and type(self.info_dict[key1]) == dict):
+                    value = self.info_dict[key1].get(key2)
         return value
 
     def add_menuitem(self, name, menu):
@@ -345,27 +363,6 @@ class Menu:
             raise self.printer.config_error(
                 "Unknown menuitem '%s'" % (name,))
         return self.menuitems[name]
-
-    cmd_MENU_PRINT_help = "menu print screen"
-    def cmd_MENU_PRINT(self, params):
-        for line in self.update():
-            self.gcode.respond_info(line)
-
-    cmd_MENU_BEGIN_help = "menu begin"
-    def cmd_MENU_BEGIN(self, params):
-        self.begin()
-
-    cmd_MENU_UP_help = "menu up"
-    def cmd_MENU_UP(self, params):
-        self.up()
-
-    cmd_MENU_DOWN_help = "menu_down"
-    def cmd_MENU_DOWN(self, params):
-        self.down()
-
-    cmd_MENU_SELECT_help = "menu select"
-    def cmd_MENU_SELECT(self, params):
-        self.select()
 
 def load_config_prefix(config):
     name = " ".join(config.get_name().split()[1:])
