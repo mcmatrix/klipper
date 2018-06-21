@@ -523,22 +523,16 @@ class PrinterLCD:
         self.lcd_chip.clear()
         # check buttons
         if self.buttons:
-            if self.encoder_a_pin:
-                encoder_a = self.buttons.check_button('encoder_a')
-            if self.encoder_b_pin:
-                encoder_b = self.buttons.check_button('encoder_b')
-            if self.click_button_pin:
-                click_button = self.buttons.check_button('click_button')
-            if self.back_button_pin:
-                back_button = self.buttons.check_button('back_button')
-            if self.up_button_pin:
-                up_button = self.buttons.check_button('up_button')
-            if self.down_button_pin:
-                down_button = self.buttons.check_button('down_button')
+            encoder_a = self.buttons.check_button('encoder_a')
+            encoder_b = self.buttons.check_button('encoder_b')
+            click_button = self.buttons.check_button('click_button')
+            back_button = self.buttons.check_button('back_button')
+            up_button = self.buttons.check_button('up_button')
+            down_button = self.buttons.check_button('down_button')
         
         if click_button and self.menu and not self.menu.is_running():
-            self.menu.begin()
-            self.menu.update_info(self, eventtime)
+            # lets start and populate the menu items
+            self.menu.begin(eventtime)
             click_button = None
 
         if self.menu and self.menu.is_running():
@@ -552,7 +546,7 @@ class PrinterLCD:
             elif back_button:
                  self.menu.back()
                 
-            self.menu.update_info(self, eventtime)
+            self.menu.update_info(eventtime)
             for y, line in enumerate(self.menu.update()):
                 self.lcd_chip.write(0, y, line)
         else:
