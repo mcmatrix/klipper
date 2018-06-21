@@ -187,19 +187,32 @@ class Menu:
         self.populate_menu()
 
     def populate_menu(self):
-        for name, item in self.menuitems:
+        for name, item in self.menuitems.items():
             if isinstance(item, MenuGroup):
                 item.populate_items()
 
     def update_info(self, eventtime):
         self.info_dict = {}        
         # get info
-        for name, obj in self.info_objs:
-            self.info_dict[name] = obj.get_status(eventtime)
+        
+        for name, obj in self.info_objs.items():
+            try:
+                self.info_dict[name] = obj.get_status(eventtime)
+            except:
+               self.info_dict[name] = {}
             # get additional info
             if name == 'toolhead':
-                pos = obj.toolhead.get_position()
+                pos = obj.get_position()
                 self.info_dict[name].update({'xpos':pos[0], 'ypos':pos[1], 'zpos':pos[2]})
+            elif name == 'extruder0':
+                info = obj.get_heater().get_status(eventtime)
+                self.info_dict[name].update(info)
+            elif name == 'extruder1':
+                info =  obj.get_heater().get_status(eventtime)
+                self.info_dict[name].update(info)
+            elif name == 'heater_bed':
+                info =  obj.get_heater().get_status(eventtime)
+                self.info_dict[name].update(info)                
 
     def push_groupstack(self, group):
         if not isinstance(group, MenuGroup):
