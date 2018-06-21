@@ -547,7 +547,6 @@ class PrinterLCD:
         if click_button and self.menu and not self.menu.is_running():
             # lets start and populate the menu items
             self.menu.begin(eventtime)
-            click_button = None
 
         if self.menu and self.menu.is_running():
             # todo: encoder
@@ -562,7 +561,7 @@ class PrinterLCD:
                 
             self.menu.update_info(eventtime)
             for y, line in enumerate(self.menu.update()):
-                self.lcd_chip.write(0, y, line)
+                self.lcd_chip.write_text(0, y, line)
         else:
             if self.lcd_type == 'hd44780':
                 self.screen_update_hd44780(eventtime)
