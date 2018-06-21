@@ -182,9 +182,9 @@ class Menu:
         self.groupstack = []        
         self.current_top = 0
         self.current_selected = 0
-        self.push_groupstack(self.lookup_menuitem(self.root))
         self.update_info(eventtime)
         self.populate_menu()
+        self.current_group = self.lookup_menuitem(self.root)
 
     def populate_menu(self):
         for name, item in self.menuitems.items():
@@ -217,15 +217,13 @@ class Menu:
     def push_groupstack(self, group):
         if not isinstance(group, MenuGroup):
             raise error("Wrong menuitem type for group, expected MenuGroup")
-        self.groupstack.append(group)            
-        self.current_group = group
+        self.groupstack.append(group)
 
     def pop_groupstack(self):
         if len(self.groupstack) > 0:
             group = self.groupstack.pop()
             if not isinstance(group, MenuGroup):
                 raise error("Wrong menuitem type for group, expected MenuGroup")
-            self.current_group = group
         else:
             group = None
         return group
@@ -311,7 +309,8 @@ class Menu:
                         itemno += 1
 
                 self.run_script(self.current_group.get_leave_gcode())
-                self.pop_groupstack()
+                #logging.info("pop_stack, parent name %s, stack size %d", parent.name, len(self.groupstack))
+                self.current_group = self.pop_groupstack()
                 if index < len(self.current_group.items):
                     self.current_top = index
                     self.current_selected = index
@@ -328,7 +327,8 @@ class Menu:
         if self.running and isinstance(self.current_group, MenuGroup):
             if isinstance(self.current_group.items[self.current_selected], MenuGroup):
                 self.run_script(self.current_group.get_leave_gcode())
-                self.push_groupstack(self.current_group.items[self.current_selected])
+                self.push_groupstack(self.current_group)
+                self.current_group = self.current_group.items[self.current_selected]
                 self.current_top = 0
                 self.current_selected = 0
                 self.run_script(self.current_group.get_enter_gcode())
