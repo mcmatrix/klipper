@@ -85,10 +85,10 @@ class PrinterButtons:
         press = None
         if name in self.button_list:            
             try:
-                press = self.button_list[name][1].get(False)
+                press = not not self.button_list[name][1].get(False)
                 self.button_list[name][1].task_done()
             except:
-                pass
+                press = False
         return press
                         
     def register_button(self, name, btnpin):
