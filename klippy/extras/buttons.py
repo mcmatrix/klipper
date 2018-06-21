@@ -17,13 +17,15 @@ class PrinterButtons:
         mcu = None
         self.button_list = {}
         self.pin_list = []
+        self.encoder_a_pin = None
+        self.encoder_b_pin = None
+        self.encoder_last_a = None
         for pin in config.get('pins').split(','):
             pin_params = ppins.lookup_pin('digital_in', pin.strip())
             if mcu is not None and pin_params['chip'] != mcu:
                 raise ppins.error("All buttons must be on same mcu")
             mcu = pin_params['chip']
-            self.pin_list.append((pin_params['pin'], pin_params['pullup'],
-                                  pin_params['invert']))
+            self.pin_list.append((pin_params['pin'], pin_params['pullup'], pin_params['invert']))
         self.mcu = mcu
         self.oid = mcu.create_oid()
         mcu.add_config_cmd("config_buttons oid=%d button_count=%d" % (
@@ -67,7 +69,21 @@ class PrinterButtons:
         out_btns = []
         for b in new_buttons:
             b = ord(b)
-            pressed_pins = [pin for i, (pin, pull_up, invert) in enumerate(self.pin_list) if ((b>>i) & 1) ^ invert]
+            pressed_pins = [pin for i, (pin, pull_up, invert) in enumerate(self.pin_list) if ((b>>i) & 1) ^ invert]            
+            # handle encoder
+            if self.encoder_a_pin & self.encoder_b_pin:
+                encoder_a = self.encoder_a_pin in pressed_pins
+                encoder_b = self.encoder_b_pin in pressed_pins
+                try:
+                    if encoder_a != self.encoder_last_a:
+                        if encoder_b != encoder_a:
+                            self.encoder_dir.put(+1, False)
+                        else:
+                            self.encoder_dir.put(-1, False)
+                except:
+                    pass    
+                self.encoder_last_a = encoder_a
+            # handle buttons
             pressed_buttons = []
             for name, (pin, q) in self.button_list.items():        
                 if pin in pressed_pins:
@@ -90,20 +106,40 @@ class PrinterButtons:
             except:
                 press = False
         return press
-                        
-    def register_button(self, name, btnpin):
+    
+    def get_encoder_dir(self):
+        dir = 0
+        try:
+            dir = self.encoder_dir.get(False)
+            self.encoder_dir.task_done()
+        except:
+            pass
+        return dir
+
+    def setup_encoder(self, pin_a, pin_b):
+        if not self.pin_exists(pin_a):
+            raise error("Pin '%s' is not defined as button" % (pin_a,))
+        if not self.pin_exists(pin_b):
+            raise error("Pin '%s' is not defined as button" % (pin_b,))        
+        self.encoder_a_pin = pin_a
+        self.encoder_b_pin = pin_b
+        self.encoder_dir = Queue.Queue(1)
+
+    def pin_exists(self, p):
+        out = False
+        for pin, pull_up, invert in self.pin_list:
+            if pin == p:
+                out = True
+        return out
+
+    def register_button(self, name, pin):
         if name in self.button_list:
             raise error("Button '%s' is already registred" % (name,))        
 
-        pin_exists = False
-        for pin, pull_up, invert in self.pin_list:
-            if pin == btnpin:
-                pin_exists = True
-                                
-        if pin_exists:
-            self.button_list[name] = (btnpin, Queue.Queue(1))
+        if self.pin_exists(pin):
+            self.button_list[name] = (pin, Queue.Queue(1))
         else:
-            raise error("Pin '%s' is not defined as button" % (btnpin,))
+            raise error("Pin '%s' is not defined as button" % (pin,))
 
 def load_config(config):
     return PrinterButtons(config)
