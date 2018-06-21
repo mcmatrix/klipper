@@ -522,6 +522,7 @@ class PrinterLCD:
     def screen_update_event(self, eventtime):
         click_button = back_button = up_button = down_button = None
         encoder_dir = 0
+        need_for_speed = False
         self.lcd_chip.clear()
         # check buttons
         if self.buttons:
@@ -538,7 +539,7 @@ class PrinterLCD:
             self.menu.begin(eventtime)
 
         if self.menu and self.menu.is_running():
-            # todo: encoder
+            need_for_speed = True            
             if up_button or  encoder_dir > 0:
                 self.menu.up()
             elif down_button or encoder_dir < 0:
@@ -552,12 +553,13 @@ class PrinterLCD:
             for y, line in enumerate(self.menu.update()):
                 self.lcd_chip.write_text(0, y, line)
         else:
+            need_for_speed = False
             if self.lcd_type == 'hd44780':
                 self.screen_update_hd44780(eventtime)
             else:
                 self.screen_update_st7920(eventtime)
         self.lcd_chip.flush()
-        return eventtime + .500
+        return eventtime + (.100 if need_for_speed else .500)
     def screen_update_hd44780(self, eventtime):
         lcd_chip = self.lcd_chip
         # Heaters
