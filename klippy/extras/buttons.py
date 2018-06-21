@@ -71,17 +71,21 @@ class PrinterButtons:
             b = ord(b)
             pressed_pins = [pin for i, (pin, pull_up, invert) in enumerate(self.pin_list) if ((b>>i) & 1) ^ invert]            
             # handle encoder
-            if self.encoder_a_pin & self.encoder_b_pin:
+            if self.encoder_a_pin and self.encoder_b_pin:
                 encoder_a = self.encoder_a_pin in pressed_pins
                 encoder_b = self.encoder_b_pin in pressed_pins
-                try:
-                    if encoder_a != self.encoder_last_a:
+                #logging.info("encoder_pins a:%r b:%r last_a:%r", encoder_a, encoder_b, self.encoder_last_a)
+                if encoder_a != self.encoder_last_a:
+                    # Means the knob is rotating
+                    try:
                         if encoder_b != encoder_a:
-                            self.encoder_dir.put(+1, False)
+                            #self.encoder_dir.put(+1, False)
+                            logging.info("encoder: +1")
                         else:
-                            self.encoder_dir.put(-1, False)
-                except:
-                    pass    
+                            #self.encoder_dir.put(-1, False)
+                            logging.info("encoder: -1")
+                    except:
+                        pass    
                 self.encoder_last_a = encoder_a
             # handle buttons
             pressed_buttons = []
