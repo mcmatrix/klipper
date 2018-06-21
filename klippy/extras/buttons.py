@@ -79,10 +79,12 @@ class PrinterButtons:
                     # Means the knob is rotating
                     try:
                         if encoder_b != encoder_a:
-                            #self.encoder_dir.put(+1, False)
+                            # for testing comment queue.put out
+                            self.encoder_dir.put(+1, False)
                             logging.info("encoder: +1")
                         else:
-                            #self.encoder_dir.put(-1, False)
+                            # for testing comment queue.put out
+                            self.encoder_dir.put(-1, False)
                             logging.info("encoder: -1")
                     except:
                         pass    
