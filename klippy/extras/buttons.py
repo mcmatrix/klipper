@@ -83,13 +83,12 @@ class PrinterButtons:
 
     def check_button(self, name):
         press = None
-        if name not in self.button_list:
-            raise error("Button '%s' is not registered" % (name,))        
-        try:
-            press = self.button_list[name][1].get(False)
-            self.button_list[name][1].task_done()
-        except:
-            pass
+        if name in self.button_list:            
+            try:
+                press = self.button_list[name][1].get(False)
+                self.button_list[name][1].task_done()
+            except:
+                pass
         return press
                         
     def register_button(self, name, btnpin):
