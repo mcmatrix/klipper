@@ -472,10 +472,8 @@ class PrinterLCD:
             self.load_glyph(self.FAN2_GLYPH, fan2_icon)
             # register buttons
             if self.buttons:
-                if self.encoder_a_pin:
-                    self.buttons.register_button('encoder_a', self.encoder_a_pin)
-                if self.encoder_b_pin:
-                    self.buttons.register_button('encoder_b', self.encoder_b_pin)
+                if self.encoder_a_pin and self.encoder_b_pin:
+                    self.buttons.setup_encoder(self.encoder_a_pin, self.encoder_b_pin)
                 if self.click_button_pin:
                     self.buttons.register_button('click_button', self.click_button_pin)
                 if self.back_button_pin:
@@ -520,25 +518,16 @@ class PrinterLCD:
         for i in range(1, 15):
             self.lcd_chip.write_graphics(x, y, i, data)
         self.lcd_chip.write_graphics(x, y, 15, [0xff]*width)
-    # Encoder updating
-    def update_encoder(self, encoder_a, encoder_b):  
-        if encoder_a != self.encoder_last_a:
-            if encoder_b != encoder_a:
-                self.encoder_cnt += 1
-            else:
-                self.encoder_cnt -= 1
-            logging.info("encoder_counter=%d", self.encoder_cnt)
-        self.encoder_last_a = encoder_a        
     # Screen updating
     def screen_update_event(self, eventtime):
-        encoder_a = encoder_b = click_button = back_button = up_button = down_button = None
+        click_button = back_button = up_button = down_button = None
+        encoder_dir = 0
         self.lcd_chip.clear()
         # check buttons
         if self.buttons:
+            
             if self.encoder_a_pin and self.encoder_b_pin:
-                encoder_a = self.buttons.check_button('encoder_a')
-                encoder_b = self.buttons.check_button('encoder_b')
-                self.update_encoder(encoder_a, encoder_b)
+                encoder_dir = self.buttons.get_encoder_dir()
             click_button = self.buttons.check_button('click_button')
             back_button = self.buttons.check_button('back_button')
             up_button = self.buttons.check_button('up_button')
@@ -550,9 +539,9 @@ class PrinterLCD:
 
         if self.menu and self.menu.is_running():
             # todo: encoder
-            if up_button:
+            if up_button or  encoder_dir > 0:
                 self.menu.up()
-            elif down_button:
+            elif down_button or encoder_dir < 0:
                  self.menu.down()
             elif click_button:
                  self.menu.select()
