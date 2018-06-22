@@ -19,7 +19,11 @@ class PrinterButtons:
         self.pin_list = []
         self.encoder_a_pin = None
         self.encoder_b_pin = None
-        self.encoder_last_a = None
+        self.encoder_last_a = False
+        self.encoder_last_b = False
+        self.encoder_pos = 0
+        self.encoder_last_pos = 0
+        self.encoder_pos_queue = Queue.Queue(1)
         for pin in config.get('pins').split(','):
             pin_params = ppins.lookup_pin('digital_in', pin.strip())
             if mcu is not None and pin_params['chip'] != mcu:
@@ -76,19 +80,36 @@ class PrinterButtons:
                 encoder_b = self.encoder_b_pin in pressed_pins
                 #logging.info("encoder_pins a:%r b:%r last_a:%r", encoder_a, encoder_b, self.encoder_last_a)
                 if encoder_a != self.encoder_last_a:
-                    # Means the knob is rotating
-                    try:
-                        if encoder_b != encoder_a:
-                            # for testing comment queue.put out
-                            self.encoder_dir.put(+1, False)
-                            logging.info("encoder: +1")
+                    if not encoder_a:
+                        if not encoder_b:
+                            self.encoder_pos -= 1
                         else:
-                            # for testing comment queue.put out
-                            self.encoder_dir.put(-1, False)
-                            logging.info("encoder: -1")
+                            self.encoder_pos += 1
+                    else:
+                        if not encoder_b:
+                            self.encoder_pos += 1
+                        else:
+                            self.encoder_pos -= 1
+
+                if encoder_b != self.encoder_last_b:
+                    if not encoder_b:
+                        if not encoder_a:
+                            self.encoder_pos += 1
+                        else:
+                            self.encoder_pos -= 1
+                    else:
+                        if not encoder_a:
+                            self.encoder_pos -= 1
+                        else:
+                            self.encoder_pos += 1
+                self.encoder_last_a = encoder_a    
+                self.encoder_last_b = encoder_b
+                if self.encoder_pos != self.encoder_last_pos:                    
+                    try:
+                        self.encoder_pos_queue.put(self.encoder_pos, False)
+                        logging.info("encoder pos: %d", self.encoder_pos)
                     except:
                         pass    
-                self.encoder_last_a = encoder_a
             # handle buttons
             pressed_buttons = []
             for name, (pin, q) in self.button_list.items():        
@@ -113,11 +134,11 @@ class PrinterButtons:
                 press = False
         return press
     
-    def get_encoder_dir(self):
+    def get_encoder_pos(self):
         dir = 0
         try:
-            dir = self.encoder_dir.get(False)
-            self.encoder_dir.task_done()
+            dir = self.encoder_pos_queue.get(False)
+            self.encoder_pos_queue.task_done()
         except:
             pass
         return dir
