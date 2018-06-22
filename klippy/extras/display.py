@@ -435,6 +435,7 @@ class PrinterLCD:
         self.encoder_a_pin = config.get('encoder_a_pin', None)
         self.encoder_b_pin = config.get('encoder_b_pin', None)
         self.encoder_resolution = config.getint('encoder_resolution', 2)
+        self.encoder_last_pos = 0
         self.click_button_pin = config.get('click_button_pin', None)
         self.back_button_pin = config.get('back_button_pin', None)
         self.up_button_pin = config.get('up_button_pin', None)
@@ -521,14 +522,13 @@ class PrinterLCD:
     # Screen updating
     def screen_update_event(self, eventtime):
         click_button = back_button = up_button = down_button = None
-        encoder_dir = 0
-        need_for_speed = False
+        encoder_pos = 0
+        refresh_delay = .500
         self.lcd_chip.clear()
         # check buttons
-        if self.buttons:
-            
+        if self.buttons:            
             if self.encoder_a_pin and self.encoder_b_pin:
-                encoder_dir = self.buttons.get_encoder_dir()
+                encoder_pos = self.buttons.get_encoder_pos()
             click_button = self.buttons.check_button('click_button')
             back_button = self.buttons.check_button('back_button')
             up_button = self.buttons.check_button('up_button')
@@ -540,27 +540,28 @@ class PrinterLCD:
             click_button = None
 
         if self.menu and self.menu.is_running():
-            need_for_speed = True            
-            if up_button or  encoder_dir > 0:
+            refresh_delay = .100
+            if up_button or  encoder_pos > self.encoder_last_pos:
                 self.menu.up()
-            elif down_button or encoder_dir < 0:
+            elif down_button or encoder_pos < self.encoder_last_pos:
                  self.menu.down()
             elif click_button:
                  self.menu.select()
             elif back_button:
-                 self.menu.back()
+                 self.menu.back()            
+            self.encoder_last_pos = encoder_pos
                 
             self.menu.update_info(eventtime)
             for y, line in enumerate(self.menu.update()):
                 self.lcd_chip.write_text(0, y, line)
         else:
-            need_for_speed = False
+            refresh_delay = .500
             if self.lcd_type == 'hd44780':
                 self.screen_update_hd44780(eventtime)
             else:
                 self.screen_update_st7920(eventtime)
         self.lcd_chip.flush()
-        return eventtime + (.100 if need_for_speed else .500)
+        return eventtime + refresh_delay
     def screen_update_hd44780(self, eventtime):
         lcd_chip = self.lcd_chip
         # Heaters
