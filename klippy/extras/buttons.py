@@ -5,6 +5,7 @@
 # This file may be distributed under the terms of the GNU GPLv3 license.
 import logging
 import Queue
+from collections import deque
 
 QUERY_TIME = .005
 
@@ -27,7 +28,11 @@ class PrinterButtons:
         self.encoder_pos = 0
         self.encoder_last_bits = 0
         self.encoder_last_pos = 0
-        self.encoder_diff = Queue.Queue(1)
+        self.encoder_steps = Queue.Queue(1)
+        self.encoder_resolution = 1
+        # running average test, keep track of seen values
+        self.encoder_pos_cache = deque(maxlen=10)
+        # setup
         for pin in config.get('pins').split(','):
             pin_params = ppins.lookup_pin('digital_in', pin.strip())
             if mcu is not None and pin_params['chip'] != mcu:
@@ -54,10 +59,6 @@ class PrinterButtons:
         self.mcu.add_config_cmd("buttons_query clock=%d rest_ticks=%d" % (
             clock, rest_ticks), is_init=True)
         self.mcu.register_msg(self.handle_buttons_state, "buttons_state")
-    # Simple low pass filter. filterValue determines smoothness. 0 = off; 0.9999 = max 
-    def encoder_smooth(self, value, last_value, weight = 0.5):
-        weight = min(0.9999, max(0, weight))
-        return int( (value * (1.0 - weight)) + (last_value * weight) )
     def handle_encoder_state(self, encoder_a, encoder_b):
         # 0b00 for no change
         # 0b01 for rotated right (CW)
@@ -65,17 +66,19 @@ class PrinterButtons:
         # 0b11 for invalid transistion        
         encoder_bits = 0
         if encoder_a:
-            encoder_bits |= 0b10
-        if encoder_b:
             encoder_bits |= 0b01
-        
+        if encoder_b:
+            encoder_bits |= 0b10        
         state = self.encoder_decode_tbl[encoder_bits][self.encoder_last_bits]
-        self.encoder_last_bits = encoder_bits            
-
+        self.encoder_last_bits = encoder_bits
         if state == 0b01: # cw
-           self.encoder_pos += 1
+            self.encoder_pos += 1
         if state == 0b10: # ccw
             self.encoder_pos -= 1
+        # use running average to smooth encoder jitter
+        self.encoder_pos_cache.append(self.encoder_pos)
+        return int(sum(self.encoder_pos_cache) / len(self.encoder_pos_cache))
+
     def handle_buttons_state(self, params):        
         # Expand the message ack_count from 8-bit
         ack_count = self.ack_count
@@ -102,16 +105,14 @@ class PrinterButtons:
             pressed_pins = [pin for i, (pin, pull_up, invert) in enumerate(self.pin_list) if ((b>>i) & 1) ^ invert]            
             # handle encoder
             if self.encoder_a_pin and self.encoder_b_pin:
-                self.handle_encoder_state(self.encoder_a_pin in pressed_pins, self.encoder_b_pin in pressed_pins)
-                self.encoder_pos = self.encoder_smooth(self.encoder_pos, self.encoder_last_pos, 0.5)
-                diff = abs(self.encoder_pos) - abs(self.encoder_last_pos)
-                if diff:
-                    logging.info("encoder diff: %d", diff)
+                pos = self.handle_encoder_state(self.encoder_a_pin in pressed_pins, self.encoder_b_pin in pressed_pins)
+                diff = pos - self.encoder_last_pos
+                if abs(diff) >= self.encoder_resolution:
                     try:
-                        self.encoder_diff.put(diff, False)                        
+                        self.encoder_steps.put(int(diff / self.encoder_resolution), False)                        
                     except:
-                        pass    
-                    self.encoder_last_pos = self.encoder_pos
+                        pass
+                    self.encoder_last_pos = pos
             # handle buttons
             pressed_buttons = []
             for name, (pin, q) in self.button_list.items():        
@@ -123,6 +124,7 @@ class PrinterButtons:
                         pass
             out_pins.append(','.join(pressed_pins))
             out_btns.append(','.join(pressed_buttons))
+        
         logging.info("buttons_pins=%s", ' '.join(out_pins))
         logging.info("buttons_btns=%s", ' '.join(out_btns))
 
@@ -136,22 +138,23 @@ class PrinterButtons:
                 press = False
         return press
     
-    def get_encoder_diff(self):
-        diff = 0
+    def get_encoder_steps(self):
+        steps = 0
         try:
-            diff = self.encoder_diff.get(False)
-            self.encoder_diff.task_done()
+            steps = self.encoder_steps.get(False)
+            self.encoder_steps.task_done()
         except:
             pass
-        return diff
+        return steps
 
-    def setup_encoder(self, pin_a, pin_b):
+    def setup_encoder(self, pin_a, pin_b, resolution=1):
         if not self.pin_exists(pin_a):
             raise error("Pin '%s' is not defined as button" % (pin_a,))
         if not self.pin_exists(pin_b):
             raise error("Pin '%s' is not defined as button" % (pin_b,))        
         self.encoder_a_pin = pin_a
         self.encoder_b_pin = pin_b
+        self.encoder_resolution = resolution
         self.encoder_dir = Queue.Queue(1)
 
     def pin_exists(self, p):
