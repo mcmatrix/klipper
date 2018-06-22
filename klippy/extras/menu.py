@@ -107,7 +107,6 @@ class MenuInput(MenuCommand):
         args = self.get_format_args()
         if len(args) > 0:
             try:
-                logging.info("args0 type: %s", type(args[0]))
                 self.input_value = float(args[0])
             except:
                 self.input_value = None
@@ -269,7 +268,7 @@ class Menu:
     def up(self):
         if self.running and isinstance(self.current_group, MenuGroup):            
             if isinstance(self.current_group.items[self.current_selected], MenuInput) and self.current_group.items[self.current_selected].is_editing():
-                self.current_group.items[self.current_selected].inc_value()
+                self.current_group.items[self.current_selected].dec_value()
             else:
                 if self.current_selected == 0:
                     return
@@ -282,7 +281,7 @@ class Menu:
     def down(self):
         if self.running and isinstance(self.current_group, MenuGroup):            
             if isinstance(self.current_group.items[self.current_selected], MenuInput) and self.current_group.items[self.current_selected].is_editing():
-                self.current_group.items[self.current_selected].dec_value()
+                self.current_group.items[self.current_selected].inc_value()
             else:
                 if self.current_selected + 1 == len(self.current_group.items):
                     return
