@@ -517,6 +517,8 @@ class PrinterLCD:
         self.lcd_chip.write_graphics(x, y, 15, [0xff]*width)
     # Screen updating
     def screen_update_event(self, eventtime):
+        encoder_steps = 0
+        click_button = back_button = up_button = down_button = None
         # default refresh rate
         refresh_delay = .500
         self.lcd_chip.clear()
