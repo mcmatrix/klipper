@@ -30,7 +30,7 @@ class MenuItemClass:
         try:
             enabled = not not ast.literal_eval(self.enable)
         except:
-            value = self.manager.get_value(self.enable)
+            value = self.manager.lookup_value(self.enable)
             enabled = not not value
         return enabled
          
@@ -60,7 +60,7 @@ class MenuCommand(MenuItemClass):
         option = None
         if self.parameter:            
             if value is None:
-                value = self.manager.get_value(self.parameter)
+                value = self.manager.lookup_value(self.parameter)
             if self.options is not None:
                 try:                    
                     if callable(self.typecast):
@@ -352,7 +352,7 @@ class Menu:
             except:
                 pass
 
-    def get_value(self, literal):
+    def lookup_value(self, literal):
         value = None
         if literal:
             try:
