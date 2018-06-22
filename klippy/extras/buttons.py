@@ -123,10 +123,8 @@ class PrinterButtons:
                     except:
                         pass
             out_pins.append(','.join(pressed_pins))
-            out_btns.append(','.join(pressed_buttons))
-        
-        logging.info("buttons_pins=%s", ' '.join(out_pins))
-        logging.info("buttons_btns=%s", ' '.join(out_btns))
+            out_btns.append(','.join(pressed_buttons))        
+        logging.debug("buttons: pins=%s ; btns=%s", ' '.join(out_pins), ' '.join(out_btns))
 
     def check_button(self, name):
         press = None
