@@ -27,11 +27,14 @@ class MenuItemClass:
 
     def is_enabled(self):
         enabled = False
-        try:
-            enabled = not not ast.literal_eval(self.enable)
-        except:
-            value = self.manager.lookup_value(self.enable)
-            enabled = not not value
+        if type(self.enable) == str and len(self.enable) > 0:
+            try:
+                enabled = not not ast.literal_eval(self.enable)
+            except:
+                if self.enable[0] == '!': # negation
+                    enabled = not (not not self.manager.lookup_value(self.enable[1:]))
+                else:
+                    enabled = not not self.manager.lookup_value(self.enable)                    
         return enabled
          
 
@@ -203,6 +206,11 @@ class Menu:
             if name == 'toolhead':
                 pos = obj.get_position()
                 self.info_dict[name].update({'xpos':pos[0], 'ypos':pos[1], 'zpos':pos[2]})
+                self.info_dict[name].update({
+                    'is_printing': (self.info_dict[name]['status'] == "Printing"),
+                    'is_ready': (self.info_dict[name]['status'] == "Ready"),
+                    'is_idle': (self.info_dict[name]['status'] == "Idle")
+                })
             elif name == 'extruder0':
                 info = obj.get_heater().get_status(eventtime)
                 self.info_dict[name].update(info)
@@ -232,7 +240,7 @@ class Menu:
             return self.groupstack[len(self.groupstack)-1]
         return None
 
-    def update(self):
+    def update(self, eventtime):
         lines = []
         if self.running and isinstance(self.current_group, MenuGroup):
             if self.first:
