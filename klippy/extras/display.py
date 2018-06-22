@@ -435,15 +435,10 @@ class PrinterLCD:
         self.encoder_a_pin = config.get('encoder_a_pin', None)
         self.encoder_b_pin = config.get('encoder_b_pin', None)
         self.encoder_resolution = config.getint('encoder_resolution', 2)
-        self.encoder_last_pos = 0
-        self.encoder_pos = 0
         self.click_button_pin = config.get('click_button_pin', None)
         self.back_button_pin = config.get('back_button_pin', None)
         self.up_button_pin = config.get('up_button_pin', None)
         self.down_button_pin = config.get('down_button_pin', None)
-        # encoder vars
-        self.encoder_last_a = None
-        self.encoder_cnt = 0        
         # printer objects
         self.buttons = self.menu = self.gcode = self.toolhead = self.sdcard = None
         self.fan = self.extruder0 = self.extruder1 = self.heater_bed = None
@@ -522,16 +517,14 @@ class PrinterLCD:
         self.lcd_chip.write_graphics(x, y, 15, [0xff]*width)
     # Screen updating
     def screen_update_event(self, eventtime):
-        click_button = back_button = up_button = down_button = None
+        # default refresh rate
         refresh_delay = .500
         self.lcd_chip.clear()
+        
         # check buttons
         if self.buttons:            
             if self.encoder_a_pin and self.encoder_b_pin:
-                self.encoder_last_pos = self.encoder_pos
-                self.encoder_pos = self.buttons.get_encoder_pos()
-                if self.encoder_pos is None:
-                    self.encoder_pos = self.encoder_last_pos
+                encoder_diff = self.buttons.get_encoder_diff()
             click_button = self.buttons.check_button('click_button')
             back_button = self.buttons.check_button('back_button')
             up_button = self.buttons.check_button('up_button')
@@ -544,14 +537,19 @@ class PrinterLCD:
 
         if self.menu and self.menu.is_running():
             refresh_delay = .100
-            if up_button or  self.encoder_pos > self.encoder_last_pos:
+            if encoder_diff > 0:
                 self.menu.up()
-            elif down_button or self.encoder_pos < self.encoder_last_pos:
+            if encoder_diff < 0:
+                self.menu.down()
+
+            if up_button:
+                self.menu.up()
+            elif down_button:
                  self.menu.down()
             elif click_button:
                  self.menu.select()
             elif back_button:
-                 self.menu.back()            
+                 self.menu.back()        
                 
             self.menu.update_info(eventtime)
             for y, line in enumerate(self.menu.update()):
