@@ -19,11 +19,15 @@ class PrinterButtons:
         self.pin_list = []
         self.encoder_a_pin = None
         self.encoder_b_pin = None
-        self.encoder_last_a = False
-        self.encoder_last_b = False
+        self.encoder_decode_tbl = (
+            (0b00, 0b10, 0b01, 0b11),
+            (0b01, 0b00, 0b11, 0b10),
+            (0b10, 0b11, 0b00, 0b01),
+            (0b11, 0b01, 0b10, 0b00))
         self.encoder_pos = 0
+        self.encoder_last_bits = 0
         self.encoder_last_pos = 0
-        self.encoder_pos_queue = Queue.Queue(1)
+        self.encoder_diff = Queue.Queue(1)
         for pin in config.get('pins').split(','):
             pin_params = ppins.lookup_pin('digital_in', pin.strip())
             if mcu is not None and pin_params['chip'] != mcu:
@@ -50,7 +54,29 @@ class PrinterButtons:
         self.mcu.add_config_cmd("buttons_query clock=%d rest_ticks=%d" % (
             clock, rest_ticks), is_init=True)
         self.mcu.register_msg(self.handle_buttons_state, "buttons_state")
-    def handle_buttons_state(self, params):
+    # Simple low pass filter. filterValue determines smoothness. 0 = off; 0.9999 = max 
+    def encoder_smooth(self, value, last_value, weight = 0.5):
+        weight = min(0.9999, max(0, weight))
+        return int( (value * (1.0 - weight)) + (last_value * weight) )
+    def handle_encoder_state(self, encoder_a, encoder_b):
+        # 0b00 for no change
+        # 0b01 for rotated right (CW)
+        # 0b10 for rotated left (CCW)
+        # 0b11 for invalid transistion        
+        encoder_bits = 0
+        if encoder_a:
+            encoder_bits |= 0b10
+        if encoder_b:
+            encoder_bits |= 0b01
+        
+        state = self.encoder_decode_tbl[encoder_bits][self.encoder_last_bits]
+        self.encoder_last_bits = encoder_bits            
+
+        if state == 0b01: # cw
+           self.encoder_pos += 1
+        if state == 0b10: # ccw
+            self.encoder_pos -= 1
+    def handle_buttons_state(self, params):        
         # Expand the message ack_count from 8-bit
         ack_count = self.ack_count
         ack_diff = (ack_count - params['ack_count']) & 0xff
@@ -76,40 +102,16 @@ class PrinterButtons:
             pressed_pins = [pin for i, (pin, pull_up, invert) in enumerate(self.pin_list) if ((b>>i) & 1) ^ invert]            
             # handle encoder
             if self.encoder_a_pin and self.encoder_b_pin:
-                encoder_a = self.encoder_a_pin in pressed_pins
-                encoder_b = self.encoder_b_pin in pressed_pins
-                #logging.info("encoder_pins a:%r b:%r last_a:%r", encoder_a, encoder_b, self.encoder_last_a)
-                if encoder_a != self.encoder_last_a:
-                    if not encoder_a:
-                        if not encoder_b:
-                            self.encoder_pos -= 1
-                        else:
-                            self.encoder_pos += 1
-                    else:
-                        if not encoder_b:
-                            self.encoder_pos += 1
-                        else:
-                            self.encoder_pos -= 1
-
-                if encoder_b != self.encoder_last_b:
-                    if not encoder_b:
-                        if not encoder_a:
-                            self.encoder_pos += 1
-                        else:
-                            self.encoder_pos -= 1
-                    else:
-                        if not encoder_a:
-                            self.encoder_pos -= 1
-                        else:
-                            self.encoder_pos += 1
-                self.encoder_last_a = encoder_a    
-                self.encoder_last_b = encoder_b
-                if self.encoder_pos != self.encoder_last_pos:                    
+                self.handle_encoder_state(self.encoder_a_pin in pressed_pins, self.encoder_b_pin in pressed_pins)
+                self.encoder_pos = self.encoder_smooth(self.encoder_pos, self.encoder_last_pos, 0.5)
+                diff = abs(self.encoder_pos) - abs(self.encoder_last_pos)
+                if diff:
+                    logging.info("encoder diff: %d", diff)
                     try:
-                        self.encoder_pos_queue.put(self.encoder_pos, False)
-                        logging.info("encoder pos: %d", self.encoder_pos)
+                        self.encoder_diff.put(diff, False)                        
                     except:
                         pass    
+                    self.encoder_last_pos = self.encoder_pos
             # handle buttons
             pressed_buttons = []
             for name, (pin, q) in self.button_list.items():        
@@ -134,14 +136,14 @@ class PrinterButtons:
                 press = False
         return press
     
-    def get_encoder_pos(self):
-        dir = None
+    def get_encoder_diff(self):
+        diff = 0
         try:
-            dir = self.encoder_pos_queue.get(False)
-            self.encoder_pos_queue.task_done()
+            diff = self.encoder_diff.get(False)
+            self.encoder_diff.task_done()
         except:
             pass
-        return dir
+        return diff
 
     def setup_encoder(self, pin_a, pin_b):
         if not self.pin_exists(pin_a):
