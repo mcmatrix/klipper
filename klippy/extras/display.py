@@ -436,6 +436,7 @@ class PrinterLCD:
         self.encoder_b_pin = config.get('encoder_b_pin', None)
         self.encoder_resolution = config.getint('encoder_resolution', 2)
         self.encoder_last_pos = 0
+        self.encoder_pos = 0
         self.click_button_pin = config.get('click_button_pin', None)
         self.back_button_pin = config.get('back_button_pin', None)
         self.up_button_pin = config.get('up_button_pin', None)
@@ -522,13 +523,15 @@ class PrinterLCD:
     # Screen updating
     def screen_update_event(self, eventtime):
         click_button = back_button = up_button = down_button = None
-        encoder_pos = 0
         refresh_delay = .500
         self.lcd_chip.clear()
         # check buttons
         if self.buttons:            
             if self.encoder_a_pin and self.encoder_b_pin:
-                encoder_pos = self.buttons.get_encoder_pos()
+                self.encoder_last_pos = self.encoder_pos
+                self.encoder_pos = self.buttons.get_encoder_pos()
+                if self.encoder_pos is None:
+                    self.encoder_pos = self.encoder_last_pos
             click_button = self.buttons.check_button('click_button')
             back_button = self.buttons.check_button('back_button')
             up_button = self.buttons.check_button('up_button')
@@ -541,15 +544,14 @@ class PrinterLCD:
 
         if self.menu and self.menu.is_running():
             refresh_delay = .100
-            if up_button or  encoder_pos > self.encoder_last_pos:
+            if up_button or  self.encoder_pos > self.encoder_last_pos:
                 self.menu.up()
-            elif down_button or encoder_pos < self.encoder_last_pos:
+            elif down_button or self.encoder_pos < self.encoder_last_pos:
                  self.menu.down()
             elif click_button:
                  self.menu.select()
             elif back_button:
                  self.menu.back()            
-            self.encoder_last_pos = encoder_pos
                 
             self.menu.update_info(eventtime)
             for y, line in enumerate(self.menu.update()):
