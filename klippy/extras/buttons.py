@@ -135,7 +135,7 @@ class PrinterButtons:
         return press
     
     def get_encoder_pos(self):
-        dir = 0
+        dir = None
         try:
             dir = self.encoder_pos_queue.get(False)
             self.encoder_pos_queue.task_done()
