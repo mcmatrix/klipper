@@ -434,7 +434,7 @@ class PrinterLCD:
         # display buttons
         self.encoder_a_pin = config.get('encoder_a_pin', None)
         self.encoder_b_pin = config.get('encoder_b_pin', None)
-        self.encoder_resolution = config.getint('encoder_resolution', above=0)
+        self.encoder_resolution = config.getint('encoder_resolution', minval=1)
         self.click_button_pin = config.get('click_button_pin', None)
         self.back_button_pin = config.get('back_button_pin', None)
         self.up_button_pin = config.get('up_button_pin', None)
@@ -470,7 +470,7 @@ class PrinterLCD:
             # register buttons
             if self.buttons:
                 if self.encoder_a_pin and self.encoder_b_pin:
-                    self.buttons.setup_encoder(self.encoder_a_pin, self.encoder_b_pin)
+                    self.buttons.setup_encoder(self.encoder_a_pin, self.encoder_b_pin, self.encoder_resolution)
                 if self.click_button_pin:
                     self.buttons.register_button('click_button', self.click_button_pin)
                 if self.back_button_pin:
