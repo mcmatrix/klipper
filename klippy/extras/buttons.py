@@ -124,7 +124,7 @@ class PrinterButtons:
                         pass
             out_pins.append(','.join(pressed_pins))
             out_btns.append(','.join(pressed_buttons))        
-        logging.debug("buttons: pins=%s ; btns=%s", ' '.join(out_pins), ' '.join(out_btns))
+        logging.info("buttons: pins=%s ; buttons=%s", ' '.join(out_pins), ' '.join(out_btns))
 
     def check_button(self, name):
         press = None
