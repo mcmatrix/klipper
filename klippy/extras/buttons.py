@@ -31,7 +31,7 @@ class PrinterButtons:
         self.encoder_steps = Queue.Queue(1)
         self.encoder_resolution = 1
         # running average test, keep track of seen values
-        self.encoder_pos_cache = deque(maxlen=10)
+        self.encoder_pos_cache = deque(maxlen=5)
         # setup
         for pin in config.get('pins').split(','):
             pin_params = ppins.lookup_pin('digital_in', pin.strip())
