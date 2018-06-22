@@ -434,7 +434,7 @@ class PrinterLCD:
         # display buttons
         self.encoder_a_pin = config.get('encoder_a_pin', None)
         self.encoder_b_pin = config.get('encoder_b_pin', None)
-        self.encoder_resolution = config.getint('encoder_resolution', minval=1)
+        self.encoder_resolution = config.getint('encoder_resolution', 1, minval=1)
         self.click_button_pin = config.get('click_button_pin', None)
         self.back_button_pin = config.get('back_button_pin', None)
         self.up_button_pin = config.get('up_button_pin', None)
