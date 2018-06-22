@@ -554,7 +554,7 @@ class PrinterLCD:
                  self.menu.back()        
                 
             self.menu.update_info(eventtime)
-            for y, line in enumerate(self.menu.update()):
+            for y, line in enumerate(self.menu.update(eventtime)):
                 self.lcd_chip.write_text(0, y, line)
         else:
             refresh_delay = .500
