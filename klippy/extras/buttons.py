@@ -20,18 +20,19 @@ class PrinterButtons:
         self.pin_list = []
         self.encoder_a_pin = None
         self.encoder_b_pin = None
-        self.encoder_decode_tbl = (
+        self.encoder_state = (
             (0b00, 0b10, 0b01, 0b11),
             (0b01, 0b00, 0b11, 0b10),
             (0b10, 0b11, 0b00, 0b01),
             (0b11, 0b01, 0b10, 0b00))
-        self.encoder_pos = 0
+        self._encoder_pos = 0 # internal pos
+        self.encoder_pos = 0 # external pos
+        self.encoder_last_pos = 0 # last external pos
         self.encoder_last_bits = 0
-        self.encoder_last_pos = 0
         self.encoder_steps = Queue.Queue(1)
         self.encoder_resolution = 1
         # running average test, keep track of seen values
-        self.encoder_pos_cache = deque(maxlen=5)
+        #self.encoder_pos_cache = deque(maxlen=5)
         # setup
         for pin in config.get('pins').split(','):
             pin_params = ppins.lookup_pin('digital_in', pin.strip())
@@ -63,21 +64,24 @@ class PrinterButtons:
         # 0b00 for no change
         # 0b01 for rotated right (CW)
         # 0b10 for rotated left (CCW)
-        # 0b11 for invalid transistion        
+        # 0b11 for invalid transistion
         encoder_bits = 0
         if encoder_a:
             encoder_bits |= 0b01
         if encoder_b:
-            encoder_bits |= 0b10        
-        state = self.encoder_decode_tbl[encoder_bits][self.encoder_last_bits]
-        self.encoder_last_bits = encoder_bits
-        if state == 0b01: # cw
-            self.encoder_pos += 1
-        if state == 0b10: # ccw
-            self.encoder_pos -= 1
-        # use running average to smooth encoder jitter
-        self.encoder_pos_cache.append(self.encoder_pos)
-        return int(sum(self.encoder_pos_cache) / len(self.encoder_pos_cache))
+            encoder_bits |= 0b10
+        if encoder_bits != self.encoder_last_bits:
+            state = self.encoder_state[encoder_bits][self.encoder_last_bits]            
+            self.encoder_last_bits = encoder_bits        
+            if state == 0b01: # cw
+                self._encoder_pos += 1
+            if state == 0b10: # ccw
+                self._encoder_pos -= 1
+            if encoder_bits == 0b11: # latch                                        
+                self.encoder_pos = self._encoder_pos >> 2
+                # use running average to smooth encoder jitter
+                #self.encoder_pos_cache.append(self._encoder_pos >> 2)
+                #self.encoder_pos = int(sum(self.encoder_pos_cache) / len(self.encoder_pos_cache))        
 
     def handle_buttons_state(self, params):        
         # Expand the message ack_count from 8-bit
@@ -105,14 +109,14 @@ class PrinterButtons:
             pressed_pins = [pin for i, (pin, pull_up, invert) in enumerate(self.pin_list) if ((b>>i) & 1) ^ invert]            
             # handle encoder
             if self.encoder_a_pin and self.encoder_b_pin:
-                pos = self.handle_encoder_state(self.encoder_a_pin in pressed_pins, self.encoder_b_pin in pressed_pins)
-                diff = pos - self.encoder_last_pos
-                if abs(diff) >= self.encoder_resolution:
+                self.handle_encoder_state(self.encoder_a_pin in pressed_pins, self.encoder_b_pin in pressed_pins)
+                diff = self.encoder_pos - self.encoder_last_pos
+                if not self.encoder_steps.full() and abs(diff) >= self.encoder_resolution:
                     try:
                         self.encoder_steps.put(int(diff / self.encoder_resolution), False)                        
                     except:
                         pass
-                    self.encoder_last_pos = pos
+                    self.encoder_last_pos = self.encoder_pos
             # handle buttons
             pressed_buttons = []
             for name, (pin, q) in self.button_list.items():        
