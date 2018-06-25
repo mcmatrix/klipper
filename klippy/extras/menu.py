@@ -217,9 +217,6 @@ class Menu:
             elif name == 'extruder1':
                 info =  obj.get_heater().get_status(eventtime)
                 self.info_dict[name].update(info)
-            elif name == 'heater_bed':
-                info =  obj.get_heater().get_status(eventtime)
-                self.info_dict[name].update(info)                
 
     def push_groupstack(self, group):
         if not isinstance(group, MenuGroup):
