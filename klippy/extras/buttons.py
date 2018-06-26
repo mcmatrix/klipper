@@ -15,7 +15,6 @@ RETRANSMIT_COUNT = 50
 
 class MCU_buttons:
     def __init__(self, printer, mcu):
-        self.printer = printer
         self.reactor = printer.get_reactor()
         self.mcu = mcu
         mcu.add_config_object(self)
@@ -39,9 +38,6 @@ class MCU_buttons:
         self.oid = self.mcu.create_oid()
         self.mcu.add_config_cmd("config_buttons oid=%d button_count=%d" % (
             self.oid, len(self.pin_list)))
-        self.mcu.add_config_cmd(
-            "buttons_query oid=%d clock=0 rest_ticks=0 retransmit_count=0" % (
-                self.oid,), is_init=True)
         for i, (pin, pull_up) in enumerate(self.pin_list):
             self.mcu.add_config_cmd(
                 "buttons_add oid=%d pos=%d pin=%s pull_up=%d" % (
@@ -68,9 +64,11 @@ class MCU_buttons:
         new_count = msg_ack_count + len(buttons) - self.ack_count
         if new_count <= 0:
             return
+        new_buttons = buttons[-new_count:]
+        # Send ack to MCU
         self.ack_cmd.send([self.oid, new_count])
         self.ack_count += new_count
-        new_buttons = buttons[-new_count:]
+        # Call self.handle_button() with this event in main thread
         for b in new_buttons:
             self.reactor.register_async_callback(
                 (lambda e, s=self, b=ord(b): s.handle_button(e, b)))
@@ -92,6 +90,7 @@ class PrinterButtons:
         self.printer = config.get_printer()
         self.mcu_buttons = {}
     def register_button(self, pins, callback):
+        # Parse pins
         ppins = self.printer.lookup_object('pins')
         mcu = mcu_name = None
         pin_params_list = []
@@ -102,6 +101,7 @@ class PrinterButtons:
             mcu = pin_params['chip']
             mcu_name = pin_params['chip_name']
             pin_params_list.append(pin_params)
+        # Register pins and callback with the appropriate MCU
         mcu_buttons = self.mcu_buttons.get(mcu_name)
         if (mcu_buttons is None
             or len(mcu_buttons.pin_list) + len(pin_params_list) > 8):
@@ -131,6 +131,7 @@ class RotaryEncoder:
             self.next_callback = self.cw_callback
         elif self.next_callback is not None:
             self.next_callback(eventtime)
+            self.next_callback = None
 
 
 ######################################################################
@@ -159,13 +160,24 @@ class PrinterButtonGCode:
             RotaryEncoder(config, pin1.strip(), pin2.strip(),
                           self.cw_callback, self.ccw_callback)
         self.gcode = printer.lookup_object('gcode')
+    def run_script(self, script):
+        for line in script.split('\n'):
+            while 1:
+                try:
+                    res = self.gcode.process_batch(line)
+                except:
+                    logging.exception("gcode button dispatch")
+                    break
+                if res:
+                    break
+                self.reactor.pause(self.reactor.monotonic() + 0.100)
     def button_callback(self, eventtime, state):
         if state:
-            self.gcode.run_script(self.button_gcode)
+            self.run_script(self.button_gcode)
     def cw_callback(self, eventtime):
-        self.gcode.run_script(self.encoder_cw_gcode)
+        self.run_script(self.encoder_cw_gcode)
     def ccw_callback(self, eventtime):
-        self.gcode.run_script(self.encoder_ccw_gcode)
+        self.run_script(self.encoder_ccw_gcode)
 
 
 ######################################################################
