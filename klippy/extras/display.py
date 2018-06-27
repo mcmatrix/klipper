@@ -460,7 +460,7 @@ class PrinterLCD:
         self.reactor = self.printer.get_reactor()
         self.lcd_chip = config.getchoice('lcd_type', LCD_chips)(config)
         self.lcd_type = config.get('lcd_type')
-        self.encoder_status = R_START
+        self.encoder_state = R_START
         # display buttons
         self.encoder_pins = config.get('encoder_pins', None)
         self.click_pin = config.get('click_pin', None)
