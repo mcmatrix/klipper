@@ -702,21 +702,21 @@ class PrinterLCD:
             elif (self.encoder_state & R_DIR_MSK) == R_DIR_CCW:
                 if self.menu:
                     self.menu.down()
-    def click_callback(self, eventtime):
-        if self.click_pin:
+    def click_callback(self, eventtime, state):
+        if state and self.click_pin:
             if self.menu and not self.menu.is_running():
                 # lets start and populate the menu items
                 self.menu.begin(eventtime)
             elif self.menu and self.menu.is_running():
                 self.menu.select()        
-    def back_callback(self, eventtime):
-        if self.back_pin and self.menu:
+    def back_callback(self, eventtime, state):
+        if state and self.back_pin and self.menu:
             self.menu.back()
-    def up_callback(self, eventtime):
-        if self.up_pin and self.menu:
+    def up_callback(self, eventtime, state):
+        if state and self.up_pin and self.menu:
             self.menu.up()
-    def down_callback(self, eventtime):
-        if self.down_pin and self.menu:
+    def down_callback(self, eventtime, state):
+        if state and self.down_pin and self.menu:
             self.menu.down()
 def load_config(config):
     return PrinterLCD(config)
