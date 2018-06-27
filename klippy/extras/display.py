@@ -418,6 +418,35 @@ feedrate_icon = [
     0b0000000000000000
 ]
 
+# Rotary encoder handler https://github.com/brianlow/Rotary
+# Copyright 2011 Ben Buxton (bb@cactii.net). Licenced under the GNU GPL Version 3.
+R_START     = 0x0
+R_CW_FINAL  = 0x1
+R_CW_BEGIN  = 0x2
+R_CW_NEXT   = 0x3
+R_CCW_BEGIN = 0x4
+R_CCW_FINAL = 0x5
+R_CCW_NEXT  = 0x6
+R_DIR_CW    = 0x10
+R_DIR_CCW   = 0x20
+R_DIR_MSK   = 0x30
+# Use the full-step state table (emits a code at 00 only)
+ENCODER_STATES = (
+  # R_START
+  (R_START,    R_CW_BEGIN,  R_CCW_BEGIN, R_START),
+  # R_CW_FINAL
+  (R_CW_NEXT,  R_START,     R_CW_FINAL,  R_START | R_DIR_CW),
+  # R_CW_BEGIN
+  (R_CW_NEXT,  R_CW_BEGIN,  R_START,     R_START),
+  # R_CW_NEXT
+  (R_CW_NEXT,  R_CW_BEGIN,  R_CW_FINAL,  R_START),
+  # R_CCW_BEGIN
+  (R_CCW_NEXT, R_START,     R_CCW_BEGIN, R_START),
+  # R_CCW_FINAL
+  (R_CCW_NEXT, R_CCW_FINAL, R_START,     R_START | R_DIR_CCW),
+  # R_CCW_NEXT
+  (R_CCW_NEXT, R_CCW_FINAL, R_CCW_BEGIN, R_START)
+)
 
 ######################################################################
 # LCD screen updates
@@ -431,17 +460,33 @@ class PrinterLCD:
         self.reactor = self.printer.get_reactor()
         self.lcd_chip = config.getchoice('lcd_type', LCD_chips)(config)
         self.lcd_type = config.get('lcd_type')
+        self.encoder_status = R_START
         # display buttons
-        self.encoder_a_pin = config.get('encoder_a_pin', None)
-        self.encoder_b_pin = config.get('encoder_b_pin', None)
-        self.encoder_resolution = config.getint('encoder_resolution', 1, minval=1)
-        self.click_button_pin = config.get('click_button_pin', None)
-        self.back_button_pin = config.get('back_button_pin', None)
-        self.up_button_pin = config.get('up_button_pin', None)
-        self.down_button_pin = config.get('down_button_pin', None)
+        self.encoder_pins = config.get('encoder_pins', None)
+        self.click_pin = config.get('click_pin', None)
+        self.back_pin = config.get('back_pin', None)
+        self.up_pin = config.get('up_pin', None)
+        self.down_pin = config.get('down_pin', None)
         # printer objects
-        self.buttons = self.menu = self.gcode = self.toolhead = self.sdcard = None
+        self.buttons = self.printer.try_load_module(config, "buttons")
+        self.menu = self.gcode = self.toolhead = self.sdcard = None
         self.fan = self.extruder0 = self.extruder1 = self.heater_bed = None
+        # register buttons & encoder
+        if self.buttons:
+            if self.encoder_pins:
+                try:
+                    pin1, pin2 = self.encoder_pins.split(',')                        
+                except:
+                    raise config.error("Unable to parse encoder_pins")
+                self.buttons.register_button([pin1, pin2], self.encoder_callback)
+            if self.click_pin:
+                self.buttons.register_button([self.click_pin], self.click_callback)
+            if self.back_pin:
+                self.buttons.register_button([self.back_pin], self.back_callback)
+            if self.up_pin:
+                self.buttons.register_button([self.up_pin], self.up_callback)
+            if self.down_pin:
+                self.buttons.register_button([self.down_pin], self.down_callback)
         # screen updating
         self.screen_update_timer = self.reactor.register_timer(
             self.screen_update_event)
@@ -458,7 +503,6 @@ class PrinterLCD:
             self.extruder0 = self.printer.lookup_object('extruder0', None)
             self.extruder1 = self.printer.lookup_object('extruder1', None)
             self.heater_bed = self.printer.lookup_object('heater_bed', None)
-            self.buttons = self.printer.lookup_object('buttons', None)
             self.menu = self.printer.lookup_object('menu', None)
             self.progress = None
             self.gcode.register_command('M73', self.cmd_M73)
@@ -467,18 +511,6 @@ class PrinterLCD:
             self.load_glyph(self.BED2_GLYPH, heat2_icon)
             self.load_glyph(self.FAN1_GLYPH, fan1_icon)
             self.load_glyph(self.FAN2_GLYPH, fan2_icon)
-            # register buttons
-            if self.buttons:
-                if self.encoder_a_pin and self.encoder_b_pin:
-                    self.buttons.setup_encoder(self.encoder_a_pin, self.encoder_b_pin, self.encoder_resolution)
-                if self.click_button_pin:
-                    self.buttons.register_button('click_button', self.click_button_pin)
-                if self.back_button_pin:
-                    self.buttons.register_button('back_button', self.back_button_pin)
-                if self.up_button_pin:
-                    self.buttons.register_button('up_button', self.up_button_pin)
-                if self.down_button_pin:
-                    self.buttons.register_button('down_button', self.down_button_pin)                    
             # Start screen update timer
             self.reactor.update_timer(self.screen_update_timer, self.reactor.NOW)
     # ST7920 Glyphs
@@ -517,42 +549,13 @@ class PrinterLCD:
         self.lcd_chip.write_graphics(x, y, 15, [0xff]*width)
     # Screen updating
     def screen_update_event(self, eventtime):
-        encoder_steps = 0
-        click_button = back_button = up_button = down_button = None
         # default refresh rate
         refresh_delay = .500
         self.lcd_chip.clear()
         
-        # check buttons
-        if self.buttons:            
-            if self.encoder_a_pin and self.encoder_b_pin:
-                encoder_steps = self.buttons.get_encoder_steps()
-            click_button = self.buttons.check_button('click_button')
-            back_button = self.buttons.check_button('back_button')
-            up_button = self.buttons.check_button('up_button')
-            down_button = self.buttons.check_button('down_button')
-        
-        if click_button and self.menu and not self.menu.is_running():
-            # lets start and populate the menu items
-            self.menu.begin(eventtime)
-            click_button = None
-
+        # check menu
         if self.menu and self.menu.is_running():
-            refresh_delay = .100
-            if encoder_steps > 0:
-                self.menu.up()
-            if encoder_steps < 0:
-                self.menu.down()
-
-            if up_button:
-                self.menu.up()
-            elif down_button:
-                 self.menu.down()
-            elif click_button:
-                 self.menu.select()
-            elif back_button:
-                 self.menu.back()        
-                
+            refresh_delay = .100                
             self.menu.update_info(eventtime)
             for y, line in enumerate(self.menu.update(eventtime)):
                 self.lcd_chip.write_text(0, y, line)
@@ -688,6 +691,32 @@ class PrinterLCD:
     # print progress: M73 P<percent>
     def cmd_M73(self, params):
         self.progress = self.gcode.get_int('P', params, minval=0, maxval=100)
-
+    # buttons & encoder callbacks
+    def encoder_callback(self, eventtime, state):
+        if self.encoder_pins:
+            # Determine new state from the pins and state table.
+            self.encoder_state = ENCODER_STATES[self.encoder_state & 0xf][state & 0x3]
+            if (self.encoder_state & R_DIR_MSK) == R_DIR_CW:
+                if self.menu:
+                    self.menu.up()
+            elif (self.encoder_state & R_DIR_MSK) == R_DIR_CCW:
+                if self.menu:
+                    self.menu.down()
+    def click_callback(self, eventtime):
+        if self.click_pin:
+            if self.menu and not self.menu.is_running():
+                # lets start and populate the menu items
+                self.menu.begin(eventtime)
+            elif self.menu and self.menu.is_running():
+                self.menu.select()        
+    def back_callback(self, eventtime):
+        if self.back_pin and self.menu:
+            self.menu.back()
+    def up_callback(self, eventtime):
+        if self.up_pin and self.menu:
+            self.menu.up()
+    def down_callback(self, eventtime):
+        if self.down_pin and self.menu:
+            self.menu.down()
 def load_config(config):
     return PrinterLCD(config)
