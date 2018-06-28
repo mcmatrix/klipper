@@ -362,9 +362,11 @@ class Menu:
                 while 1:
                     try:
                         res = self.gcode.process_batch(line)
-                    except:
-                        logging.exception("gcode menu dispatch")
+                    except self.gcode.error as e:
                         break
+                    except:
+                        logging.exception("menu dispatch")
+                        break                        
                     if res:
                         break
                     self.reactor.pause(self.reactor.monotonic() + 0.100)
