@@ -8,41 +8,12 @@
 # This file may be distributed under the terms of the GNU GPLv3 license.
 import logging
 import hd44780, st7920, uc1701, icons, menu
+from buttons import RotaryEncoder
 
 LCD_chips = { 'st7920': st7920.ST7920, 'hd44780': hd44780.HD44780, 'uc1701' : uc1701.UC1701 }
 M73_TIMEOUT = 5.
 MENU_UPDATE_DELAY = .100
 DEFAULT_UPDATE_DELAY = .500
-
-# Rotary encoder handler https://github.com/brianlow/Rotary
-# Copyright 2011 Ben Buxton (bb@cactii.net). Licenced under the GNU GPL Version 3.
-R_START     = 0x0
-R_CW_FINAL  = 0x1
-R_CW_BEGIN  = 0x2
-R_CW_NEXT   = 0x3
-R_CCW_BEGIN = 0x4
-R_CCW_FINAL = 0x5
-R_CCW_NEXT  = 0x6
-R_DIR_CW    = 0x10
-R_DIR_CCW   = 0x20
-R_DIR_MSK   = 0x30
-# Use the full-step state table (emits a code at 00 only)
-ENCODER_STATES = (
-  # R_START
-  (R_START,    R_CW_BEGIN,  R_CCW_BEGIN, R_START),
-  # R_CW_FINAL
-  (R_CW_NEXT,  R_START,     R_CW_FINAL,  R_START | R_DIR_CW),
-  # R_CW_BEGIN
-  (R_CW_NEXT,  R_CW_BEGIN,  R_START,     R_START),
-  # R_CW_NEXT
-  (R_CW_NEXT,  R_CW_BEGIN,  R_CW_FINAL,  R_START),
-  # R_CCW_BEGIN
-  (R_CCW_NEXT, R_START,     R_CCW_BEGIN, R_START),
-  # R_CCW_FINAL
-  (R_CCW_NEXT, R_CCW_FINAL, R_START,     R_START | R_DIR_CCW),
-  # R_CCW_NEXT
-  (R_CCW_NEXT, R_CCW_FINAL, R_CCW_BEGIN, R_START)
-)
 
 class PrinterLCD:
     def __init__(self, config):
@@ -63,14 +34,13 @@ class PrinterLCD:
         self.gcode = self.toolhead = self.sdcard = None
         self.fan = self.extruder0 = self.extruder1 = self.heater_bed = None
         # register buttons & encoder
-        self.encoder_state = R_START
         if self.buttons:
             if self.encoder_pins:
                 try:
                     pin1, pin2 = self.encoder_pins.split(',')
                 except:
                     raise config.error("Unable to parse encoder_pins")
-                self.buttons.register_button([pin1, pin2], self.encoder_callback)
+                RotaryEncoder(config, pin1.strip(), pin2.strip(), self.encoder_cw_callback, self.encoder_ccw_callback)
             if self.click_pin:
                 self.buttons.register_button([self.click_pin], self.click_callback)
             if self.back_pin:
@@ -314,14 +284,6 @@ class PrinterLCD:
             status = "X%-4.0fY%-4.0fZ%-5.2f" % (pos[0], pos[1], pos[2])
         self.lcd_chip.write_text(x, y, status)
     # buttons & encoder callbacks
-    def encoder_callback(self, eventtime, state):
-        if self.encoder_pins:
-            # Determine new state from the pins and state table.
-            self.encoder_state = ENCODER_STATES[self.encoder_state & 0xf][state & 0x3]
-            if (self.encoder_state & R_DIR_MSK) == R_DIR_CW:
-                self.encoder_cw_callback(eventtime)
-            elif (self.encoder_state & R_DIR_MSK) == R_DIR_CCW:
-                self.encoder_ccw_callback(eventtime)
     def encoder_cw_callback(self, eventtime):
         if self.menu:
             self.menu.up()
