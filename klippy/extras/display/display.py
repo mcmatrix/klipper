@@ -28,7 +28,8 @@ class PrinterLCD:
         self.click_pin = config.get('click_pin', None)
         self.back_pin = config.get('back_pin', None)
         self.up_pin = config.get('up_pin', None)
-        self.down_pin = config.get('down_pin', None)        
+        self.down_pin = config.get('down_pin', None)
+        self.kill_pin = config.get('kill_pin', None)
         # printer objects
         self.buttons = self.printer.try_load_module(config, "buttons")
         self.gcode = self.toolhead = self.sdcard = None
@@ -49,6 +50,8 @@ class PrinterLCD:
                 self.buttons.register_button([self.up_pin], self.up_callback)
             if self.down_pin:
                 self.buttons.register_button([self.down_pin], self.down_callback)
+            if self.kill_pin:
+                self.buttons.register_button([self.kill_pin], self.kill_callback)
         # screen updating
         self.screen_update_timer = self.reactor.register_timer(
             self.screen_update_event)
@@ -307,7 +310,10 @@ class PrinterLCD:
             self.menu.up()
     def down_callback(self, eventtime, state):
         if state and self.down_pin and self.menu:
-            self.menu.down()        
+            self.menu.down()
+    def kill_callback(self, eventtime, state):
+        if state and self.kill_pin:
+            self.printer.invoke_shutdown("Printer halted!")
     def set_message(self, msg, msg_time=None):
         self.message = msg
         self.msg_time = msg_time
