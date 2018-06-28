@@ -163,6 +163,7 @@ class Menu:
         self.current_selected = 0
         self.current_group = None
         self.printer = config.get_printer()
+        self.reactor = self.printer.get_reactor()
         self.gcode = self.printer.lookup_object('gcode')
         self.root = config.get('root')
         dims = config.getchoice('lcd_type', LCD_dims)
@@ -357,10 +358,16 @@ class Menu:
 
     def run_script(self, script):
         if script is not None:        
-            try:
-                self.gcode.run_script(script)
-            except:
-                pass
+            for line in script.split('\n'):
+                while 1:
+                    try:
+                        res = self.gcode.process_batch(line)
+                    except:
+                        logging.exception("gcode menu dispatch")
+                        break
+                    if res:
+                        break
+                    self.reactor.pause(self.reactor.monotonic() + 0.100)
 
     def lookup_value(self, literal):
         value = None
