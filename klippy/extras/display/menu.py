@@ -161,6 +161,8 @@ class Menu:
         self.info_dict = {}
         self.current_top = 0
         self.current_selected = 0
+        self.next_blinktime = 0
+        self.blink_state = True
         self.current_group = None
         self.printer = config.get_printer()
         self.reactor = self.printer.get_reactor()
@@ -242,8 +244,15 @@ class Menu:
         if len(self.groupstack) > 0:
             return self.groupstack[len(self.groupstack)-1]
         return None
+    
+    # toggle blink
+    def update_blink(self, eventtime):
+        if eventtime > self.next_blinktime:
+            self.blink_state = not self.blink_state
+            self.next_blinktime = eventtime + (0.200 if self.blink_state else 0.500)
 
     def update(self, eventtime):
+        self.update_blink(eventtime)
         lines = []
         if self.running and isinstance(self.current_group, MenuGroup):
             if self.first:
@@ -260,14 +269,17 @@ class Menu:
                 if row < len(self.current_group.items):
                     if row == self.current_selected:
                         if isinstance(self.current_group.items[row], MenuInput) and self.current_group.items[row].is_editing():
-                            str += '*'
+                            if self.blink_state:
+                                str += ' '
+                            else:     
+                                str += '*'
                         else:
                             str += '>'
                     else:
                         str += ' '
                     
                     str += self.current_group.items[row].get_name()[:self.cols-2].ljust(self.cols-2)
-                                
+
                     if isinstance(self.current_group.items[row], MenuGroup):
                         str += '>'
                     else:
