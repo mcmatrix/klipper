@@ -57,6 +57,8 @@ class PrinterLCD:
     def printer_state(self, state):
         if state == 'ready':
             self.lcd_chip.init()
+            # Menu
+            self.menu.printer_state(state)
             # Load printer objects
             self.gcode = self.printer.lookup_object('gcode')
             self.toolhead = self.printer.lookup_object('toolhead')
