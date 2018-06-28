@@ -17,8 +17,8 @@ class MenuItemBack:
         return self.name
 
 class MenuItemClass:
-    def __init__(self, config):
-        self.manager = config.get_printer().lookup_object("menu")
+    def __init__(self, menu, config):
+        self.menu = menu
         self.name = config.get('name')
         self.enable = config.get('enable', repr(True))
     
@@ -32,15 +32,15 @@ class MenuItemClass:
                 enabled = not not ast.literal_eval(self.enable)
             except:
                 if self.enable[0] == '!': # negation
-                    enabled = not (not not self.manager.lookup_value(self.enable[1:]))
+                    enabled = not (not not self.menu.lookup_value(self.enable[1:]))
                 else:
-                    enabled = not not self.manager.lookup_value(self.enable)                    
+                    enabled = not not self.menu.lookup_value(self.enable)                    
         return enabled
          
 
 class MenuCommand(MenuItemClass):
-    def __init__(self, config):
-        MenuItemClass.__init__(self, config)
+    def __init__(self, menu, config):
+        MenuItemClass.__init__(self, menu, config)
         self.gcode = config.get('gcode', None)        
         self.parameter, self.options, self.typecast = self.parse_parameter(config.get('parameter', ''))
 
@@ -63,7 +63,7 @@ class MenuCommand(MenuItemClass):
         option = None
         if self.parameter:            
             if value is None:
-                value = self.manager.lookup_value(self.parameter)
+                value = self.menu.lookup_value(self.parameter)
             if self.options is not None:
                 try:                    
                     if callable(self.typecast):
@@ -90,8 +90,8 @@ class MenuCommand(MenuItemClass):
         return self._get_formatted(self.gcode)
 
 class MenuInput(MenuCommand):
-    def __init__(self, config):
-        MenuCommand.__init__(self, config)
+    def __init__(self, menu, config):
+        MenuCommand.__init__(self, menu, config)
         self.input_value = None
         self.input_min = config.getfloat('input_min', sys.float_info.min)
         self.input_max = config.getfloat('input_max', sys.float_info.max)
@@ -126,8 +126,8 @@ class MenuInput(MenuCommand):
         self.input_value = min(self.input_max, max(self.input_min, self.input_value))
 
 class MenuGroup(MenuItemClass):
-    def __init__(self, config):
-        MenuItemClass.__init__(self, config)
+    def __init__(self, menu, config):
+        MenuItemClass.__init__(self, menu, config)
         self.items = []
         self._items = config.get('items', '')
         self.enter_gcode = config.get('enter_gcode', None)
@@ -137,7 +137,7 @@ class MenuGroup(MenuItemClass):
         self.items = [] # empty list
         self.items.append(MenuItemBack('..')) # always add back as first item
         for name in self._items.split(','):
-            item = self.manager.lookup_menuitem(name.strip())
+            item = self.menu.lookup_menuitem(name.strip())
             if item.is_enabled():
                 self.items.append(item)
 
@@ -389,5 +389,5 @@ class Menu:
     def load_menuitems(self, config):
         for cfg in config.get_prefix_sections('menu '):
             name = " ".join(cfg.get_name().split()[1:])
-            item = config.getchoice('type', menu_items)(cfg)
+            item = config.getchoice('type', menu_items)(self, cfg)
             self.add_menuitem(name, item)
