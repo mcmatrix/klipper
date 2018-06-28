@@ -148,6 +148,8 @@ class MenuGroup(MenuItemClass):
         return self.leave_gcode
 
 menu_items = { 'command': MenuCommand, 'input': MenuInput, 'group': MenuGroup }
+# Default dimensions for lcds (rows, cols)
+LCD_dims = { 'st7920': (4,16), 'hd44780': (4,20), 'uc1701' : (4,16) }
 
 class Menu:
     def __init__(self, config):
@@ -163,8 +165,11 @@ class Menu:
         self.printer = config.get_printer()
         self.gcode = self.printer.lookup_object('gcode')
         self.root = config.get('root')
-        self.rows = config.getint('rows', 4)
-        self.cols = config.getint('cols', 20)
+        dims = config.getchoice('lcd_type', LCD_dims)
+        self.rows = config.getint('rows', dims[0])
+        self.cols = config.getint('cols', dims[1])
+        # load items
+        self.load_menuitems(config)
     
     def printer_state(self, state):
         if state == 'ready':
@@ -380,12 +385,9 @@ class Menu:
             raise self.printer.config_error(
                 "Unknown menuitem '%s'" % (name,))
         return self.menuitems[name]
-
-def load_config_prefix(config):
-    name = " ".join(config.get_name().split()[1:])
-    item = config.getchoice('type', menu_items)(config)
-    menu = config.get_printer().lookup_object("menu")
-    menu.add_menuitem(name, item)
-
-def load_config(config):
-    return Menu(config)
+    
+    def load_menuitems(self, config):
+        for cfg in config.get_prefix_sections('menu '):
+            name = " ".join(cfg.get_name().split()[1:])
+            item = config.getchoice('type', menu_items)(cfg)
+            self.add_menuitem(name, item)
