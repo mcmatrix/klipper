@@ -168,13 +168,17 @@ class Menu:
         dims = config.getchoice('lcd_type', LCD_dims)
         self.rows = config.getint('rows', dims[0])
         self.cols = config.getint('cols', dims[1])
-        # Load printer objects
-        for name in ['gcode', 'toolhead', 'fan', 'extruder0', 'extruder1', 'heater_bed', 'virtual_sdcard']:
-            obj = self.printer.lookup_object(name, None)
-            if obj is not None:
-                self.info_objs[name] = obj
         # load items
         self.load_menuitems(config)
+    
+    def printer_state(self, state):
+        if state == 'ready':
+            # Load printer objects
+            self.info_objs = {}
+            for name in ['gcode', 'toolhead', 'fan', 'extruder0', 'extruder1', 'heater_bed', 'virtual_sdcard']:
+                obj = self.printer.lookup_object(name, None)
+                if obj is not None:
+                    self.info_objs[name] = obj
 
     def is_running(self):
         return self.running
