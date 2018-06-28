@@ -389,5 +389,5 @@ class Menu:
     def load_menuitems(self, config):
         for cfg in config.get_prefix_sections('menu '):
             name = " ".join(cfg.get_name().split()[1:])
-            item = config.getchoice('type', menu_items)(self, cfg)
+            item = cfg.getchoice('type', menu_items)(self, cfg)
             self.add_menuitem(name, item)
