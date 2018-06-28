@@ -8,7 +8,7 @@
 # This file may be distributed under the terms of the GNU GPLv3 license.
 import logging
 import hd44780, st7920, uc1701, icons, menu
-from buttons import RotaryEncoder
+from ..buttons import RotaryEncoder
 
 LCD_chips = { 'st7920': st7920.ST7920, 'hd44780': hd44780.HD44780, 'uc1701' : uc1701.UC1701 }
 M73_TIMEOUT = 5.
