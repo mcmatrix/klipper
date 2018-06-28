@@ -1,4 +1,4 @@
-# Basic LCD display support
+﻿# Basic LCD display support
 #
 # Copyright (C) 2018  Kevin O'Connor <kevin@koconnor.net>
 # Copyright (C) 2018  Aleph Objects, Inc <marcio@alephobjects.com>
