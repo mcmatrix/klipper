@@ -8,7 +8,6 @@
 # This file may be distributed under the terms of the GNU GPLv3 license.
 import logging
 import hd44780, st7920, uc1701, icons, menu
-from ..buttons import RotaryEncoder
 
 LCD_chips = { 'st7920': st7920.ST7920, 'hd44780': hd44780.HD44780, 'uc1701' : uc1701.UC1701 }
 M73_TIMEOUT = 5.
@@ -41,17 +40,17 @@ class PrinterLCD:
                     pin1, pin2 = self.encoder_pins.split(',')
                 except:
                     raise config.error("Unable to parse encoder_pins")
-                RotaryEncoder(config, pin1.strip(), pin2.strip(), self.encoder_cw_callback, self.encoder_ccw_callback)
+                self.buttons.register_rotary_encoder(pin1.strip(), pin2.strip(), self.encoder_cw_callback, self.encoder_ccw_callback)
             if self.click_pin:
-                self.buttons.register_button([self.click_pin], self.click_callback)
+                self.buttons.register_button_push(self.click_pin, self.click_callback)
             if self.back_pin:
-                self.buttons.register_button([self.back_pin], self.back_callback)
+                self.buttons.register_button_push(self.back_pin, self.back_callback)
             if self.up_pin:
-                self.buttons.register_button([self.up_pin], self.up_callback)
+                self.buttons.register_button_push(self.up_pin, self.up_callback)
             if self.down_pin:
-                self.buttons.register_button([self.down_pin], self.down_callback)
+                self.buttons.register_button_push(self.down_pin, self.down_callback)
             if self.kill_pin:
-                self.buttons.register_button([self.kill_pin], self.kill_callback)
+                self.buttons.register_button_push(self.kill_pin, self.kill_callback)
         # screen updating
         self.screen_update_timer = self.reactor.register_timer(
             self.screen_update_event)
@@ -295,24 +294,24 @@ class PrinterLCD:
     def encoder_ccw_callback(self, eventtime):        
         if self.menu:
             self.menu.down()
-    def click_callback(self, eventtime, state):
-        if state and self.click_pin:
-            if self.menu and not self.menu.is_running():
+    def click_callback(self, eventtime):
+        if self.click_pin and self.menu:
+            if not self.menu.is_running():
                 # lets start and populate the menu items
                 self.menu.begin(eventtime)
-            elif self.menu and self.menu.is_running():
+            elif self.menu.is_running():
                 self.menu.select()        
-    def back_callback(self, eventtime, state):
-        if state and self.back_pin and self.menu:
+    def back_callback(self, eventtime):
+        if self.back_pin and self.menu:
             self.menu.back()
-    def up_callback(self, eventtime, state):
-        if state and self.up_pin and self.menu:
+    def up_callback(self, eventtime):
+        if self.up_pin and self.menu:
             self.menu.up()
-    def down_callback(self, eventtime, state):
-        if state and self.down_pin and self.menu:
+    def down_callback(self, eventtime):
+        if self.down_pin and self.menu:
             self.menu.down()
-    def kill_callback(self, eventtime, state):
-        if state and self.kill_pin:
+    def kill_callback(self, eventtime):
+        if self.kill_pin:
             self.printer.invoke_shutdown("Printer halted!")
     def set_message(self, msg, msg_time=None):
         self.message = msg
