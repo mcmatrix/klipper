@@ -22,7 +22,7 @@ class PrinterLCD:
         self.lcd_chip = config.getchoice('lcd_type', LCD_chips)(config)
         self.lcd_type = config.get('lcd_type')
         # menu
-        self.menu = menu.Menu(config)        
+        self.menu = menu.MenuManager(config)
         # buttons
         self.encoder_pins = config.get('encoder_pins', None)
         self.click_pin = config.get('click_pin', None)
