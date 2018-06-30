@@ -249,7 +249,6 @@ class MenuManager:
         self.blink_state = True
         self.current_group = None
         self.printer = config.get_printer()
-        self.reactor = self.printer.get_reactor()
         self.gcode = self.printer.lookup_object('gcode')
         self.sdcard = None
         self.root = config.get('root')
@@ -464,19 +463,11 @@ class MenuManager:
                 self.back()
 
     def run_script(self, script):
-        if script is not None:        
-            for line in script.split('\n'):
-                while 1:
-                    try:
-                        res = self.gcode.process_batch(line)
-                    except self.gcode.error as e:
-                        break
-                    except:
-                        logging.exception("menu dispatch")
-                        break                        
-                    if res:
-                        break
-                    self.reactor.pause(self.reactor.monotonic() + 0.100)
+        if script is not None:
+            try:
+                self.gcode.run_script(script)
+            except:
+                pass
 
     def lookup_value(self, literal):
         value = None
