@@ -1,15 +1,18 @@
-# Basic LCD display support
+﻿# Basic LCD display support
 #
 # Copyright (C) 2018  Kevin O'Connor <kevin@koconnor.net>
 # Copyright (C) 2018  Aleph Objects, Inc <marcio@alephobjects.com>
 # Copyright (C) 2018  Eric Callahan <arksine.code@gmail.com>
+# Copyright (C) 2018  Janar Sööt <janar.soot@gmail.com>
 #
 # This file may be distributed under the terms of the GNU GPLv3 license.
 import logging
-import hd44780, st7920, uc1701, icons
+import hd44780, st7920, uc1701, icons, menu
 
 LCD_chips = { 'st7920': st7920.ST7920, 'hd44780': hd44780.HD44780, 'uc1701' : uc1701.UC1701 }
 M73_TIMEOUT = 5.
+MENU_UPDATE_DELAY = .100
+DEFAULT_UPDATE_DELAY = .500
 
 class PrinterLCD:
     def __init__(self, config):
@@ -17,9 +20,37 @@ class PrinterLCD:
         self.reactor = self.printer.get_reactor()
         self.lcd_chip = config.getchoice('lcd_type', LCD_chips)(config)
         self.lcd_type = config.get('lcd_type')
+        # menu
+        self.menu = menu.MenuManager(config)
+        # buttons
+        self.encoder_pins = config.get('encoder_pins', None)
+        self.click_pin = config.get('click_pin', None)
+        self.back_pin = config.get('back_pin', None)
+        self.up_pin = config.get('up_pin', None)
+        self.down_pin = config.get('down_pin', None)
+        self.kill_pin = config.get('kill_pin', None)
         # printer objects
+        self.buttons = self.printer.try_load_module(config, "buttons")
         self.gcode = self.toolhead = self.sdcard = None
         self.fan = self.extruder0 = self.extruder1 = self.heater_bed = None
+        # register buttons & encoder
+        if self.buttons:
+            if self.encoder_pins:
+                try:
+                    pin1, pin2 = self.encoder_pins.split(',')
+                except:
+                    raise config.error("Unable to parse encoder_pins")
+                self.buttons.register_rotary_encoder(pin1.strip(), pin2.strip(), self.encoder_cw_callback, self.encoder_ccw_callback)
+            if self.click_pin:
+                self.buttons.register_button_push(self.click_pin, self.click_callback)
+            if self.back_pin:
+                self.buttons.register_button_push(self.back_pin, self.back_callback)
+            if self.up_pin:
+                self.buttons.register_button_push(self.up_pin, self.up_callback)
+            if self.down_pin:
+                self.buttons.register_button_push(self.down_pin, self.down_callback)
+            if self.kill_pin:
+                self.buttons.register_button_push(self.kill_pin, self.kill_callback)
         # screen updating
         self.screen_update_timer = self.reactor.register_timer(
             self.screen_update_event)
@@ -28,6 +59,8 @@ class PrinterLCD:
     def printer_state(self, state):
         if state == 'ready':
             self.lcd_chip.init()
+            # Menu
+            self.menu.printer_state(state)
             # Load printer objects
             self.gcode = self.printer.lookup_object('gcode')
             self.toolhead = self.printer.lookup_object('toolhead')
@@ -88,14 +121,22 @@ class PrinterLCD:
             self.lcd_chip.write_graphics(x, y, i, data)
         self.lcd_chip.write_graphics(x, y, 15, [0xff]*width)
     # Screen updating
-    def screen_update_event(self, eventtime):
+    def screen_update_event(self, eventtime):        
+        update_delay = DEFAULT_UPDATE_DELAY
         self.lcd_chip.clear()
-        if self.lcd_type == 'hd44780':
-            self.screen_update_hd44780(eventtime)
-        else:
-            self.screen_update_128x64(eventtime)
+        # check menu
+        if self.menu and self.menu.is_running():
+            update_delay = MENU_UPDATE_DELAY                
+            self.menu.update_info(eventtime)
+            for y, line in enumerate(self.menu.update(eventtime)):
+                self.lcd_chip.write_text(0, y, line)
+        else:            
+            if self.lcd_type == 'hd44780':
+                self.screen_update_hd44780(eventtime)
+            else:
+                self.screen_update_128x64(eventtime)
         self.lcd_chip.flush()
-        return eventtime + .500
+        return eventtime + update_delay
     def screen_update_hd44780(self, eventtime):
         lcd_chip = self.lcd_chip
         # Heaters
@@ -246,6 +287,32 @@ class PrinterLCD:
             pos = self.toolhead.get_position()
             status = "X%-4.0fY%-4.0fZ%-5.2f" % (pos[0], pos[1], pos[2])
         self.lcd_chip.write_text(x, y, status)
+    # buttons & encoder callbacks
+    def encoder_cw_callback(self, eventtime):
+        if self.menu:
+            self.menu.up()
+    def encoder_ccw_callback(self, eventtime):        
+        if self.menu:
+            self.menu.down()
+    def click_callback(self, eventtime):
+        if self.click_pin and self.menu:
+            if not self.menu.is_running():
+                # lets start and populate the menu items
+                self.menu.begin(eventtime)
+            elif self.menu.is_running():
+                self.menu.select()        
+    def back_callback(self, eventtime):
+        if self.back_pin and self.menu:
+            self.menu.back()
+    def up_callback(self, eventtime):
+        if self.up_pin and self.menu:
+            self.menu.up()
+    def down_callback(self, eventtime):
+        if self.down_pin and self.menu:
+            self.menu.down()
+    def kill_callback(self, eventtime):
+        if self.kill_pin:
+            self.printer.invoke_shutdown("Printer halted!")
     def set_message(self, msg, msg_time=None):
         self.message = msg
         self.msg_time = msg_time
