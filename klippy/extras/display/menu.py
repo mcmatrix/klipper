@@ -9,7 +9,7 @@ import logging, sys, ast
 class error(Exception):
     pass
 
-class MenuItemBase:
+class MenuItemBase(object):
     def __init__(self, menu, config):
         self.menu = menu
         self.name = ''
@@ -35,7 +35,7 @@ class MenuItemBase:
 
 class MenuItemCommand(MenuItemBase):
     def __init__(self, menu, config):
-        MenuItemBase.__init__(self, menu, config)
+        super(MenuItemCommand, self).__init__(menu, config)
         self.name = config.get('name')
         self.gcode = config.get('gcode', None)        
         self.parameter, self.options, self.typecast = self.parse_parameter(config.get('parameter', ''))
@@ -87,7 +87,7 @@ class MenuItemCommand(MenuItemBase):
 
 class MenuItemInput(MenuItemCommand):
     def __init__(self, menu, config):
-        MenuItemCommand.__init__(self, menu, config)
+        super(MenuItemInput, self).__init__(menu, config)
         self.input_value = None
         self.input_min = config.getfloat('input_min', sys.float_info.min)
         self.input_max = config.getfloat('input_max', sys.float_info.max)
@@ -123,20 +123,21 @@ class MenuItemInput(MenuItemCommand):
 
 class MenuItemGroup(MenuItemBase):
     def __init__(self, menu, config):
-        MenuItemBase.__init__(self, menu, config)
+        super(MenuItemGroup, self).__init__(menu, config)
         self.name = config.get('name')
         self.items = []
-        self._items = config.get('items')
+        self._items = config.get('items', None)
         self.enter_gcode = config.get('enter_gcode', None)
         self.leave_gcode = config.get('leave_gcode', None)
 
     def populate_items(self):
-        self.items = [] # empty list
+        self.items = [] # empty list        
         self.items.append('..') # always add back as first item
-        for name in self._items.split(','):
-            item = self.menu.lookup_menuitem(name.strip())
-            if item.is_enabled():
-                self.items.append(item)
+        if self._items:
+            for name in self._items.split(','):
+                item = self.menu.lookup_menuitem(name.strip())
+                if item.is_enabled():
+                    self.items.append(item)
 
     def get_enter_gcode(self):
         return self.enter_gcode
@@ -144,9 +145,27 @@ class MenuItemGroup(MenuItemBase):
     def get_leave_gcode(self):
         return self.leave_gcode
 
+class MenuItemGroupSDCard(MenuItemGroup):
+    def __init__(self, menu, config):
+        super(MenuItemGroupSDCard, self).__init__(menu, config)
+
+    def populate_items(self):
+        super(MenuItemGroupSDCard, self).populate_items()
+        if self.menu.sdcard:
+            files = self.menu.sdcard.get_file_list()
+            for fname, fsize in files:
+                gcode = [
+                    'M23 /%s' % fname
+                ]
+                item = MenuItemCommand(self.menu, {'name': '/%s' % fname, 'gcode': "\n".join(gcode)})
+                self.items.append(item)
+
+    def is_enabled(self):
+        return not not self.menu.sdcard
+
 class MenuItemRow(MenuItemBase):
     def __init__(self, menu, config):
-        MenuItemBase.__init__(self, menu, config)
+        super(MenuItemRow, self).__init__(menu, config)
         self.items = []
         self.selected = None
         self._items = config.get('items')
@@ -209,7 +228,7 @@ class MenuItemRow(MenuItemBase):
         return self.selected
 
 
-menu_items = { 'command': MenuItemCommand, 'input': MenuItemInput, 'group': MenuItemGroup, 'row':MenuItemRow }
+menu_items = { 'command': MenuItemCommand, 'input': MenuItemInput, 'group': MenuItemGroup, 'row':MenuItemRow, 'sdcard':MenuItemGroupSDCard }
 # Default dimensions for lcds (rows, cols)
 LCD_dims = { 'st7920': (4,16), 'hd44780': (4,20), 'uc1701' : (4,16) }
 
@@ -232,6 +251,7 @@ class MenuManager:
         self.printer = config.get_printer()
         self.reactor = self.printer.get_reactor()
         self.gcode = self.printer.lookup_object('gcode')
+        self.sdcard = None
         self.root = config.get('root')
         dims = config.getchoice('lcd_type', LCD_dims)
         self.rows = config.getint('rows', dims[0])
@@ -242,6 +262,7 @@ class MenuManager:
     def printer_state(self, state):
         if state == 'ready':
             # Load printer objects
+            self.sdcard = self.printer.lookup_object('virtual_sdcard', None)
             self.info_objs = {}
             for name in ['gcode', 'toolhead', 'fan', 'extruder0', 'extruder1', 'heater_bed', 'virtual_sdcard']:
                 obj = self.printer.lookup_object(name, None)
