@@ -88,6 +88,7 @@ class MenuItemCommand(MenuItemBase):
 class MenuItemInput(MenuItemCommand):
     def __init__(self, menu, config):
         super(MenuItemInput, self).__init__(menu, config)
+        self.reverse = not not config.get('reverse', False)
         self.input_value = None
         self.input_min = config.getfloat('input_min', sys.float_info.min)
         self.input_max = config.getfloat('input_max', sys.float_info.max)
@@ -114,11 +115,17 @@ class MenuItemInput(MenuItemCommand):
         self.input_value = None
 
     def inc_value(self):
-        self.input_value += abs(self.input_step) 
+        if(self.reverse is True):
+            self.input_value -= abs(self.input_step) 
+        else:
+            self.input_value += abs(self.input_step) 
         self.input_value = min(self.input_max, max(self.input_min, self.input_value))
 
     def dec_value(self):
-        self.input_value -= abs(self.input_step) 
+        if(self.reverse is True):
+            self.input_value += abs(self.input_step) 
+        else:
+            self.input_value -= abs(self.input_step) 
         self.input_value = min(self.input_max, max(self.input_min, self.input_value))
 
 class MenuItemGroup(MenuItemBase):
