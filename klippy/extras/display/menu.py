@@ -139,7 +139,7 @@ class MenuItemGroup(MenuItemBase):
 
     def populate_items(self):
         self.items = [] # empty list        
-        self.items.append('..') # always add back as first item
+        self.items.append('[..] %s' % (self.name)) # always add back as first item
         if self._items:
             for name in self._items.split(','):
                 item = self.menu.lookup_menuitem(name.strip())
