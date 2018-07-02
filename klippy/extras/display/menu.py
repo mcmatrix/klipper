@@ -25,9 +25,9 @@ class MenuItemBase(object):
                 enabled = not not ast.literal_eval(self.enable)
             except:
                 if self.enable[0] == '!': # negation
-                    enabled = not (not not self.menu.lookup_value(self.enable[1:]))
+                    enabled = not (not not self.menu.lookup_parameter(self.enable[1:]))
                 else:
-                    enabled = not not self.menu.lookup_value(self.enable)                    
+                    enabled = not not self.menu.lookup_parameter(self.enable)                    
         return enabled
 
     def __str__(self):
@@ -59,7 +59,7 @@ class MenuItemCommand(MenuItemBase):
         option = None
         if self.parameter:            
             if value is None:
-                value = self.menu.lookup_value(self.parameter)
+                value = self.menu.lookup_parameter(self.parameter)
             if self.options is not None:
                 try:                    
                     if callable(self.typecast):
@@ -147,21 +147,19 @@ class MenuItemGroup(MenuItemBase):
 
 class MenuItemGroupSDCard(MenuItemGroup):
     def __init__(self, menu, config):
-        super(MenuItemGroupSDCard, self).__init__(menu, config)
+        super(MenuItemGroupSDCard, self).__init__(menu, config)        
 
     def populate_items(self):
         super(MenuItemGroupSDCard, self).populate_items()
-        if self.menu.sdcard:
-            files = self.menu.sdcard.get_file_list()
+        sdcard = self.menu.objs['virtual_sdcard']
+        if sdcard is not None:
+            files = sdcard.get_file_list()
             for fname, fsize in files:
                 gcode = [
                     'M23 /%s' % fname
                 ]
-                item = MenuItemCommand(self.menu, {'name': '/%s' % fname, 'gcode': "\n".join(gcode)})
+                item = MenuItemCommand(self.menu, {'name': '%s' % (fname), 'gcode': "\n".join(gcode)})
                 self.items.append(item)
-
-    def is_enabled(self):
-        return not not self.menu.sdcard
 
 class MenuItemRow(MenuItemBase):
     def __init__(self, menu, config):
@@ -228,7 +226,7 @@ class MenuItemRow(MenuItemBase):
         return self.selected
 
 
-menu_items = { 'command': MenuItemCommand, 'input': MenuItemInput, 'group': MenuItemGroup, 'row':MenuItemRow, 'sdcard':MenuItemGroupSDCard }
+menu_items = { 'command': MenuItemCommand, 'input': MenuItemInput, 'group': MenuItemGroup, 'row':MenuItemRow, 'vsdcard':MenuItemGroupSDCard }
 # Default dimensions for lcds (rows, cols)
 LCD_dims = { 'st7920': (4,16), 'hd44780': (4,20), 'uc1701' : (4,16) }
 
@@ -241,8 +239,6 @@ class MenuManager:
         self.running = False
         self.menuitems = {}
         self.groupstack = []
-        self.info_objs = {}
-        self.info_dict = {}
         self.current_top = 0
         self.current_selected = 0
         self.next_blinktime = 0
@@ -250,23 +246,39 @@ class MenuManager:
         self.current_group = None
         self.printer = config.get_printer()
         self.gcode = self.printer.lookup_object('gcode')
-        self.sdcard = None
+        self.parameters = {}
+        self.objs = {
+            'gcode': None, 
+            'toolhead': None, 
+            'fan': None, 
+            'extruder0': None, 
+            'extruder1': None, 
+            'heater_bed': None, 
+            'virtual_sdcard': None
+        }
+        # try to load printer objects in this state
+        for name in self.objs.keys():
+             self.objs[name] = self.printer.lookup_object(name, None)
         self.root = config.get('root')
         dims = config.getchoice('lcd_type', LCD_dims)
         self.rows = config.getint('rows', dims[0])
         self.cols = config.getint('cols', dims[1])
+        # Add MENU commands
+        self.gcode.register_mux_command("MENU", "DO", 'dump', self.cmd_MENUDO_DUMP, desc=self.cmd_MENUDO_help)
+        self.gcode.register_mux_command("MENU", "DO", 'exit', self.cmd_MENUDO_EXIT, desc=self.cmd_MENUDO_help)
+        self.gcode.register_mux_command("MENU", "DO", 'up', self.cmd_MENUDO_UP, desc=self.cmd_MENUDO_help)
+        self.gcode.register_mux_command("MENU", "DO", 'down', self.cmd_MENUDO_DOWN, desc=self.cmd_MENUDO_help)
+        self.gcode.register_mux_command("MENU", "DO", 'select', self.cmd_MENUDO_SELECT, desc=self.cmd_MENUDO_help)
+        self.gcode.register_mux_command("MENU", "DO", 'back', self.cmd_MENUDO_BACK, desc=self.cmd_MENUDO_help)
         # load items
         self.load_menuitems(config)
     
     def printer_state(self, state):
         if state == 'ready':
-            # Load printer objects
-            self.sdcard = self.printer.lookup_object('virtual_sdcard', None)
-            self.info_objs = {}
-            for name in ['gcode', 'toolhead', 'fan', 'extruder0', 'extruder1', 'heater_bed', 'virtual_sdcard']:
-                obj = self.printer.lookup_object(name, None)
-                if obj is not None:
-                    self.info_objs[name] = obj
+            # Load printer objects available in ready state
+            for name in self.objs.keys():
+                if self.objs[name] is None:
+                    self.objs[name] = self.printer.lookup_object(name, None)
 
     def is_running(self):
         return self.running
@@ -287,29 +299,31 @@ class MenuManager:
                 item.populate_items()
 
     def update_info(self, eventtime):
-        self.info_dict = {}        
-        # get info
-        
-        for name, obj in self.info_objs.items():
-            try:
-                self.info_dict[name] = obj.get_status(eventtime)
-            except:
-               self.info_dict[name] = {}
-            # get additional info
-            if name == 'toolhead':
-                pos = obj.get_position()
-                self.info_dict[name].update({'xpos':pos[0], 'ypos':pos[1], 'zpos':pos[2]})
-                self.info_dict[name].update({
-                    'is_printing': (self.info_dict[name]['status'] == "Printing"),
-                    'is_ready': (self.info_dict[name]['status'] == "Ready"),
-                    'is_idle': (self.info_dict[name]['status'] == "Idle")
-                })
-            elif name == 'extruder0':
-                info = obj.get_heater().get_status(eventtime)
-                self.info_dict[name].update(info)
-            elif name == 'extruder1':
-                info =  obj.get_heater().get_status(eventtime)
-                self.info_dict[name].update(info)
+        self.parameters = {}        
+        for name in  self.objs.keys():            
+            if self.objs[name] is not None:
+                try:
+                    self.parameters[name] = self.objs[name].get_status(eventtime)
+                except:
+                    self.parameters[name] = {}                
+                self.parameters[name].update({'is_enabled': True})
+                # get additional info
+                if name == 'toolhead':
+                    pos = self.objs[name].get_position()
+                    self.parameters[name].update({'xpos':pos[0], 'ypos':pos[1], 'zpos':pos[2]})
+                    self.parameters[name].update({
+                        'is_printing': (self.parameters[name]['status'] == "Printing"),
+                        'is_ready': (self.parameters[name]['status'] == "Ready"),
+                        'is_idle': (self.parameters[name]['status'] == "Idle")
+                    })
+                elif name == 'extruder0':
+                    info = self.objs[name].get_heater().get_status(eventtime)
+                    self.parameters[name].update(info)
+                elif name == 'extruder1':
+                    info = self.objs[name].get_heater().get_status(eventtime)
+                    self.parameters[name].update(info)
+            else:
+                self.parameters[name] = {'is_enabled': False}
 
     def push_groupstack(self, group):
         if not isinstance(group, MenuItemGroup):
@@ -349,9 +363,9 @@ class MenuManager:
                 self.current_top = 0
 
             for row in range(self.current_top, self.current_top + self.rows):
-                current = self.current_group.items[row]
                 str = ""
                 if row < len(self.current_group.items):
+                    current = self.current_group.items[row]
                     if row == self.current_selected:
                         if isinstance(current, (MenuItemInput, MenuItemRow)) and current.is_editing():
                             str += '*'
@@ -462,6 +476,11 @@ class MenuManager:
             else:
                 self.back()
 
+    def exit(self):
+        if self.running and isinstance(self.current_group, MenuItemGroup):
+            self.run_script(self.current_group.get_leave_gcode())
+            self.running = False
+
     def run_script(self, script):
         if script is not None:
             try:
@@ -469,16 +488,16 @@ class MenuManager:
             except:
                 pass
 
-    def lookup_value(self, literal):
+    def lookup_parameter(self, literal):
         value = None
         if literal:
             try:
                 value = float(literal)
             except ValueError:
                 key1, key2 = literal.split('.')[:2]
-                if(type(self.info_dict) == dict and key1 and key2 and
-                   key1 in self.info_dict and type(self.info_dict[key1]) == dict):
-                    value = self.info_dict[key1].get(key2)
+                if(type(self.parameters) == dict and key1 and key2 and
+                   key1 in self.parameters and type(self.parameters[key1]) == dict):
+                    value = self.parameters[key1].get(key2)
         return value
 
     def add_menuitem(self, name, menu):
@@ -498,3 +517,32 @@ class MenuManager:
             name = " ".join(cfg.get_name().split()[1:])
             item = cfg.getchoice('type', menu_items)(self, cfg)
             self.add_menuitem(name, item)
+    
+    cmd_MENUDO_help = "Menu do things (dump, exit, up, down, select, back)"
+    def cmd_MENUDO_DUMP(self, params):        
+        for key1 in self.parameters:
+            if type(self.parameters[key1]) == dict:
+                for key2 in self.parameters[key1]:
+                    msg = "{0}.{1} = {2}".format(key1, key2, self.parameters[key1].get(key2))
+                    logging.info(msg)
+                    self.gcode.respond_info(msg)
+            else:
+                msg = "{0} = {1}".format(key1, self.parameters.get(key1))
+                logging.info(msg)
+                self.gcode.respond_info(msg)
+
+    def cmd_MENUDO_EXIT(self, params):        
+        self.exit()
+
+    def cmd_MENUDO_UP(self, params):        
+        self.up()
+
+    def cmd_MENUDO_DOWN(self, params):        
+        self.down()
+
+    def cmd_MENUDO_SELECT(self, params):        
+        self.select()
+
+    def cmd_MENUDO_BACK(self, params):
+        self.back()
+
