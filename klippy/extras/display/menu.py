@@ -88,7 +88,7 @@ class MenuItemCommand(MenuItemBase):
 class MenuItemInput(MenuItemCommand):
     def __init__(self, menu, config):
         super(MenuItemInput, self).__init__(menu, config)
-        self.reverse = not not config.get('reverse', False)
+        self.reverse = not not config.getboolean('reverse', False)
         self.input_value = None
         self.input_min = config.getfloat('input_min', sys.float_info.min)
         self.input_max = config.getfloat('input_max', sys.float_info.max)
