@@ -251,6 +251,7 @@ class MenuManager:
         self.next_blinktime = 0
         self.blink_state = True
         self.current_group = None
+        self.config = config
         self.printer = config.get_printer()
         self.gcode = self.printer.lookup_object('gcode')
         self.parameters = {}
@@ -261,11 +262,14 @@ class MenuManager:
             'extruder0': None, 
             'extruder1': None, 
             'heater_bed': None, 
-            'virtual_sdcard': None
+            'virtual_sdcard': None,
+            'output_pin': {},
+            'servo': {}
         }
         # try to load printer objects in this state
         for name in self.objs.keys():
-             self.objs[name] = self.printer.lookup_object(name, None)
+            if self.objs[name] is None:
+                self.objs[name] = self.printer.lookup_object(name, None)
         self.root = config.get('root')
         dims = config.getchoice('lcd_type', LCD_dims)
         self.rows = config.getint('rows', dims[0])
@@ -286,6 +290,9 @@ class MenuManager:
             for name in self.objs.keys():
                 if self.objs[name] is None:
                     self.objs[name] = self.printer.lookup_object(name, None)
+            # load servo name & output_pin names
+            self.lookup_extra_names(self.config, 'output_pin')
+            self.lookup_extra_names(self.config, 'servo')
 
     def is_running(self):
         return self.running
@@ -307,8 +314,8 @@ class MenuManager:
 
     def update_info(self, eventtime):
         self.parameters = {}        
-        for name in  self.objs.keys():            
-            if self.objs[name] is not None:
+        for name in self.objs.keys():            
+            if self.objs[name] is not None and type(self.objs[name]) != dict:
                 try:
                     self.parameters[name] = self.objs[name].get_status(eventtime)
                 except:
@@ -329,6 +336,14 @@ class MenuManager:
                 elif name == 'extruder1':
                     info = self.objs[name].get_heater().get_status(eventtime)
                     self.parameters[name].update(info)
+            elif type(self.objs[name]) == dict:
+                if name == 'output_pin' or name == 'servo':
+                    self.parameters[name] = {}
+                    for key, obj in self.objs[name].items():
+                        try:
+                            self.parameters[name].update({key: obj.last_value})
+                        except:
+                            self.parameters[name].update({'is_enabled': False})
             else:
                 self.parameters[name] = {'is_enabled': False}
 
@@ -518,7 +533,12 @@ class MenuManager:
             raise self.printer.config_error(
                 "Unknown menuitem '%s'" % (name,))
         return self.menuitems[name]
-    
+
+    def lookup_extra_names(self, config, section):
+        for cfg in config.get_prefix_sections('%s ' % section):
+            name = " ".join(cfg.get_name().split()[1:])
+            self.objs[section][name] = self.printer.lookup_object(cfg.get_name(), None)
+
     def load_menuitems(self, config):
         for cfg in config.get_prefix_sections('menu '):
             name = " ".join(cfg.get_name().split()[1:])
