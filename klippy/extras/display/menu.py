@@ -14,7 +14,14 @@ class MenuItemBase(object):
         self.menu = menu
         self.name = ''
         self.enable = config.get('enable', repr(True))
-    
+
+    def _remove_quotes(self, name):
+        if name.startswith(('"', "'")):
+            name = name[1:]
+        if name.endswith(('"', "'")):
+            name = name[:-1]
+        return name
+
     def _get_name(self):
         return self.name
 
@@ -36,7 +43,7 @@ class MenuItemBase(object):
 class MenuItemCommand(MenuItemBase):
     def __init__(self, menu, config):
         super(MenuItemCommand, self).__init__(menu, config)
-        self.name = config.get('name')
+        self.name = self._remove_quotes(config.get('name'))
         self.gcode = config.get('gcode', None)        
         self.parameter, self.options, self.typecast = self.parse_parameter(config.get('parameter', ''))
 
@@ -131,7 +138,7 @@ class MenuItemInput(MenuItemCommand):
 class MenuItemGroup(MenuItemBase):
     def __init__(self, menu, config):
         super(MenuItemGroup, self).__init__(menu, config)
-        self.name = config.get('name')
+        self.name = self._remove_quotes(config.get('name'))
         self.items = []
         self._items = config.get('items', None)
         self.enter_gcode = config.get('enter_gcode', None)
