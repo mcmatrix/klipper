@@ -276,11 +276,11 @@ class MenuManager:
         for name in self.objs.keys():
             if self.objs[name] is None:
                 self.objs[name] = self.printer.lookup_object(name, None)
-        self.root = config.get('root')
+        self.root = config.get('menu_root', None)
         dims = config.getchoice('lcd_type', LCD_dims)
         self.rows = config.getint('rows', dims[0])
         self.cols = config.getint('cols', dims[1])
-        self.timeout = config.getint('timeout', 0)
+        self.timeout = config.getint('menu_timeout', 0)
         self.timer = 0
         # Add MENU commands
         self.gcode.register_mux_command("MENU", "DO", 'dump', self.cmd_MENUDO_DUMP, desc=self.cmd_MENUDO_help)
@@ -324,12 +324,15 @@ class MenuManager:
 
     def begin(self, eventtime):
         self.first = True
-        self.running = True
         self.groupstack = []        
         self.current_top = 0
-        self.current_selected = 0        
-        self.populate_menu()
-        self.current_group = self.lookup_menuitem(self.root)
+        self.current_selected = 0
+        if self.root is not None:
+            self.running = True
+            self.populate_menu()
+            self.current_group = self.lookup_menuitem(self.root)
+        else:
+            self.running = False
 
     def populate_menu(self):
         for name, item in self.menuitems.items():
