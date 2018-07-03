@@ -60,7 +60,7 @@ class MenuItemCommand(MenuItemBase):
                 c = conv[t[1][0]]
             except:
                 pass
-        return [p, o, c]
+        return (p, o, c)
 
     def get_format_args(self, value = None):
         option = None
@@ -70,20 +70,26 @@ class MenuItemCommand(MenuItemBase):
             if self.options is not None:
                 try:                    
                     if callable(self.typecast):
-                        option = self.options[self.typecast(value)]
+                        if type(self.options) in (float, int):
+                            option = self.typecast(self.options * value)
+                        else:
+                            option = self.options[self.typecast(value)]
                     else:
-                        option = self.options[value]
-                except:
-                    pass
-        return [value, option]
+                        if type(self.options) in (float, int):
+                            option = self.options * value
+                        else:
+                            option = self.options[value]
+                except Exception as e:
+                    logging.error('Parameter exception: '+ str(e))
+        return (value, option)
 
     def _get_formatted(self, literal, value = None):
         args = self.get_format_args(value)
         if type(literal) == str and len(args) > 0:
             try:
                 literal = literal.format(*args)
-            except:
-                pass
+            except Exception as e:
+                logging.error('Format exception: '+ str(e))
         return literal
 
     def _get_name(self):
