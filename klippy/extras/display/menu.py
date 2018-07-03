@@ -255,7 +255,6 @@ class MenuManager:
         self.groupstack = []
         self.current_top = 0
         self.current_selected = 0
-        self.next_blinktime = 0
         self.blink_state = True
         self.current_group = None
         self.config = config
@@ -281,6 +280,8 @@ class MenuManager:
         dims = config.getchoice('lcd_type', LCD_dims)
         self.rows = config.getint('rows', dims[0])
         self.cols = config.getint('cols', dims[1])
+        self.timeout = config.getint('timeout', 0)
+        self.timer = 0
         # Add MENU commands
         self.gcode.register_mux_command("MENU", "DO", 'dump', self.cmd_MENUDO_DUMP, desc=self.cmd_MENUDO_help)
         self.gcode.register_mux_command("MENU", "DO", 'exit', self.cmd_MENUDO_EXIT, desc=self.cmd_MENUDO_help)
@@ -298,9 +299,26 @@ class MenuManager:
                 if self.objs[name] is None:
                     self.objs[name] = self.printer.lookup_object(name, None)
             # load servo name & output_pin names
-            self.lookup_extra_names(self.config, 'output_pin')
-            self.lookup_extra_names(self.config, 'servo')
+            self.lookup_section_names(self.config, 'output_pin')
+            self.lookup_section_names(self.config, 'servo')
+            # start timer
+            reactor = self.printer.get_reactor()
+            reactor.register_timer(self._timer_event, reactor.NOW)
+            reactor.register_timer(self._blink_event, reactor.NOW)
 
+    def _timer_event(self, eventtime):
+        # update parameters
+        self._update_parameters(eventtime)
+        # check timeout
+        if self.is_running() and self.timeout > 0:
+            if self.timer >= self.timeout:
+                self.exit()
+            self.timer += 1
+        else:
+            self.timer = 0
+
+        return eventtime + 1.
+    
     def is_running(self):
         return self.running
 
@@ -309,8 +327,7 @@ class MenuManager:
         self.running = True
         self.groupstack = []        
         self.current_top = 0
-        self.current_selected = 0
-        self.update_info(eventtime)
+        self.current_selected = 0        
         self.populate_menu()
         self.current_group = self.lookup_menuitem(self.root)
 
@@ -319,7 +336,7 @@ class MenuManager:
             if isinstance(item, (MenuItemGroup,MenuItemRow)):
                 item.populate_items()
 
-    def update_info(self, eventtime):
+    def _update_parameters(self, eventtime):
         self.parameters = {}        
         for name in self.objs.keys():            
             if self.objs[name] is not None and type(self.objs[name]) != dict:
@@ -374,10 +391,9 @@ class MenuManager:
         return None
     
     # toggle blink
-    def update_blink(self, eventtime):
-        if eventtime > self.next_blinktime:
-            self.blink_state = not self.blink_state
-            self.next_blinktime = eventtime + (BLINK_OFF_TIME if self.blink_state else BLINK_ON_TIME)
+    def _blink_event(self, eventtime):
+        self.blink_state = not self.blink_state
+        return eventtime + (BLINK_OFF_TIME if self.blink_state else BLINK_ON_TIME)
 
     def update(self, eventtime):
         lines = []
@@ -410,11 +426,11 @@ class MenuManager:
                         str += name[:self.cols-1].ljust(self.cols-1)
 
                 lines.append(str.ljust(self.cols))
-        self.update_blink(eventtime)
         return lines
 
     def up(self):
         if self.running and isinstance(self.current_group, MenuItemGroup):
+            self.timer = 0
             current = self.current_group.items[self.current_selected]
             if isinstance(current, (MenuItemInput, MenuItemRow)) and current.is_editing():
                 current.dec_value()
@@ -434,6 +450,7 @@ class MenuManager:
 
     def down(self):
         if self.running and isinstance(self.current_group, MenuItemGroup):
+            self.timer = 0
             current = self.current_group.items[self.current_selected]
             if isinstance(current, (MenuItemInput, MenuItemRow)) and current.is_editing():
                 current.inc_value()
@@ -453,6 +470,7 @@ class MenuManager:
 
     def back(self):
         if self.running and isinstance(self.current_group, MenuItemGroup):
+            self.timer = 0
             current = self.current_group.items[self.current_selected]
             if isinstance(current, (MenuItemInput, MenuItemRow)) and current.is_editing():
                 return
@@ -484,6 +502,7 @@ class MenuManager:
 
     def select(self):
         if self.running and isinstance(self.current_group, MenuItemGroup):
+            self.timer = 0
             current = self.current_group.items[self.current_selected]
             if isinstance(current, MenuItemRow):
                 current = current.curr_item()
@@ -541,7 +560,7 @@ class MenuManager:
                 "Unknown menuitem '%s'" % (name,))
         return self.menuitems[name]
 
-    def lookup_extra_names(self, config, section):
+    def lookup_section_names(self, config, section):
         for cfg in config.get_prefix_sections('%s ' % section):
             name = " ".join(cfg.get_name().split()[1:])
             self.objs[section][name] = self.printer.lookup_object(cfg.get_name(), None)
