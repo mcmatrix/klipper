@@ -126,8 +126,7 @@ class PrinterLCD:
         self.lcd_chip.clear()
         # check menu
         if self.menu and self.menu.is_running():
-            update_delay = MENU_UPDATE_DELAY                
-            self.menu.update_info(eventtime)
+            update_delay = MENU_UPDATE_DELAY
             for y, line in enumerate(self.menu.update(eventtime)):
                 self.lcd_chip.write_text(0, y, line)
         else:            
