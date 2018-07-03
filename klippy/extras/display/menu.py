@@ -100,6 +100,7 @@ class MenuItemInput(MenuItemCommand):
         self.input_min = config.getfloat('input_min', sys.float_info.min)
         self.input_max = config.getfloat('input_max', sys.float_info.max)
         self.input_step = config.getfloat('input_step', above=0.)
+        self.input_scale = config.getfloat('input_scale', 1.)
     
     def _get_name(self):        
         return self._get_formatted(self.name, self.input_value)
@@ -114,7 +115,7 @@ class MenuItemInput(MenuItemCommand):
         args = self.get_format_args()
         if len(args) > 0:
             try:
-                self.input_value = float(args[0])
+                self.input_value = self.input_scale * float(args[0])
             except:
                 self.input_value = None
     
