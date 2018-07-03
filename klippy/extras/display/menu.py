@@ -67,7 +67,7 @@ class MenuItemCommand(MenuItemBase):
         if self.parameter:            
             if value is None:
                 value = self.menu.lookup_parameter(self.parameter)
-            if self.options is not None:
+            if self.options is not None and value is not None:
                 try:                    
                     if callable(self.typecast):
                         if type(self.options) in (float, int):
@@ -80,7 +80,9 @@ class MenuItemCommand(MenuItemBase):
                         else:
                             option = self.options[value]
                 except Exception as e:
-                    logging.error('Parameter exception: '+ str(e))
+                    logging.error('Parameter mapping exception: '+ str(e))
+            elif value is None:
+                logging.error("Parameter '%s' not found" % str(self.parameter))
         return (value, option)
 
     def _get_formatted(self, literal, value = None):
@@ -309,12 +311,10 @@ class MenuManager:
             self.lookup_section_names(self.config, 'servo')
             # start timer
             reactor = self.printer.get_reactor()
-            reactor.register_timer(self._timer_event, reactor.NOW)
-            reactor.register_timer(self._blink_event, reactor.NOW)
+            reactor.register_timer(self.timeout_event, reactor.NOW)
+            reactor.register_timer(self.blink_event, reactor.NOW)
 
-    def _timer_event(self, eventtime):
-        # update parameters
-        self._update_parameters(eventtime)
+    def timeout_event(self, eventtime):
         # check timeout
         if self.is_running() and self.timeout > 0:
             if self.timer >= self.timeout:
@@ -335,6 +335,7 @@ class MenuManager:
         self.current_selected = 0
         if self.root is not None:
             self.running = True
+            self.update_parameters(eventtime)
             self.populate_menu()
             self.current_group = self.lookup_menuitem(self.root)
         else:
@@ -345,7 +346,7 @@ class MenuManager:
             if isinstance(item, (MenuItemGroup,MenuItemRow)):
                 item.populate_items()
 
-    def _update_parameters(self, eventtime):
+    def update_parameters(self, eventtime):
         self.parameters = {}        
         for name in self.objs.keys():            
             if self.objs[name] is not None and type(self.objs[name]) != dict:
@@ -399,13 +400,13 @@ class MenuManager:
             return self.groupstack[len(self.groupstack)-1]
         return None
     
-    # toggle blink
-    def _blink_event(self, eventtime):
+    def blink_event(self, eventtime):
         self.blink_state = not self.blink_state
         return eventtime + (BLINK_OFF_TIME if self.blink_state else BLINK_ON_TIME)
 
-    def update(self, eventtime):
+    def update(self, eventtime):        
         lines = []
+        self.update_parameters(eventtime)
         if self.running and isinstance(self.current_group, MenuItemGroup):
             if self.first:
                 self.run_script(self.current_group.get_enter_gcode())
