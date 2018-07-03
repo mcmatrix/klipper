@@ -130,6 +130,8 @@ class MenuItemInput(MenuItemCommand):
         self.input_value = None
 
     def inc_value(self):
+        if self.input_value is None:
+            return
         if(self.reverse is True):
             self.input_value -= abs(self.input_step) 
         else:
@@ -137,6 +139,8 @@ class MenuItemInput(MenuItemCommand):
         self.input_value = min(self.input_max, max(self.input_min, self.input_value))
 
     def dec_value(self):
+        if self.input_value is None:
+            return
         if(self.reverse is True):
             self.input_value += abs(self.input_step) 
         else:
