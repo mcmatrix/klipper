@@ -44,52 +44,78 @@ class MenuItemCommand(MenuItemBase):
     def __init__(self, menu, config):
         super(MenuItemCommand, self).__init__(menu, config)
         self.name = self._remove_quotes(config.get('name'))
-        self.gcode = config.get('gcode', None)        
-        self.parameter, self.options, self.typecast = self.parse_parameter(config.get('parameter', ''))
+        self.gcode = config.get('gcode', None) 
+        self.parameter = config.get('parameter', '')        
+        self.transform = self.parse_transform(config.get('transform', ''))
 
-    def parse_parameter(self, str = ''):
-        # endstop.xmax:f['OFF','ON']
-        conv = {'f': float, 'i': int, 'b': bool, 's': str}
-        t = str.split(':', 1)
-        p = t[0] if t[0] else None
-        o = None
-        c = None
-        if len(t) > 1 and t[1] and t[1][0] in conv:
+    def make_mapper(self, left_min, left_max, right_min, right_max, cast_fn): 
+        # interpolate
+        left_span = left_max - left_min  
+        right_span = right_max - right_min  
+        scale_factor = float(right_span) / float(left_span) 
+        def map_fn(value):
+            return cast_fn(right_min + (value-left_min)*scale_factor)
+        return map_fn
+
+    def make_scaler(self, scale_factor, cast_fn): 
+        def scale_fn(value):
+            return cast_fn(value*scale_factor)
+        return scale_fn    
+    
+    def make_chooser(self, choices, cast_fn): 
+        def choose_fn(value):
+            return choices[cast_fn(value)]
+        return choose_fn
+
+    def parse_transform(self, transform):
+        fn = None
+        if transform:
             try:
-                o = ast.literal_eval(t[1][1:])
-                c = conv[t[1][0]]
-            except:
-                pass
-        return (p, o, c)
-
-    def get_format_args(self, value = None):
-        option = None
+                o = ast.literal_eval(transform)                
+                if type(o) == tuple and len(o) == 4 and type(o[3]) in (float, int):
+                    # mapper (interpolate), cast type by last parameter type
+                    fn = self.make_mapper(o[0], o[1], o[2], o[3], type(o[3]))
+                elif type(o) == tuple and len(o) == 2:
+                    # boolean chooser for 2 size tuple
+                    fn = self.make_chooser(o, bool)
+                elif type(o) == list and o:
+                    # int chooser for list
+                    fn = self.make_chooser(o, int)
+                elif type(o) == str and o:
+                    # int chooser for string
+                    fn = self.make_chooser(o, int)
+                elif type(o) in (float, int):
+                    # scaler, cast type depends from scale factor type
+                    fn = self.make_scaler(o, type(o))
+                elif type(o) == dict and o.keys() and type(o.keys()[0]) in (int, float, str):
+                    # chooser, cast type by first key type
+                    fn = self.make_chooser(o, type(o.keys()[0]))
+                else:
+                    logging.error("Invalid transform parameter: '%s'" % str(transform))
+            except Exception as e:
+                logging.error('Transform parsing exception: '+ str(e))
+        return fn
+        
+    def get_values(self, value = None):
+        transformed = None
         if self.parameter:            
             if value is None:
                 value = self.menu.lookup_parameter(self.parameter)
-            if self.options is not None and value is not None:
-                try:                    
-                    if callable(self.typecast):
-                        if type(self.options) in (float, int):
-                            option = self.typecast(self.options * value)
-                        else:
-                            option = self.options[self.typecast(value)]
-                    else:
-                        if type(self.options) in (float, int):
-                            option = self.options * value
-                        else:
-                            option = self.options[value]
+            if value is not None:
+                try:
+                    if self.transform is not None and callable(self.transform):
+                        transformed = self.transform(value)
                 except Exception as e:
-                    logging.error('Parameter mapping exception: '+ str(e))
+                    logging.error('Transformation exception: '+ str(e))
             elif value is None:
                 logging.error("Parameter '%s' not found" % str(self.parameter))
-        return (value, option)
+        return (value, transformed)
 
-    def _get_formatted(self, literal, value = None):
-        args = self.get_format_args(value)
-        if type(literal) == str and len(args) > 0:
+    def _get_formatted(self, literal, val = None):
+        values = [value for value in self.get_values(val) if value is not None]
+        if type(literal) == str and len(values) > 0:
             try:
-                literal = literal.format(*args)
+                literal = literal.format(*values)
             except Exception as e:
                 logging.error('Format exception: '+ str(e))
         return literal
@@ -119,7 +145,7 @@ class MenuItemInput(MenuItemCommand):
         return self.input_value is not None
 
     def init_value(self):
-        args = self.get_format_args()
+        args = self.get_values()
         if len(args) > 0:
             try:
                 self.input_value = float(args[0])
