@@ -884,8 +884,7 @@ class MenuManager:
             container = self.menustack[self.stack_size()-lvl-1]
         return container
     
-    # TODO rename to render
-    def update(self, eventtime):
+    def render(self, eventtime):
         lines = []
         self.update_parameters(eventtime)
         container = self.stack_peek()        
