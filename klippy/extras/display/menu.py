@@ -449,6 +449,9 @@ class MenuGroup(MenuContainer):
         self.selected = None
         self.items = config.get('items')
 
+    def is_accepted(self, item):
+        return super(MenuGroup, self).is_accepted(item) and type(item) not in (MenuDeck, MenuCard)
+
     def is_scrollable(self):
         return False
 
@@ -595,6 +598,9 @@ class MenuList(MenuContainer):
         self._enter_gcode = config.get('enter_gcode', None)
         self._leave_gcode = config.get('leave_gcode', None)
         self.items = config.get('items')
+
+    def is_accepted(self, item):
+        return super(MenuList, self).is_accepted(item) and type(item) not in (MenuDeck, MenuCard)
 
     def _names_aslist(self):
         return self._aslist_splitlines(self.items)
@@ -1000,13 +1006,13 @@ class MenuManager:
                     self.selected = index
                 else:
                     self.top_row = 0
-                    self.selected = 0
+                    self.selected = 0                
                 # init element
-                if isinstance(container[self.selected], MenuElement):
-                    container[self.selected].init()
+                if isinstance(parent[self.selected], MenuElement):
+                    parent[self.selected].init()
                 # wind up group first item or init item
-                if isinstance(container[self.selected], MenuGroup):
-                    container[self.selected].find_next_item()
+                if isinstance(parent[self.selected], MenuGroup):
+                    parent[self.selected].find_next_item()
             else:
                 self.stack_pop()
                 self.running = False
