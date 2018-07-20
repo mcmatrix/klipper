@@ -729,7 +729,9 @@ class MenuManager:
         for name in self.objs.keys():
             if self.objs[name] is None:
                 self.objs[name] = self.printer.lookup_object(name, None)
-        self.root = config.get('menu_root', None)
+        self.root = None
+        self._root = config.get('menu_root', None)
+        self.autorun = config.getboolean('menu_autorun', False)
         dims = config.getchoice('lcd_type', LCD_dims)
         self.rows = config.getint('rows', dims[0])
         self.cols = config.getint('cols', dims[1])
@@ -747,6 +749,9 @@ class MenuManager:
     
     def printer_state(self, state):
         if state == 'ready':
+            # Load menu root
+            if self._root is not None:
+                self.root = self.lookup_menuitem(self._root)
             # Load printer objects available in ready state
             for name in self.objs.keys():
                 if self.objs[name] is None:
@@ -772,12 +777,15 @@ class MenuManager:
 
     def timeout_check(self, eventtime):
         # check timeout
-        if self.is_running() and self.timeout > 0:
+        if self.is_running() and self.timeout > 0 and not self._timeout_autorun_root():
             if self.timer >= self.timeout:
                 self.exit()
             self.timer += 1
         else:
             self.timer = 0
+
+    def _timeout_autorun_root(self):
+        return self.autorun is True and self.root is not None and self.stack_peek() is self.root and self.selected == 0
 
     def is_running(self):
         return self.running
@@ -786,15 +794,17 @@ class MenuManager:
         self.menustack = []        
         self.top_row = 0
         self.selected = 0
-        root = self.lookup_menuitem(self.root)
-        if isinstance(root, MenuContainer):
+        self.timer = 0
+        if isinstance(self.root, MenuContainer):
             self.update_parameters(eventtime)
             self.populate_items()
-            self.stack_push(root)
-            self.running = True            
-        else:
-            logging.error("Invalid root '%s', menu stopped!" % str(self.root))
-            self.running = False
+            self.stack_push(self.root)
+            self.running = True
+            return
+        elif self.root is not None:
+            logging.error("Invalid root '%s', menu stopped!" % str(self._root))
+
+        self.running = False
 
     def populate_items(self):
         for name, item in self.menuitems.items():
@@ -887,7 +897,7 @@ class MenuManager:
     def render(self, eventtime):
         lines = []
         self.update_parameters(eventtime)
-        container = self.stack_peek()        
+        container = self.stack_peek()
         if self.running and isinstance(container, MenuContainer):
             if not container.is_editing():
                 container.update_items()
