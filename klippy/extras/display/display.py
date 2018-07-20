@@ -21,6 +21,7 @@ class PrinterLCD:
         self.lcd_chip = config.getchoice('lcd_type', LCD_chips)(config)
         self.lcd_type = config.get('lcd_type')
         # menu
+        self.menu_autorun = config.getboolean('menu_autorun', False)
         self.menu = menu.MenuManager(config)
         # buttons
         self.encoder_pins = config.get('encoder_pins', None)
@@ -28,7 +29,7 @@ class PrinterLCD:
         self.back_pin = config.get('back_pin', None)
         self.up_pin = config.get('up_pin', None)
         self.down_pin = config.get('down_pin', None)
-        self.kill_pin = config.get('kill_pin', None)
+        self.kill_pin = config.get('kill_pin', None)        
         # printer objects
         self.buttons = self.printer.try_load_module(config, "buttons")
         self.gcode = self.toolhead = self.sdcard = None
@@ -127,8 +128,11 @@ class PrinterLCD:
         # check menu
         if self.menu and self.menu.is_running():
             update_delay = MENU_UPDATE_DELAY
-            for y, line in enumerate(self.menu.update(eventtime)):
+            for y, line in enumerate(self.menu.render(eventtime)):
                 self.lcd_chip.write_text(0, y, line)
+        elif self.menu and not self.menu.is_running() and self.menu_autorun is True:
+            # lets start and populate the menu items
+            self.menu.begin(eventtime)
         else:            
             if self.lcd_type == 'hd44780':
                 self.screen_update_hd44780(eventtime)
