@@ -11,15 +11,15 @@ class error(Exception):
 
 # static class for cursor
 class MenuCursor:
-    SIZE = 3
-    CURSORS = ' >*'
-    NONE, SELECT, EDIT = range(SIZE)
+    NONE = ' '
+    SELECT = '>'
+    EDIT = '*'
 
 # Menu element baseclass
 class MenuElement(object):
     def __init__(self, menu, config):
+        self.cursor = config.get('cursor', MenuCursor.SELECT)
         self._menu = menu
-        self._cursors = config.get('cursors', MenuCursor.CURSORS) # none, select, edit
         self._width = self._asint(config.get('width', '0'))
         self._scroll = self._asbool(config.get('scroll', 'false'))
         self._enable_any = self._asbool(config.get('enable_any', 'false'))
@@ -29,9 +29,9 @@ class MenuElement(object):
         self.__scroll_offs = 0
         self.__scroll_diff = 0
         self.__scroll_dir = 0
-        self.__last_state = True        
-        if len(self._cursors) < MenuCursor.SIZE:
-            raise error("Cursors list with unexpected length, expecting %d." % (MenuCursor.SIZE))
+        self.__last_state = True
+        if len(self.cursor) < 1:
+            raise error("Cursor with unexpected length, expecting 1.")
 
     # override
     def _render(self):
@@ -59,18 +59,12 @@ class MenuElement(object):
         return logical_fn[int(self._enable_any)]([self._lookup_bool(enable) for enable in self._enable])
 
     def _revive(self):
-        pass
-
-    def get_cursor(self, idx):
-        if idx in range(MenuCursor.SIZE):
-            return self._cursors[idx]
-        return MenuCursor.CURSORS[MenuCursor.NONE]
+        self.__clear_scroll()
 
     def heartbeat(self, eventtime):
         state = bool(int(eventtime) & 1)
-        if (eventtime - self._last_heartbeat) > 1:
-            self._revive()
-            self.__clear_scroll()
+        if (eventtime - self._last_heartbeat) >= 1:
+            self._revive()            
 
         if self.__last_state ^ state:
             self.__last_state = state
@@ -85,7 +79,7 @@ class MenuElement(object):
         self.__scroll_offs = 0
 
     def __update_scroll(self, eventtime):
-        if self.__scroll_diff > 0 and self.__scroll_dir:
+        if self.__scroll_dir and self.__scroll_diff > 0:
             self.__scroll_offs += self.__scroll_dir
             if self.__scroll_offs >= self.__scroll_diff:
                 self.__scroll_dir = -1
@@ -94,22 +88,24 @@ class MenuElement(object):
         else:
             self.__clear_scroll()        
 
+    def __render_scroll(self, s):
+        if not self.__scroll_dir:
+            self.__scroll_dir = 1
+            self.__scroll_offs = 0
+        return s[self.__scroll_offs:self._width+self.__scroll_offs].ljust(self._width)
+
     def render(self, scroll = False):
-        out = str(self._render())
+        s = str(self._render())
         if self._width > 0:
-            diff = len(out) - self._width
-            if scroll and self._scroll is True and self.is_scrollable() and diff > 0:
-                if not self.__scroll_dir:
-                    self.__scroll_diff = diff
-                    self.__scroll_dir = 1
-                    self.__scroll_offs = 0
-                out = out[self.__scroll_offs:self._width+self.__scroll_offs].ljust(self._width)
+            self.__scroll_diff = len(s) - self._width
+            if scroll and self._scroll is True and self.is_scrollable() and self.__scroll_diff > 0:
+                s = self.__render_scroll(s)
             else:
                 self.__clear_scroll()
-                out = out[:self._width].ljust(self._width)
+                s = s[:self._width].ljust(self._width)
         else:
             self.__clear_scroll()
-        return out
+        return s
 
     def _lookup_bool(self, b):
         if not self._asbool(b):
@@ -183,9 +179,6 @@ class MenuElement(object):
             subvalues = self._aslist_split(value, sep = ',')
             result.extend(subvalues)
         return result
-
-    def __str__(self):
-        return str(self.render())
 
 # menu container baseclass
 class MenuContainer(MenuElement):
@@ -364,16 +357,16 @@ class MenuItem(MenuElement):
 class MenuCommand(MenuItem):
     def __init__(self, menu, config):
         super(MenuCommand, self).__init__(menu, config)
-        self.gcode = config.get('gcode')
-        self.action = config.get('action', None)
+        self._gcode = config.get('gcode')
+        self._action = config.get('action', None)
 
     def is_readonly(self):
         return False
 
     def get_gcode(self):
-        return self._get_formatted(self.gcode)
+        return self._get_formatted(self._gcode)
 
-    def get_action(self):
+    def call_action(self):
         fn = None
         def back_fn():
             self._menu.back()
@@ -386,17 +379,13 @@ class MenuCommand(MenuItem):
             'exit': exit_fn
         }
         try:
-            s = str(self.action).strip()
+            s = str(self._action).strip()
             fn = _actions.get(s)
         except:
-            logging.error("Unknown action %s" % (self.action))
-        return fn
-
-    def __call__(self):
-        if self.action is not None:
-            action = self.get_action()
-            if callable(action):
-                action()
+            logging.error("Unknown action %s" % (self._action))
+        
+        if callable(fn):
+            fn()
 
 class MenuInput(MenuCommand):
     def __init__(self, menu, config):
@@ -418,7 +407,7 @@ class MenuInput(MenuCommand):
         return self._get_formatted(self._name, self._input_value)
 
     def get_gcode(self):
-        return self._get_formatted(self.gcode, self._input_value)
+        return self._get_formatted(self._gcode, self._input_value)
     
     def is_editing(self):
         return self._input_value is not None
@@ -600,8 +589,8 @@ class MenuCycler(MenuGroup):
 class MenuList(MenuContainer):
     def __init__(self, menu, config):
         super(MenuList, self).__init__(menu, config)
-        self.enter_gcode = config.get('enter_gcode', None)
-        self.leave_gcode = config.get('leave_gcode', None)
+        self._enter_gcode = config.get('enter_gcode', None)
+        self._leave_gcode = config.get('leave_gcode', None)
         self.items = config.get('items')
 
     def _names_aslist(self):
@@ -614,10 +603,10 @@ class MenuList(MenuContainer):
         return super(MenuList, self)._lookup_item(item)
 
     def get_enter_gcode(self):
-        return self.enter_gcode
+        return self._enter_gcode
 
     def get_leave_gcode(self):
-        return self.leave_gcode
+        return self._leave_gcode
 
 class MenuVSDCard(MenuList):
     def __init__(self, menu, config):
@@ -631,7 +620,7 @@ class MenuVSDCard(MenuList):
                 gcode = [
                     'M23 /%s' % str(fname)
                 ]
-                self.append_item(MenuCommand(self._menu, {'name': '%s' % str(fname), 'cursors':' +*', 'gcode': "\n".join(gcode)}))
+                self.append_item(MenuCommand(self._menu, {'name': '%s' % str(fname), 'cursor':'+', 'gcode': "\n".join(gcode)}))
 
     def populate_items(self):
         super(MenuVSDCard, self).populate_items()
@@ -706,7 +695,7 @@ LCD_dims = { 'st7920': (4,16), 'hd44780': (4,20), 'uc1701' : (4,16) }
 
 TIMER_DELAY   = 0.200
 BLINK_FAST_SEQUENCE = (True, True, False, False)
-BLINK_SLOW_SEQUENCE = (True, True, True, False, False, False)
+BLINK_SLOW_SEQUENCE = (True, True, True, True, False, False, False)
 
 class MenuManager:
     def __init__(self, config):
@@ -913,24 +902,21 @@ class MenuManager:
             else:
                 for row in range(self.top_row, self.top_row + self.rows):
                     s = ""
-                    if row < len(container):
+                    if row < len(container):                        
                         selected = (row == self.selected)
                         current = container[row]
-                        current.heartbeat(eventtime)
-                        name = "%s" % str(current.render(selected))
                         if selected:
+                            current.heartbeat(eventtime)
                             if isinstance(current, (MenuInput, MenuGroup)) and current.is_editing():
-                                s += current.get_cursor(MenuCursor.EDIT)
+                                s += MenuCursor.EDIT
                             elif isinstance(current, MenuElement):
-                                s += current.get_cursor(MenuCursor.SELECT)
+                                s += current.cursor
                             else:
-                                s += MenuCursor.CURSORS[MenuCursor.SELECT]
+                                s += MenuCursor.SELECT
                         else:
-                            if isinstance(current, MenuElement):
-                                s += current.get_cursor(MenuCursor.NONE)
-                            else:
-                                s += MenuCursor.CURSORS[MenuCursor.NONE]
+                            s += MenuCursor.NONE
 
+                        name = "%s" % str(current.render(selected))
                         if isinstance(current, MenuList):                        
                             s += name[:self.cols-len(s)-1].ljust(self.cols-len(s)-1) + '>'
                         else:
@@ -1019,7 +1005,7 @@ class MenuManager:
                 else:
                     current.init_value()
             elif isinstance(current, MenuCommand):
-                current()
+                current.call_action()
                 self.run_script(current.get_gcode())
 
     def exit(self):
