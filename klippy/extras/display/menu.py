@@ -25,10 +25,9 @@ class MenuElement(object):
         self._enable_any = self._asbool(config.get('enable_any', 'false'))
         self._enable = self._aslist(config.get('enable', 'true'))
         self._name = self._strip_quotes(config.get('name'))
-        self._last_heartbeat = 0
         self.__scroll_offs = 0
         self.__scroll_diff = 0
-        self.__scroll_dir = 0
+        self.__scroll_dir = None
         self.__last_state = True
         if len(self.cursor) < 1:
             raise error("Cursor with unexpected length, expecting 1.")
@@ -58,39 +57,38 @@ class MenuElement(object):
         logical_fn = (all,any)
         return logical_fn[int(self._enable_any)]([self._lookup_bool(enable) for enable in self._enable])
 
-    def _revive(self):
+    def init(self):
         self.__clear_scroll()
 
     def heartbeat(self, eventtime):
         state = bool(int(eventtime) & 1)
-        if (eventtime - self._last_heartbeat) >= 1:
-            self._revive()            
-
         if self.__last_state ^ state:
             self.__last_state = state
             if not self.is_editing():
                 self._second_tick(eventtime)
                 self.__update_scroll(eventtime)
-        self._last_heartbeat = eventtime
 
     def __clear_scroll(self):
-        self.__scroll_dir = 0
+        self.__scroll_dir = None
         self.__scroll_diff = 0
         self.__scroll_offs = 0
 
     def __update_scroll(self, eventtime):
-        if self.__scroll_dir and self.__scroll_diff > 0:
+        if self.__scroll_dir == 0 and self.__scroll_diff > 0:
+            self.__scroll_dir = 1
+            self.__scroll_offs = 0
+        elif self.__scroll_dir and self.__scroll_diff > 0:
             self.__scroll_offs += self.__scroll_dir
             if self.__scroll_offs >= self.__scroll_diff:
                 self.__scroll_dir = -1
             elif self.__scroll_offs <= 0:
                 self.__scroll_dir = 1
         else:
-            self.__clear_scroll()        
+            self.__clear_scroll()
 
     def __render_scroll(self, s):
-        if not self.__scroll_dir:
-            self.__scroll_dir = 1
+        if self.__scroll_dir is None:
+            self.__scroll_dir = 0
             self.__scroll_offs = 0
         return s[self.__scroll_offs:self._width+self.__scroll_offs].ljust(self._width)
 
@@ -462,6 +460,11 @@ class MenuGroup(MenuContainer):
 
     def _names_aslist(self):
         return self._aslist_split(self.items, sep=self._sep)
+
+    def init(self):
+        super(MenuGroup, self).init()
+        for item in self._items:
+            item.init()
 
     def _render_item(self, item, selected = False, scroll = False):
         name = "%s" % str(item.render(scroll))
@@ -950,7 +953,10 @@ class MenuManager:
                 else:
                     self.top_row -= 1
                     self.selected -= 1
-                # wind up group last item
+                # init element
+                if isinstance(container[self.selected], MenuElement):
+                    container[self.selected].init()
+                # wind up group last item or init item
                 if isinstance(container[self.selected], MenuGroup):
                     container[self.selected].find_prev_item()
 
@@ -971,6 +977,9 @@ class MenuManager:
                 else:
                     self.top_row += 1
                     self.selected += 1 
+                # init element
+                if isinstance(container[self.selected], MenuElement):
+                    container[self.selected].init()
                 # wind up group first item
                 if isinstance(container[self.selected], MenuGroup):
                     container[self.selected].find_next_item()
@@ -992,6 +1001,12 @@ class MenuManager:
                 else:
                     self.top_row = 0
                     self.selected = 0
+                # init element
+                if isinstance(container[self.selected], MenuElement):
+                    container[self.selected].init()
+                # wind up group first item or init item
+                if isinstance(container[self.selected], MenuGroup):
+                    container[self.selected].find_next_item()
             else:
                 self.stack_pop()
                 self.running = False
