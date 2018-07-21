@@ -22,8 +22,7 @@ class MenuElement(object):
         self._menu = menu
         self._width = self._asint(config.get('width', '0'))
         self._scroll = self._asbool(config.get('scroll', 'false'))
-        self._enable_any = self._asbool(config.get('enable_any', 'false'))
-        self._enable = self._aslist(config.get('enable', 'true'))
+        self._enable = self._aslist(config.get('enable', 'true'), flatten=False)
         self._name = self._strip_quotes(config.get('name'))
         self.__scroll_offs = 0
         self.__scroll_diff = 0
@@ -54,8 +53,7 @@ class MenuElement(object):
 
     # override
     def is_enabled(self):
-        logical_fn = (all,any)
-        return logical_fn[int(self._enable_any)]([self._lookup_bool(enable) for enable in self._enable])
+        return self._parse_bool(self._enable)
 
     def init(self):
         self.__clear_scroll()
@@ -105,9 +103,15 @@ class MenuElement(object):
             self.__clear_scroll()
         return s
 
+    def _parse_bool(self, lst):
+        try:
+            return any([all([self._lookup_bool(l2) for l2 in self._aslist_split(l1)]) for l1 in lst])
+        except:
+            return False
+
     def _lookup_bool(self, b):
         if not self._asbool(b):
-            if b[0] == '!': # negation:
+            if b[0] == '!': # logical negation:
                 return not (not not self._menu.lookup_parameter(b[1:]))
             else:
                 return not not self._menu.lookup_parameter(b)
@@ -389,7 +393,7 @@ class MenuInput(MenuCommand):
     def __init__(self, menu, config):
         super(MenuInput, self).__init__(menu, config)
         self._reverse = self._asbool(config.get('reverse', 'false'))
-        self._readonly = self._aslist(config.get('readonly', 'false'))
+        self._readonly = self._aslist(config.get('readonly', 'false'), flatten=False)
         self._input_value = None
         self._input_min = config.getfloat('input_min', sys.float_info.min)
         self._input_max = config.getfloat('input_max', sys.float_info.max)
@@ -399,7 +403,7 @@ class MenuInput(MenuCommand):
         return False
 
     def is_readonly(self):
-        return all([self._lookup_bool(readonly) for readonly in self._readonly])
+        return self._parse_bool(self._readonly)
 
     def _render(self):
         return self._get_formatted(self._name, self._input_value)
