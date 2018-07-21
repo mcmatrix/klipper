@@ -60,8 +60,6 @@ class PrinterLCD:
     def printer_state(self, state):
         if state == 'ready':
             self.lcd_chip.init()
-            # Menu
-            self.menu.printer_state(state)
             # Load printer objects
             self.gcode = self.printer.lookup_object('gcode')
             self.toolhead = self.printer.lookup_object('toolhead')
@@ -83,6 +81,9 @@ class PrinterLCD:
             self.load_glyph(self.FAN2_GLYPH, icons.fan2_icon)
             # Start screen update timer
             self.reactor.update_timer(self.screen_update_timer, self.reactor.NOW)
+        # Menu
+        self.menu.printer_state(state)
+
     # ST7920/UC1701 Glyphs
     def load_glyph(self, glyph_id, data):
         if self.lcd_type == 'uc1701':
