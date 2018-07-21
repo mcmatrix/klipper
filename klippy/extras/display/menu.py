@@ -53,7 +53,7 @@ class MenuElement(object):
 
     # override
     def is_enabled(self):
-        return self._parse_boolean(self._enable)
+        return self._parse_bool(self._enable)
 
     def init(self):
         self.__clear_scroll()
@@ -103,7 +103,7 @@ class MenuElement(object):
             self.__clear_scroll()
         return s
 
-    def _parse_boolean(self, lst):
+    def _parse_bool(self, lst):
         try:
             return any([all([self._lookup_bool(l2) for l2 in self._aslist_split(l1)]) for l1 in lst])
         except:
@@ -111,7 +111,7 @@ class MenuElement(object):
 
     def _lookup_bool(self, b):
         if not self._asbool(b):
-            if b[0] == '!': # negation:
+            if b[0] == '!': # logical negation:
                 return not (not not self._menu.lookup_parameter(b[1:]))
             else:
                 return not not self._menu.lookup_parameter(b)
@@ -403,7 +403,7 @@ class MenuInput(MenuCommand):
         return False
 
     def is_readonly(self):
-        return self._parse_boolean(self._readonly)
+        return self._parse_bool(self._readonly)
 
     def _render(self):
         return self._get_formatted(self._name, self._input_value)
