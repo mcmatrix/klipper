@@ -454,7 +454,7 @@ class MenuGroup(MenuContainer):
         self.items = config.get('items')
 
     def is_accepted(self, item):
-        return super(MenuGroup, self).is_accepted(item) and type(item) not in (MenuDeck, MenuCard)
+        return super(MenuGroup, self).is_accepted(item) and type(item) is not MenuCard
 
     def is_scrollable(self):
         return False
@@ -604,7 +604,7 @@ class MenuList(MenuContainer):
         self.items = config.get('items')
 
     def is_accepted(self, item):
-        return super(MenuList, self).is_accepted(item) and type(item) not in (MenuDeck, MenuCard)
+        return super(MenuList, self).is_accepted(item) and type(item) is not MenuCard
 
     def _names_aslist(self):
         return self._aslist_splitlines(self.items)
