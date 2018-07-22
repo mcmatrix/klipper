@@ -485,8 +485,6 @@ class MenuGroup(MenuContainer):
 
     def _render(self):
         s = ""
-        if not self.is_editing(): 
-            self.update_items()
         if self.selected is not None:
             self.selected = (self.selected % len(self)) if len(self) > 0 else None
 
@@ -615,6 +613,12 @@ class MenuList(MenuContainer):
             item = MenuGroup(self._menu, {'name':'Group', 'items': item}, ',')
         return super(MenuList, self)._lookup_item(item)
 
+    def update_items(self):
+        super(MenuList, self).update_items()
+        for item in self._items:            
+            if isinstance(item, MenuGroup) and not item.is_editing():
+                item.update_items()
+
     def get_enter_gcode(self):
         return self._enter_gcode
 
@@ -651,7 +655,10 @@ class MenuCard(MenuGroup):
         return filter(None, [self._strip_quotes(s) for s in self._aslist_splitlines(self.content)])
 
     def update_items(self):
-        self._items = [item for item in self._allitems]       
+        self._items = self._allitems[:]
+        for item in self._items:            
+            if isinstance(item, MenuGroup) and not item.is_editing():
+                item.update_items()
 
     def _lookup_item(self, item):
         if isinstance(item, str) and ',' in item:
@@ -691,12 +698,6 @@ class MenuDeck(MenuList):
 
     def is_accepted(self, item):
         return type(item) is MenuCard
-
-    def update_items(self):
-        super(MenuDeck, self).update_items()
-        for item in self._items:
-            if isinstance(item, MenuContainer) and not item.is_editing():
-                item.update_items()
 
     def _render(self):
         return self._name
@@ -879,7 +880,9 @@ class MenuManager:
         top = self.stack_peek()
         if top is not None:
             self.run_script(top.get_leave_gcode())
-        self.run_script(container.get_enter_gcode())        
+        self.run_script(container.get_enter_gcode())
+        if not container.is_editing():
+            container.update_items()
         self.menustack.append(container)
 
     def stack_pop(self):
@@ -888,10 +891,16 @@ class MenuManager:
             container = self.menustack.pop()
             if not isinstance(container, MenuContainer):
                 raise error("Wrong type, expected MenuContainer")
-            self.run_script(container.get_leave_gcode())
             top = self.stack_peek()
             if top is not None:
+                if not isinstance(container, MenuContainer):
+                    raise error("Wrong type, expected MenuContainer")
+                if not top.is_editing():
+                    top.update_items()
+                self.run_script(container.get_leave_gcode())
                 self.run_script(top.get_enter_gcode())
+            else:
+                self.run_script(container.get_leave_gcode())
         return container
     
     def stack_size(self):
@@ -908,13 +917,13 @@ class MenuManager:
         self.update_parameters(eventtime)
         container = self.stack_peek()
         if self.running and isinstance(container, MenuContainer):
-            if not container.is_editing():
-                container.update_items()
             container.heartbeat(eventtime)                
             # clamps
             self.top_row = max(0, min(self.top_row, len(container) - self.rows))
             self.selected = max(0, min(self.selected, len(container)-1))
             if isinstance(container, MenuDeck):
+                if not container.is_editing():
+                    container.update_items()                
                 container[self.selected].heartbeat(eventtime)
                 lines = container[self.selected].render_content(eventtime)                
             else:
