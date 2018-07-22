@@ -225,6 +225,8 @@ class MenuContainer(MenuElement):
         if item is not None:
             if not self.is_accepted(item):
                 raise error("Menu item '%s'is not accepted!" % str(type(item)))
+            if isinstance(item, (MenuContainer)):
+                item.populate_items()            
             self._allitems.append(item)
 
     def populate_items(self):
@@ -563,7 +565,6 @@ class MenuCycler(MenuGroup):
     def _lookup_item(self, item):        
         if isinstance(item, str) and '|' in item:
             item = MenuItemGroup(self._menu, {'name':'ItemGroup', 'items': item}, '|')
-            item.populate_items()
         elif isinstance(item, str) and item.isdigit():
             try:
                 self._interval = max(0, int(item))
@@ -612,7 +613,6 @@ class MenuList(MenuContainer):
     def _lookup_item(self, item):
         if isinstance(item, str) and ',' in item:
             item = MenuGroup(self._menu, {'name':'Group', 'items': item}, ',')
-            item.populate_items()
         return super(MenuList, self)._lookup_item(item)
 
     def get_enter_gcode(self):
@@ -656,7 +656,6 @@ class MenuCard(MenuGroup):
     def _lookup_item(self, item):
         if isinstance(item, str) and ',' in item:
             item = MenuCycler(self._menu, {'name':'Cycler', 'items': item}, ',')
-            item.populate_items()
         return super(MenuCard, self)._lookup_item(item)
 
     def render_content(self, eventtime):
@@ -715,6 +714,7 @@ class MenuManager:
         self.running = False
         self.menuitems = {}
         self.menustack = []
+        self._recursive_guard = []
         self.top_row = 0
         self.selected = 0
         self.blink_fast_state = True
@@ -804,13 +804,14 @@ class MenuManager:
         return self.running
 
     def begin(self, eventtime):
-        self.menustack = []        
+        self.menustack = []
+        self._recursive_guard = []
         self.top_row = 0
         self.selected = 0
         self.timer = 0
         if isinstance(self.root, MenuContainer):
             self.update_parameters(eventtime)
-            self.populate_items()
+            self.root.populate_items()
             self.stack_push(self.root)
             self.running = True
             return
@@ -818,11 +819,6 @@ class MenuManager:
             logging.error("Invalid root '%s', menu stopped!" % str(self._root))
 
         self.running = False
-
-    def populate_items(self):
-        for name, item in self.menuitems.items():
-            if isinstance(item, (MenuContainer)):
-                item.populate_items()
 
     def update_parameters(self, eventtime):
         self.parameters = {
@@ -1075,12 +1071,18 @@ class MenuManager:
                 "Menu object '%s' already created" % (name,))        
         self.menuitems[name] = menu
 
-    def lookup_menuitem(self, name):
+    def lookup_menuitem(self, name, peek = False):
         if name is None:
             return None
         if name not in self.menuitems:
             raise self.printer.config_error(
                 "Unknown menuitem '%s'" % (name,))
+        if not peek and isinstance(self.menuitems[name], MenuContainer):
+            if name in self._recursive_guard:
+                raise self.printer.config_error(
+                    "Containers can only be used once! Potential recursive relation of '%s'" % (name,))
+            else:
+                self._recursive_guard.append(name)
         return self.menuitems[name]
 
     def lookup_section_names(self, config, section):
