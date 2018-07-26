@@ -370,26 +370,14 @@ class MenuCommand(MenuItem):
     def get_gcode(self):
         return self._get_formatted(self._gcode)
 
-    def call_action(self):
-        fn = None
-        def back_fn():
-            self._menu.back()
-        
-        def exit_fn():
-            self._menu.exit()
-
-        _actions = {
-            'back': back_fn, 
-            'exit': exit_fn
-        }
-        try:
-            s = str(self._action).strip()
-            fn = _actions.get(s)
-        except:
-            logging.error("Unknown action %s" % (self._action))
-        
-        if callable(fn):
-            fn()
+    def __call__(self):
+        if self._action is not None:
+            try:
+                fmt = self._get_formatted(self._action)
+                args = fmt.split()
+                self._menu.run_action(args[0], *args[1:])
+            except Exception as e:
+                logging.error('Action format exception: '+ str(e))
 
 class MenuInput(MenuCommand):
     def __init__(self, menu, config):
@@ -1044,7 +1032,7 @@ class MenuManager:
                 else:
                     current.init_value()
             elif isinstance(current, MenuCommand):
-                current.call_action()
+                current()
                 self.run_script(current.get_gcode())
 
     def exit(self):
@@ -1052,6 +1040,20 @@ class MenuManager:
         if self.running and isinstance(container, MenuContainer):
             self.run_script(container.get_leave_gcode())
             self.running = False
+
+    def run_action(self, action, *args):
+        action = str(action).strip().lower()        
+        if action == 'back':
+            self.back()
+        elif action == 'exit':
+            self.exit()
+        elif action == 'log':
+            try:
+                logging.info("Info from log action: {}".format(*args))
+            except:
+                logging.error("Malformed log action call")
+        else:
+            logging.error("Unknown action %s" % (action))
 
     def run_script(self, script):
         if script is not None:
