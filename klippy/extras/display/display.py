@@ -316,7 +316,8 @@ class PrinterLCD:
             self.menu.down()
     def kill_callback(self, eventtime):
         if self.kill_pin:
-            self.printer.invoke_shutdown("Printer halted!")
+            # Emergency Stop
+            self.printer.invoke_shutdown("Shutdown due to kill button!")
     def set_message(self, msg, msg_time=None):
         self.message = msg
         self.msg_time = msg_time
