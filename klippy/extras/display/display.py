@@ -29,7 +29,7 @@ class PrinterLCD:
         self.back_pin = config.get('back_pin', None)
         self.up_pin = config.get('up_pin', None)
         self.down_pin = config.get('down_pin', None)
-        self.kill_pin = config.get('kill_pin', None)        
+        self.kill_pin = config.get('kill_pin', None)
         # printer objects
         self.buttons = self.printer.try_load_module(config, "buttons")
         self.gcode = self.toolhead = self.sdcard = None
@@ -123,7 +123,7 @@ class PrinterLCD:
             self.lcd_chip.write_graphics(x, y, i, data)
         self.lcd_chip.write_graphics(x, y, 15, [0xff]*width)
     # Screen updating
-    def screen_update_event(self, eventtime):        
+    def screen_update_event(self, eventtime):
         update_delay = DEFAULT_UPDATE_DELAY
         self.lcd_chip.clear()
         # check menu
@@ -134,7 +134,7 @@ class PrinterLCD:
         elif self.menu and not self.menu.is_running() and self.menu_autorun is True:
             # lets start and populate the menu items
             self.menu.begin(eventtime)
-        else:            
+        else:
             if self.lcd_type == 'hd44780':
                 self.screen_update_hd44780(eventtime)
             else:
@@ -295,7 +295,7 @@ class PrinterLCD:
     def encoder_cw_callback(self, eventtime):
         if self.menu:
             self.menu.up()
-    def encoder_ccw_callback(self, eventtime):        
+    def encoder_ccw_callback(self, eventtime):
         if self.menu:
             self.menu.down()
     def click_callback(self, eventtime):
@@ -304,7 +304,7 @@ class PrinterLCD:
                 # lets start and populate the menu items
                 self.menu.begin(eventtime)
             elif self.menu.is_running():
-                self.menu.select()        
+                self.menu.select()
     def back_callback(self, eventtime):
         if self.back_pin and self.menu:
             self.menu.back()
