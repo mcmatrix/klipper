@@ -1,4 +1,5 @@
-﻿# Basic LCD menu support
+# -*- coding: utf-8 -*-
+# Basic LCD menu support
 #
 # Based on the RaspberryPiLcdMenu from Alan Aufderheide, February 2013
 # Copyright (C) 2018  Janar Sööt <janar.soot@gmail.com>
