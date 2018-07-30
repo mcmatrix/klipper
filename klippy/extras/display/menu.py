@@ -5,7 +5,7 @@
 # Copyright (C) 2018  Janar Sööt <janar.soot@gmail.com>
 #
 # This file may be distributed under the terms of the GNU GPLv3 license.
-import logging, sys, ast
+import logging, sys, ast, re
 
 class error(Exception):
     pass
@@ -299,6 +299,28 @@ class MenuItem(MenuElement):
         funs = {'int':int, 'float':float, 'bool':bool, 'str':str, 'abs':abs, 'bin':bin, 'hex':hex, 'oct':oct}
         fn = None
         t = str(t).strip()
+        m = re.search(r"^(\d*)(?:\.?)([\S]+)(\([\S]*\))$", t)
+        #map(a,b,c,d)
+        #choose(a,b) - bool
+        #choose(a,b,c,..) - int
+        #choose({'a':1,'b':2})
+        #scale()
+        #days()
+        #hours()
+        #minutes()
+        #seconds()
+        #int()
+        #float()
+        #bool()
+        #str()
+        #abs()
+        #bin()
+        #hex()
+        #oct()
+        if m is not None:
+            idx = m.group(1) or 0
+            func = m.group(2)
+            args = m.group(3)
         try:
             o = ast.literal_eval(t)
             if isinstance(o, tuple) and len(o) == 4 and isinstance(o[3], (float, int)):
