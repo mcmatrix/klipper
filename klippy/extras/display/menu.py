@@ -5,7 +5,10 @@
 # Copyright (C) 2018  Janar Sööt <janar.soot@gmail.com>
 #
 # This file may be distributed under the terms of the GNU GPLv3 license.
-import logging, sys, ast, re
+import logging
+import sys
+import ast
+import re
 
 
 class error(Exception):
@@ -26,7 +29,8 @@ class MenuElement(object):
         self._menu = menu
         self._width = self._asint(config.get('width', '0'))
         self._scroll = self._asbool(config.get('scroll', 'false'))
-        self._enable = self._aslist(config.get('enable', 'true'), flatten=False)
+        self._enable = self._aslist(config.get('enable', 'true'),
+                                    flatten=False)
         self._name = self._strip_quotes(config.get('name'))
         self.__scroll_offs = 0
         self.__scroll_diff = 0
@@ -115,7 +119,7 @@ class MenuElement(object):
 
     def _lookup_bool(self, b):
         if not self._asbool(b):
-            if b[0] == '!': # logical negation:
+            if b[0] == '!':  # logical negation:
                 return not (not not self._menu.lookup_parameter(b[1:]))
             else:
                 return not not self._menu.lookup_parameter(b)
@@ -136,7 +140,7 @@ class MenuElement(object):
         if isinstance(s, bool):
             return s
         s = str(s).strip()
-        return s.lower() in ('y','yes', 't', 'true', 'on', '1')
+        return s.lower() in ('y', 'yes', 't', 'true', 'on', '1')
 
     def _asint(self, s, default=0):
         if s is None:
@@ -157,7 +161,7 @@ class MenuElement(object):
         s = str(s).strip()
         try:
             return float(s)
-        except:
+        except Exception:
             return default
 
     def _aslist_splitlines(self, value, default=[]):
@@ -165,16 +169,16 @@ class MenuElement(object):
             value = filter(None, [x.strip() for x in value.splitlines()])
         try:
             return list(value)
-        except:
-            return default
+        except Exception:
+            return list(default)
 
     def _aslist_split(self, value, sep=',', default=[]):
         if isinstance(value, str):
             value = filter(None, [x.strip() for x in value.split(sep)])
         try:
             return list(value)
-        except:
-            return default
+        except Exception:
+            return list(default)
 
     def _aslist(self, value, flatten=True, default=[]):
         values = self._aslist_splitlines(value)
@@ -182,9 +186,10 @@ class MenuElement(object):
             return values
         result = []
         for value in values:
-            subvalues = self._aslist_split(value, sep = ',')
+            subvalues = self._aslist_split(value, sep=',')
             result.extend(subvalues)
         return result
+
 
 # menu container baseclass
 class MenuContainer(MenuElement):
@@ -234,12 +239,12 @@ class MenuContainer(MenuElement):
             self._allitems.append(item)
 
     def populate_items(self):
-        self._allitems = [] # empty list
+        self._allitems = []  # empty list
         if self._show_back is True:
             name = '[..]'
             if self._show_title:
                 name += ' %s' % str(self._name)
-            self.append_item(MenuCommand(self._menu, {'name':name, 'gcode':'', 'action': 'back'}))
+            self.append_item(MenuCommand(self._menu, {'name': name, 'gcode': '', 'action': 'back'}))
         for name in self._names_aslist():
             self.append_item(name)
         self.update_items()
@@ -256,6 +261,7 @@ class MenuContainer(MenuElement):
     def __getitem__(self, key):
         return self._items[key]
 
+
 class MenuItem(MenuElement):
     def __init__(self, menu, config):
         super(MenuItem, self).__init__(menu, config)
@@ -263,32 +269,48 @@ class MenuItem(MenuElement):
         self.transform = config.get('transform', '')
 
     def _parse_transform(self, t):
-        def mapper(left_min, left_max, right_min, right_max, cast_fn):
+        flist = {
+            'int': int,
+            'float': float,
+            'bool': bool,
+            'str': str,
+            'abs': abs,
+            'bin': bin,
+            'hex': hex,
+            'oct': oct
+        }
+
+        def mapper(left_min, left_max, right_min, right_max, cast_fn, index=0):
             # interpolate
             left_span = left_max - left_min
             right_span = right_max - right_min
             scale_factor = float(right_span) / float(left_span)
-            def map_fn(value):
-                return cast_fn(right_min + (value-left_min)*scale_factor)
+
+            def map_fn(values):
+                return cast_fn(
+                    right_min + (values[index]-left_min)*scale_factor
+                )
             return map_fn
 
-        def scaler(scale_factor, cast_fn):
-            def scale_fn(value):
-                return cast_fn(value*scale_factor)
+        def scaler(scale_factor, cast_fn, index=0):
+            def scale_fn(values):
+                return cast_fn(values[index]*scale_factor)
             return scale_fn
 
-        def chooser(choices, cast_fn):
-            def choose_fn(value):
-                return choices[cast_fn(value)]
+        def chooser(choices, cast_fn, index=0):
+            def choose_fn(values):
+                return choices[cast_fn(values[index])]
             return choose_fn
 
-        def timerizer(key):
+        def timerizer(key, index=0):
             time = {}
-            def time_fn(value):
+
+            def time_fn(values):
                 try:
-                    seconds = int(value)
-                except:
+                    seconds = int(values[index])
+                except Exception:
                     seconds = 0
+
                 time['days'], time['seconds'] = divmod(seconds, 86400)
                 time['hours'], time['seconds'] = divmod(time['seconds'], 3600)
                 time['minutes'], time['seconds'] = divmod(time['seconds'], 60)
@@ -299,75 +321,66 @@ class MenuItem(MenuElement):
                     return 0
             return time_fn
 
-        funs = {'int':int, 'float':float, 'bool':bool, 'str':str, 'abs':abs, 'bin':bin, 'hex':hex, 'oct':oct}
-        fn = None
-        t = str(t).strip()
-        m = re.search(r"^(\d*)(?:\.?)([\S]+)(\([\S]*\))$", t)
-        #transform: idx.func(a,b,...)
-        #map(a,b,c,d)
-        #choose(a,b) - bool
-        #choose(a,b,c,..) - int
-        #choose({'a':1,'b':2})
-        #scale()
-        #days()
-        #hours()
-        #minutes()
-        #seconds()
-        #int()
-        #float()
-        #bool()
-        #str()
-        #abs()
-        #bin()
-        #hex()
-        #oct()
-        if m is not None:
-            idx = m.group(1) or 0
-            func = m.group(2)
-            args = m.group(3)
-        try:
-            o = ast.literal_eval(t)
-            if isinstance(o, tuple) and len(o) == 4 and isinstance(o[3], (float, int)):
-                # mapper (interpolate), cast type by last parameter type
-                fn = mapper(o[0], o[1], o[2], o[3], type(o[3]))
-            elif isinstance(o, tuple) and len(o) == 2:
-                # boolean chooser for 2 size tuple
-                fn = chooser(o, bool)
-            elif isinstance(o, list) and o:
-                # int chooser for list
-                fn = chooser(o, int)
-            elif isinstance(o, str) and o:
-                key = o.strip().lower()
-                if key in funs:
-                    fn = funs[key]
-                elif key in ('days','hours','minutes','seconds'):
-                    fn = timerizer(key)
+        def functionizer(key, index=0):
+            def func_fn(values):
+                if key in flist and callable(flist[key]):
+                    return flist[key](values[index])
                 else:
                     logging.error("Unknown function: '%s'" % str(key))
-            elif isinstance(o, (float, int)):
-                # scaler, cast type depends from scale factor type
-                fn = scaler(o, type(o))
-            elif isinstance(o, dict) and o.keys() and isinstance(o.keys()[0], (int, float, str)):
-                # chooser, cast type by first key type
-                fn = chooser(o, type(o.keys()[0]))
-            else:
-                logging.error("Invalid transform parameter: '%s'" % (t,))
-        except:
-            logging.exception("Transform parsing error")
+                    return values[index]
+            return func_fn
+
+        fn = None
+        t = str(t).strip()
+        # transform: idx.func(a,b,...)
+        m = re.search(r"^(\d*)(?:\.?)([\S]+)(\([\S]*\))$", t)
+        if m is not None:
+            index = m.group(1) or 0
+            fname = str(m.group(2)).lower()
+            try:
+                o = ast.literal_eval(m.group(3))
+                if fname == 'map' and isinstance(o, tuple) and len(o) == 4 and isinstance(o[3], (float, int)):
+                    # mapper (interpolate), cast type by last parameter type
+                    fn = mapper(o[0], o[1], o[2], o[3], type(o[3]), index)
+                elif fname == 'choose' and isinstance(o, tuple) and len(o) == 2:
+                    # boolean chooser for 2 size tuple
+                    fn = chooser(o, bool, index)
+                elif fname == 'choose' and isinstance(o, tuple) and len(o) > 2:
+                    # int chooser for list
+                    fn = chooser(o, int, index)
+                elif fname == 'choose' and isinstance(o, dict) and o.keys() and isinstance(o.keys()[0], (int, float, str)):
+                    # chooser, cast type by first key type
+                    fn = chooser(o, type(o.keys()[0]), index)
+                elif fname == 'scale' and isinstance(o, (float, int)):
+                    # scaler, cast type depends from scale factor type
+                    fn = scaler(o, type(o), index)
+                elif fname in ('days', 'hours', 'minutes', 'seconds'):
+                    fn = timerizer(fname, index)
+                elif fname in flist:
+                    fn = functionizer(fname, index)
+                else:
+                    logging.error("Invalid transform parameter: '%s'" % str(m.group(0)))
+            except Exception:
+                logging.exception("Transform parsing error")
         return fn
 
     def _transform_aslist(self):
         return list(filter(None, (self._parse_transform(t) for t in self._aslist(self.transform, flatten=False))))
 
-    def _prepare_values(self, value = None):
-        values = []
-        if self.parameter:
+    def _parameter_aslist(self):
+        return list((self._menu.lookup_parameter(p) for p in self._aslist_split(self.parameter)))
+
+    def _prepare_values(self, value=None):
+        values = self._parameter_aslist()
+        if values: # TODO
+            if value is not None:
+                values[0] = value
             value = self._menu.lookup_parameter(self.parameter) if value is None else value
             if value is not None:
                 values += [value]
                 try:
                     values += [t(value) for t in self._transform_aslist() if callable(t)]
-                except:
+                except Exception:
                     logging.exception("Transformation error")
             else:
                 logging.error("Parameter '%s' not found" % str(self.parameter))
