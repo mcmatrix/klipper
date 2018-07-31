@@ -7,14 +7,17 @@
 # This file may be distributed under the terms of the GNU GPLv3 license.
 import logging, sys, ast, re
 
+
 class error(Exception):
     pass
+
 
 # static class for cursor
 class MenuCursor:
     NONE = ' '
     SELECT = '>'
     EDIT = '*'
+
 
 # Menu element baseclass
 class MenuElement(object):
@@ -91,7 +94,7 @@ class MenuElement(object):
             self.__scroll_offs = 0
         return s[self.__scroll_offs:self._width+self.__scroll_offs].ljust(self._width)
 
-    def render(self, scroll = False):
+    def render(self, scroll=False):
         s = str(self._render())
         if self._width > 0:
             self.__scroll_diff = len(s) - self._width
@@ -107,7 +110,7 @@ class MenuElement(object):
     def _parse_bool(self, lst):
         try:
             return any([all([self._lookup_bool(l2) for l2 in self._aslist_split(l1)]) for l1 in lst])
-        except:
+        except Exception:
             return False
 
     def _lookup_bool(self, b):
@@ -143,7 +146,7 @@ class MenuElement(object):
         s = str(s).strip()
         try:
             return int(float(s))
-        except:
+        except Exception:
             return default
 
     def _asfloat(self, s, default=0.0):
@@ -300,6 +303,7 @@ class MenuItem(MenuElement):
         fn = None
         t = str(t).strip()
         m = re.search(r"^(\d*)(?:\.?)([\S]+)(\([\S]*\))$", t)
+        #transform: idx.func(a,b,...)
         #map(a,b,c,d)
         #choose(a,b) - bool
         #choose(a,b,c,..) - int
@@ -348,8 +352,8 @@ class MenuItem(MenuElement):
                 fn = chooser(o, type(o.keys()[0]))
             else:
                 logging.error("Invalid transform parameter: '%s'" % (t,))
-        except Exception as e:
-            logging.error('Transform parsing exception: '+ str(e))
+        except:
+            logging.exception("Transform parsing error")
         return fn
 
     def _transform_aslist(self):
@@ -363,8 +367,8 @@ class MenuItem(MenuElement):
                 values += [value]
                 try:
                     values += [t(value) for t in self._transform_aslist() if callable(t)]
-                except Exception as e:
-                    logging.error('Transformation exception: '+ str(e))
+                except:
+                    logging.exception("Transformation error")
             else:
                 logging.error("Parameter '%s' not found" % str(self.parameter))
         return tuple(values)
@@ -374,8 +378,8 @@ class MenuItem(MenuElement):
         if isinstance(literal, str) and len(values) > 0:
             try:
                 literal = literal.format(*values)
-            except Exception as e:
-                logging.error('Format exception: '+ str(e))
+            except:
+                logging.exception("Format error")
         return literal
 
     def _render(self):
@@ -399,8 +403,8 @@ class MenuCommand(MenuItem):
                 fmt = self._get_formatted(self._action)
                 args = fmt.split()
                 self._menu.run_action(args[0], *args[1:])
-            except Exception as e:
-                logging.error('Action format exception: '+ str(e))
+            except:
+                logging.exception("Action format error")
 
 class MenuInput(MenuCommand):
     def __init__(self, menu, config):
@@ -691,8 +695,8 @@ class MenuCard(MenuGroup):
         for line in self._content_aslist():
             try:
                 lines.append(str(line).format(*items))
-            except Exception as e:
-                logging.error('Card rendering exception: '+ str(e))
+            except:
+                logging.exception('Card rendering error')
         return lines
 
     def _render(self):
@@ -878,8 +882,8 @@ class MenuManager:
                     for key, obj in self.objs[name].items():
                         try:
                             self.parameters[name].update({'%s.value' % str(key): obj.last_value, '%s.is_enabled' % str(key): True})
-                        except Exception as e:
-                            logging.error('Parameter update error: '+ str(e))
+                        except:
+                            logging.exception('Parameter update error')
                 else:
                     self.parameters[name].update({'is_enabled': False})
             else:
@@ -1074,7 +1078,7 @@ class MenuManager:
             try:
                 logging.info("Info from log action: {}".format(*args))
             except:
-                logging.error("Malformed log action call")
+                logging.exception("Malformed log action call")
         else:
             logging.error("Unknown action %s" % (action))
 
