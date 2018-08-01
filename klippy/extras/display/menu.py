@@ -386,17 +386,18 @@ class MenuItem(MenuElement):
                 logging.exception("Transformation error")
         return tuple(values)
 
-    def _get_formatted(self, literal, val = None):
+    def _get_formatted(self, literal, val=None):
         values = self._prepare_values(val)
         if isinstance(literal, str) and len(values) > 0:
             try:
                 literal = literal.format(*values)
-            except:
+            except Exception:
                 logging.exception("Format error")
         return literal
 
     def _render(self):
         return self._get_formatted(self._name)
+
 
 class MenuCommand(MenuItem):
     def __init__(self, menu, config):
@@ -416,8 +417,9 @@ class MenuCommand(MenuItem):
                 fmt = self._get_formatted(self._action)
                 args = fmt.split()
                 self._menu.run_action(args[0], *args[1:])
-            except:
+            except Exception:
                 logging.exception("Action format error")
+
 
 class MenuInput(MenuCommand):
     def __init__(self, menu, config):
@@ -451,7 +453,7 @@ class MenuInput(MenuCommand):
             if len(args) > 0:
                 try:
                     self._input_value = float(args[0])
-                except:
+                except Exception:
                     pass
 
     def reset_value(self):
@@ -475,8 +477,9 @@ class MenuInput(MenuCommand):
             self._input_value -= abs(self._input_step)
         self._input_value = min(self._input_max, max(self._input_min, self._input_value))
 
+
 class MenuGroup(MenuContainer):
-    def __init__(self, menu, config, sep = ','):
+    def __init__(self, menu, config, sep=','):
         super(MenuGroup, self).__init__(menu, config)
         self._sep = sep
         self._show_back = False
@@ -503,7 +506,7 @@ class MenuGroup(MenuContainer):
         for item in self._items:
             item.init()
 
-    def _render_item(self, item, selected = False, scroll = False):
+    def _render_item(self, item, selected=False, scroll=False):
         name = "%s" % str(item.render(scroll))
         if selected and not self.is_editing():
             name = name if self._menu.blink_slow_state else ' '*len(name)
@@ -520,11 +523,11 @@ class MenuGroup(MenuContainer):
             s += self._render_item(item, (i == self.selected), True)
         return s
 
-    def _call_selected(self, method = None):
+    def _call_selected(self, method=None):
         res = None
         try:
             res = (getattr(self[self.selected], method)() if method is not None else self[self.selected])
-        except:
+        except Exception:
             pass
         return res
 
@@ -564,6 +567,7 @@ class MenuGroup(MenuContainer):
             self.selected = (self.selected - 1) if self.selected > 0 else None
         return self.selected
 
+
 class MenuItemGroup(MenuGroup):
     def __init__(self, menu, config, sep):
         super(MenuItemGroup, self).__init__(menu, config, sep)
@@ -573,6 +577,7 @@ class MenuItemGroup(MenuGroup):
 
     def is_accepted(self, item):
         return type(item) is MenuItem
+
 
 class MenuCycler(MenuGroup):
     def __init__(self, menu, config, sep):
@@ -590,11 +595,11 @@ class MenuCycler(MenuGroup):
 
     def _lookup_item(self, item):
         if isinstance(item, str) and '|' in item:
-            item = MenuItemGroup(self._menu, {'name':'ItemGroup', 'items': item}, '|')
+            item = MenuItemGroup(self._menu, {'name': 'ItemGroup', 'items': item}, '|')
         elif isinstance(item, str) and item.isdigit():
             try:
                 self._interval = max(0, int(item))
-            except:
+            except Exception:
                 pass
             item = None
         return super(MenuCycler, self)._lookup_item(item)
@@ -623,6 +628,7 @@ class MenuCycler(MenuGroup):
             self._curr_idx = 0
             self._items = []
 
+
 class MenuList(MenuContainer):
     def __init__(self, menu, config):
         super(MenuList, self).__init__(menu, config)
@@ -638,7 +644,7 @@ class MenuList(MenuContainer):
 
     def _lookup_item(self, item):
         if isinstance(item, str) and ',' in item:
-            item = MenuGroup(self._menu, {'name':'Group', 'items': item}, ',')
+            item = MenuGroup(self._menu, {'name': 'Group', 'items': item}, ',')
         return super(MenuList, self)._lookup_item(item)
 
     def update_items(self):
@@ -653,6 +659,7 @@ class MenuList(MenuContainer):
     def get_leave_gcode(self):
         return self._leave_gcode
 
+
 class MenuVSDCard(MenuList):
     def __init__(self, menu, config):
         super(MenuVSDCard, self).__init__(menu, config)
@@ -665,11 +672,12 @@ class MenuVSDCard(MenuList):
                 gcode = [
                     'M23 /%s' % str(fname)
                 ]
-                self.append_item(MenuCommand(self._menu, {'name': '%s' % str(fname), 'cursor':'+', 'gcode': "\n".join(gcode)}))
+                self.append_item(MenuCommand(self._menu, {'name': '%s' % str(fname), 'cursor': '+', 'gcode': "\n".join(gcode)}))
 
     def populate_items(self):
         super(MenuVSDCard, self).populate_items()
         self._populate_files()
+
 
 class MenuCard(MenuGroup):
     def __init__(self, menu, config):
@@ -690,7 +698,7 @@ class MenuCard(MenuGroup):
 
     def _lookup_item(self, item):
         if isinstance(item, str) and ',' in item:
-            item = MenuCycler(self._menu, {'name':'Cycler', 'items': item}, ',')
+            item = MenuCycler(self._menu, {'name': 'Cycler', 'items': item}, ',')
         return super(MenuCard, self)._lookup_item(item)
 
     def render_content(self, eventtime):
@@ -708,12 +716,13 @@ class MenuCard(MenuGroup):
         for line in self._content_aslist():
             try:
                 lines.append(str(line).format(*items))
-            except:
+            except Exception:
                 logging.exception('Card rendering error')
         return lines
 
     def _render(self):
         return self._name
+
 
 class MenuDeck(MenuList):
     def __init__(self, menu, config):
@@ -730,13 +739,15 @@ class MenuDeck(MenuList):
     def _render(self):
         return self._name
 
-menu_items = { 'item': MenuItem, 'command': MenuCommand, 'input': MenuInput, 'list': MenuList, 'vsdcard':MenuVSDCard, 'deck':MenuDeck, 'card': MenuCard }
-# Default dimensions for lcds (rows, cols)
-LCD_dims = { 'st7920': (4,16), 'hd44780': (4,20), 'uc1701' : (4,16) }
 
-TIMER_DELAY   = 0.200
+menu_items = {'item': MenuItem, 'command': MenuCommand, 'input': MenuInput, 'list': MenuList, 'vsdcard': MenuVSDCard, 'deck': MenuDeck, 'card': MenuCard}
+# Default dimensions for lcds (rows, cols)
+LCD_dims = {'st7920': (4, 16), 'hd44780': (4, 20), 'uc1701': (4, 16)}
+
+TIMER_DELAY = 0.200
 BLINK_FAST_SEQUENCE = (True, True, False, False)
 BLINK_SLOW_SEQUENCE = (True, True, True, True, False, False, False)
+
 
 class MenuManager:
     def __init__(self, config):
@@ -863,13 +874,13 @@ class MenuManager:
             if self.objs[name] is not None and type(self.objs[name]) != dict:
                 try:
                     self.parameters[name] = self.objs[name].get_status(eventtime)
-                except:
+                except Exception:
                     self.parameters[name] = {}
                 self.parameters[name].update({'is_enabled': True})
                 # get additional info
                 if name == 'toolhead':
                     pos = self.objs[name].get_position()
-                    self.parameters[name].update({'xpos':pos[0], 'ypos':pos[1], 'zpos':pos[2], 'epos': pos[3]})
+                    self.parameters[name].update({'xpos': pos[0], 'ypos': pos[1], 'zpos': pos[2], 'epos': pos[3]})
                     self.parameters[name].update({
                         'is_printing': (self.parameters[name]['status'] == "Printing"),
                         'is_ready': (self.parameters[name]['status'] == "Ready"),
@@ -895,7 +906,7 @@ class MenuManager:
                     for key, obj in self.objs[name].items():
                         try:
                             self.parameters[name].update({'%s.value' % str(key): obj.last_value, '%s.is_enabled' % str(key): True})
-                        except:
+                        except Exception:
                             logging.exception('Parameter update error')
                 else:
                     self.parameters[name].update({'is_enabled': False})
@@ -1090,7 +1101,7 @@ class MenuManager:
         elif action == 'log':
             try:
                 logging.info("Info from log action: {}".format(*args))
-            except:
+            except Exception:
                 logging.exception("Malformed log action call")
         else:
             logging.error("Unknown action %s" % (action))
@@ -1099,20 +1110,20 @@ class MenuManager:
         if script is not None:
             try:
                 self.gcode.run_script(script)
-            except:
+            except Exception:
                 pass
 
     def lookup_parameter(self, literal):
         value = None
         try:
             value = float(literal)
-        except:
+        except Exception:
             pass
         if value is None:
             try:
                 key1, key2 = literal.split('.', 1)
                 value = self.parameters[key1].get(key2)
-            except:
+            except Exception:
                 pass
         return value
 
@@ -1122,7 +1133,7 @@ class MenuManager:
                 "Menu object '%s' already created" % (name,))
         self.menuitems[name] = menu
 
-    def lookup_menuitem(self, name, peek = False):
+    def lookup_menuitem(self, name, peek=False):
         if name is None:
             return None
         if name not in self.menuitems:
@@ -1148,6 +1159,7 @@ class MenuManager:
             self.add_menuitem(name, item)
 
     cmd_MENUDO_help = "Menu do things (dump, exit, up, down, select, back)"
+
     def cmd_MENUDO_DUMP(self, params):
         for key1 in self.parameters:
             if type(self.parameters[key1]) == dict:
