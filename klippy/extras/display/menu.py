@@ -806,7 +806,7 @@ BLINK_SLOW_SEQUENCE = (True, True, True, True, False, False, False)
 
 
 class MenuManager:
-    def __init__(self, config):
+    def __init__(self, config, lcd_chip):
         self.running = False
         self.menuitems = {}
         self.menustack = []
@@ -819,6 +819,7 @@ class MenuManager:
         self.blink_slow_idx = 0
         self.timeout_idx = 0
         self.config = config
+        self.lcd_chip = lcd_chip
         self.printer = config.get_printer()
         self.gcode = self.printer.lookup_object('gcode')
         self.parameters = {}
@@ -1072,6 +1073,9 @@ class MenuManager:
                             s += name[:self.cols-i].ljust(self.cols-i)
                     lines.append(s.ljust(self.cols))
         return lines
+
+    def screen_update_event(self, eventtime):
+        pass
 
     def up(self):
         container = self.stack_peek()
