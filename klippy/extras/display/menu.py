@@ -368,22 +368,22 @@ class MenuItem(MenuElement):
         return list(filter(None, (self._parse_transform(t) for t in self._aslist(self.transform, flatten=False))))
 
     def _parameter_aslist(self):
-        return list((self._menu.lookup_parameter(p) for p in self._aslist_split(self.parameter)))
+        lst = []
+        for p in self._aslist_split(self.parameter):
+            lst.append(self._menu.lookup_parameter(p))
+            if lst[-1] is None:
+                logging.error("Parameter '%s' not found" % str(p))
+        return list(lst)
 
     def _prepare_values(self, value=None):
-        values = self._parameter_aslist()
-        if values: # TODO
-            if value is not None:
-                values[0] = value
-            value = self._menu.lookup_parameter(self.parameter) if value is None else value
-            if value is not None:
-                values += [value]
-                try:
-                    values += [t(value) for t in self._transform_aslist() if callable(t)]
-                except Exception:
-                    logging.exception("Transformation error")
-            else:
-                logging.error("Parameter '%s' not found" % str(self.parameter))
+        values = []
+        for i, v in enumerate(self._parameter_aslist()):
+            values += [value if i == 0 and value is not None else v]
+        if values:
+            try:
+                values += [t(list(values)) for t in self._transform_aslist() if callable(t)]
+            except Exception:
+                logging.exception("Transformation error")
         return tuple(values)
 
     def _get_formatted(self, literal, val = None):
