@@ -96,13 +96,16 @@ class MenuElement(object):
         if self.__scroll_dir is None:
             self.__scroll_dir = 0
             self.__scroll_offs = 0
-        return s[self.__scroll_offs:self._width+self.__scroll_offs].ljust(self._width)
+        return s[
+            self.__scroll_offs:self._width + self.__scroll_offs
+        ].ljust(self._width)
 
     def render(self, scroll=False):
         s = str(self._render())
         if self._width > 0:
             self.__scroll_diff = len(s) - self._width
-            if scroll and self._scroll is True and self.is_scrollable() and self.__scroll_diff > 0:
+            if (scroll and self._scroll is True and self.is_scrollable()
+                    and self.__scroll_diff > 0):
                 s = self.__render_scroll(s)
             else:
                 self.__clear_scroll()
@@ -244,7 +247,9 @@ class MenuContainer(MenuElement):
             name = '[..]'
             if self._show_title:
                 name += ' %s' % str(self._name)
-            self.append_item(MenuCommand(self._menu, {'name': name, 'gcode': '', 'action': 'back'}))
+            self.append_item(MenuCommand(self._menu, {'name': name,
+                                                      'gcode': '',
+                                                      'action': 'back'}))
         for name in self._names_aslist():
             self.append_item(name)
         self.update_items()
@@ -339,16 +344,19 @@ class MenuItem(MenuElement):
             fname = str(m.group(2)).lower()
             try:
                 o = ast.literal_eval(m.group(3))
-                if fname == 'map' and isinstance(o, tuple) and len(o) == 4 and isinstance(o[3], (float, int)):
+                if (fname == 'map' and isinstance(o, tuple) and len(o) == 4
+                        and isinstance(o[3], (float, int))):
                     # mapper (interpolate), cast type by last parameter type
                     fn = mapper(o[0], o[1], o[2], o[3], type(o[3]), index)
-                elif fname == 'choose' and isinstance(o, tuple) and len(o) == 2:
+                elif (fname == 'choose' and isinstance(o, tuple)
+                        and len(o) == 2):
                     # boolean chooser for 2 size tuple
                     fn = chooser(o, bool, index)
                 elif fname == 'choose' and isinstance(o, tuple) and len(o) > 2:
                     # int chooser for list
                     fn = chooser(o, int, index)
-                elif fname == 'choose' and isinstance(o, dict) and o.keys() and isinstance(o.keys()[0], (int, float, str)):
+                elif (fname == 'choose' and isinstance(o, dict) and o.keys()
+                        and isinstance(o.keys()[0], (int, float, str))):
                     # chooser, cast type by first key type
                     fn = chooser(o, type(o.keys()[0]), index)
                 elif fname == 'scale' and isinstance(o, (float, int)):
@@ -359,7 +367,8 @@ class MenuItem(MenuElement):
                 elif fname in flist:
                     fn = functionizer(fname, index)
                 else:
-                    logging.error("Invalid transform parameter: '%s'" % str(m.group(0)))
+                    logging.error(
+                        "Invalid transform parameter: '%s'" % str(m.group(0)))
             except Exception:
                 logging.exception("Transform parsing error")
         return fn
@@ -595,7 +604,10 @@ class MenuCycler(MenuGroup):
 
     def _lookup_item(self, item):
         if isinstance(item, str) and '|' in item:
-            item = MenuItemGroup(self._menu, {'name': 'ItemGroup', 'items': item}, '|')
+            item = MenuItemGroup(self._menu, {
+                'name': 'ItemGroup',
+                'items': item
+            }, '|')
         elif isinstance(item, str) and item.isdigit():
             try:
                 self._interval = max(0, int(item))
@@ -672,7 +684,11 @@ class MenuVSDCard(MenuList):
                 gcode = [
                     'M23 /%s' % str(fname)
                 ]
-                self.append_item(MenuCommand(self._menu, {'name': '%s' % str(fname), 'cursor': '+', 'gcode': "\n".join(gcode)}))
+                self.append_item(MenuCommand(self._menu, {
+                    'name': '%s' % str(fname),
+                    'cursor': '+',
+                    'gcode': "\n".join(gcode)
+                }))
 
     def populate_items(self):
         super(MenuVSDCard, self).populate_items()
@@ -698,7 +714,10 @@ class MenuCard(MenuGroup):
 
     def _lookup_item(self, item):
         if isinstance(item, str) and ',' in item:
-            item = MenuCycler(self._menu, {'name': 'Cycler', 'items': item}, ',')
+            item = MenuCycler(self._menu, {
+                'name': 'Cycler',
+                'items': item
+            }, ',')
         return super(MenuCard, self)._lookup_item(item)
 
     def render_content(self, eventtime):
@@ -740,7 +759,15 @@ class MenuDeck(MenuList):
         return self._name
 
 
-menu_items = {'item': MenuItem, 'command': MenuCommand, 'input': MenuInput, 'list': MenuList, 'vsdcard': MenuVSDCard, 'deck': MenuDeck, 'card': MenuCard}
+menu_items = {
+    'item': MenuItem,
+    'command': MenuCommand,
+    'input': MenuInput,
+    'list': MenuList,
+    'vsdcard': MenuVSDCard,
+    'deck': MenuDeck,
+    'card': MenuCard
+}
 # Default dimensions for lcds (rows, cols)
 LCD_dims = {'st7920': (4, 16), 'hd44780': (4, 20), 'uc1701': (4, 16)}
 
@@ -830,7 +857,8 @@ class MenuManager:
 
     def timeout_check(self, eventtime):
         # check timeout
-        if self.is_running() and self.timeout > 0 and not self._timeout_autorun_root():
+        if (self.is_running() and self.timeout > 0
+                and not self._timeout_autorun_root()):
             if self.timer >= self.timeout:
                 self.exit()
             self.timer += 1
@@ -838,7 +866,8 @@ class MenuManager:
             self.timer = 0
 
     def _timeout_autorun_root(self):
-        return self.autorun is True and self.root is not None and self.stack_peek() is self.root and self.selected == 0
+        return (self.autorun is True and self.root is not None
+                and self.stack_peek() is self.root and self.selected == 0)
 
     def is_running(self):
         return self.running
@@ -880,11 +909,19 @@ class MenuManager:
                 # get additional info
                 if name == 'toolhead':
                     pos = self.objs[name].get_position()
-                    self.parameters[name].update({'xpos': pos[0], 'ypos': pos[1], 'zpos': pos[2], 'epos': pos[3]})
                     self.parameters[name].update({
-                        'is_printing': (self.parameters[name]['status'] == "Printing"),
-                        'is_ready': (self.parameters[name]['status'] == "Ready"),
-                        'is_idle': (self.parameters[name]['status'] == "Idle")
+                        'xpos': pos[0],
+                        'ypos': pos[1],
+                        'zpos': pos[2],
+                        'epos': pos[3]
+                    })
+                    self.parameters[name].update({
+                        'is_printing':
+                            (self.parameters[name]['status'] == "Printing"),
+                        'is_ready':
+                            (self.parameters[name]['status'] == "Ready"),
+                        'is_idle':
+                            (self.parameters[name]['status'] == "Idle")
                     })
                 elif name == 'extruder0':
                     info = self.objs[name].get_heater().get_status(eventtime)
@@ -905,7 +942,10 @@ class MenuManager:
                 if name == 'output_pin' or name == 'servo':
                     for key, obj in self.objs[name].items():
                         try:
-                            self.parameters[name].update({'%s.value' % str(key): obj.last_value, '%s.is_enabled' % str(key): True})
+                            self.parameters[name].update({
+                                '%s.value' % str(key): obj.last_value,
+                                '%s.is_enabled' % str(key): True
+                            })
                         except Exception:
                             logging.exception('Parameter update error')
                 else:
@@ -1142,7 +1182,8 @@ class MenuManager:
         if not peek and isinstance(self.menuitems[name], MenuContainer):
             if name in self._recursive_guard:
                 raise self.printer.config_error(
-                    "Containers can only be used once! Potential recursive relation of '%s'" % (name,))
+                    "Containers can only be used once! "
+                    "Potential recursive relation of '%s'" % (name,))
             else:
                 self._recursive_guard.append(name)
         return self.menuitems[name]
@@ -1164,7 +1205,10 @@ class MenuManager:
         for key1 in self.parameters:
             if type(self.parameters[key1]) == dict:
                 for key2 in self.parameters[key1]:
-                    msg = "{0}.{1} = {2}".format(key1, key2, self.parameters[key1].get(key2))
+                    msg = "{0}.{1} = {2}".format(
+                        key1, key2,
+                        self.parameters[key1].get(key2)
+                    )
                     logging.info(msg)
                     self.gcode.respond_info(msg)
             else:
