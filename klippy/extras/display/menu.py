@@ -31,7 +31,7 @@ class MenuElement(object):
         self._scroll = self._asbool(config.get('scroll', 'false'))
         self._enable = self._aslist(config.get('enable', 'true'),
                                     flatten=False)
-        self._name = self._strip_quotes(config.get('name'))
+        self._name = self._asliteral(config.get('name'))
         self.__scroll_offs = 0
         self.__scroll_diff = 0
         self.__scroll_dir = None
@@ -122,6 +122,7 @@ class MenuElement(object):
                 ]) for l1 in lst
             ])
         except Exception:
+            logging.exception("Parsing error")
             return False
 
     def _lookup_bool(self, b):
@@ -132,13 +133,12 @@ class MenuElement(object):
                 return not not self._menu.lookup_parameter(b)
         return True
 
-    def _strip_quotes(self, s):
-        if isinstance(s, str):
-            s = str(s).strip()
-            if s.startswith(('"', "'")):
-                s = s[1:]
-            if s.endswith(('"', "'")):
-                s = s[:-1]
+    def _asliteral(self, s):
+        s = str(s).strip()
+        if s.startswith(('"', "'")):
+            s = s[1:]
+        if s.endswith(('"', "'")):
+            s = s[:-1]
         return s
 
     def _asbool(self, s, default=False):
@@ -155,10 +155,7 @@ class MenuElement(object):
         if isinstance(s, (int, float)):
             return int(s)
         s = str(s).strip()
-        try:
-            return int(float(s))
-        except Exception:
-            return default
+        return int(float(s)) if self._isfloat(s) else int(default)
 
     def _asfloat(self, s, default=0.0):
         if s is None:
@@ -166,10 +163,7 @@ class MenuElement(object):
         if isinstance(s, (int, float)):
             return float(s)
         s = str(s).strip()
-        try:
-            return float(s)
-        except Exception:
-            return default
+        return float(s) if self._isfloat(s) else float(default)
 
     def _lines_aslist(self, value, default=[]):
         if isinstance(value, str):
@@ -177,6 +171,7 @@ class MenuElement(object):
         try:
             return list(value)
         except Exception:
+            logging.exception("Parsing error")
             return list(default)
 
     def _words_aslist(self, value, sep=',', default=[]):
@@ -185,6 +180,7 @@ class MenuElement(object):
         try:
             return list(value)
         except Exception:
+            logging.exception("Parsing error")
             return list(default)
 
     def _aslist(self, value, flatten=True, default=[]):
@@ -196,6 +192,13 @@ class MenuElement(object):
             subvalues = self._words_aslist(value, sep=',')
             result.extend(subvalues)
         return result
+
+    def _isfloat(self, value):
+        try:
+            float(value)
+            return True
+        except ValueError:
+            return False
 
 
 # menu container baseclass
@@ -318,6 +321,7 @@ class MenuItem(MenuElement):
                 try:
                     seconds = int(values[index])
                 except Exception:
+                    logging.exception("Seconds parsing error")
                     seconds = 0
 
                 time['days'], time['seconds'] = divmod(seconds, 86400)
@@ -467,11 +471,10 @@ class MenuInput(MenuCommand):
         self._input_value = None
         if not self.is_readonly():
             args = self._prepare_values()
-            if len(args) > 0:
-                try:
-                    self._input_value = float(args[0])
-                except Exception:
-                    pass
+            if len(args) > 0 and self._isfloat(args[0]):
+                self._input_value = float(args[0])
+            else:
+                logging.error("Cannot init input value")
 
     def reset_value(self):
         self._input_value = None
@@ -552,7 +555,7 @@ class MenuGroup(MenuContainer):
             else:
                 res = getattr(self[self.selected], method)()
         except Exception:
-            pass
+            logging.exception("Call selected error")
         return res
 
     def is_editing(self):
@@ -634,7 +637,7 @@ class MenuCycler(MenuGroup):
             try:
                 self._interval = max(0, int(item))
             except Exception:
-                pass
+                logging.exception("Interval parsing error")
             item = None
         return super(MenuCycler, self)._lookup_item(item)
 
@@ -728,7 +731,7 @@ class MenuCard(MenuGroup):
 
     def _content_aslist(self):
         return filter(None, [
-            self._strip_quotes(s) for s in self._lines_aslist(self.content)
+            self._asliteral(s) for s in self._lines_aslist(self.content)
         ])
 
     def update_items(self):
@@ -1177,6 +1180,13 @@ class MenuManager:
             self.run_script(container.get_leave_gcode())
             self.running = False
 
+    def _isfloat(self, value):
+        try:
+            float(value)
+            return True
+        except ValueError:
+            return False
+
     def run_action(self, action, *args):
         action = str(action).strip().lower()
         if action == 'back':
@@ -1196,20 +1206,18 @@ class MenuManager:
             try:
                 self.gcode.run_script(script)
             except Exception:
-                pass
+                logging.exception("Script running error")
 
     def lookup_parameter(self, literal):
         value = None
-        try:
+        if self._isfloat(literal):
             value = float(literal)
-        except Exception:
-            pass
-        if value is None:
+        else:
             try:
                 key1, key2 = literal.split('.', 1)
                 value = self.parameters[key1].get(key2)
             except Exception:
-                pass
+                logging.exception("Parameter lookup error")
         return value
 
     def add_menuitem(self, name, menu):
