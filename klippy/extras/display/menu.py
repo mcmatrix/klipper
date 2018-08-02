@@ -457,6 +457,7 @@ class MenuInput(MenuCommand):
     def __init__(self, menu, config):
         super(MenuInput, self).__init__(menu, config)
         self._reverse = self._asbool(config.get('reverse', 'false'))
+        self._realtime = self._asbool(config.get('realtime', 'false'))
         self._readonly = self._aslist(
             config.get('readonly', 'false'), flatten=False)
         self._input_value = None
@@ -492,8 +493,10 @@ class MenuInput(MenuCommand):
         self._input_value = None
 
     def inc_value(self):
+        prev_value = self._input_value
         if self._input_value is None:
             return
+
         if(self._reverse is True):
             self._input_value -= abs(self._input_step)
         else:
@@ -501,15 +504,23 @@ class MenuInput(MenuCommand):
         self._input_value = min(self._input_max, max(
             self._input_min, self._input_value))
 
+        if self._realtime and prev_value != self._input_value:
+            self._menu.run_script(self.get_gcode())
+
     def dec_value(self):
+        prev_value = self._input_value
         if self._input_value is None:
             return
+
         if(self._reverse is True):
             self._input_value += abs(self._input_step)
         else:
             self._input_value -= abs(self._input_step)
         self._input_value = min(self._input_max, max(
             self._input_min, self._input_value))
+
+        if self._realtime and prev_value != self._input_value:
+            self._menu.run_script(self.get_gcode())
 
 
 class MenuGroup(MenuContainer):
@@ -1326,10 +1337,10 @@ class MenuManager:
 
     # buttons & encoder callbacks
     def encoder_cw_callback(self, eventtime):
-        self.menu.up()
+        self.up()
 
     def encoder_ccw_callback(self, eventtime):
-        self.menu.down()
+        self.down()
 
     def click_callback(self, eventtime):
         if self.click_pin:
