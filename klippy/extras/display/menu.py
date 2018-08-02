@@ -358,7 +358,7 @@ class MenuItem(MenuElement):
         # transform: idx.func(a,b,...)
         m = re.search(r"^(\d*)(?:\.?)([\S]+)(\([\S]*\))$", t)
         if m is not None:
-            index = m.group(1) or 0
+            index = int(m.group(1)) or 0
             fname = str(m.group(2)).lower()
             try:
                 o = ast.literal_eval(m.group(3))
@@ -416,7 +416,7 @@ class MenuItem(MenuElement):
             try:
                 values += [t(list(values)) for t in self._transform_aslist()]
             except Exception:
-                logging.exception("Transformation error")
+                logging.exception("Transformation execution failed")
         return tuple(values)
 
     def _get_formatted(self, literal, val=None):
@@ -425,7 +425,7 @@ class MenuItem(MenuElement):
             try:
                 literal = literal.format(*values)
             except Exception:
-                logging.exception("Format error")
+                logging.exception("Literal formatting failed")
         return literal
 
     def _render(self):
