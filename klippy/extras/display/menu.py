@@ -128,10 +128,22 @@ class MenuElement(object):
     def _lookup_bool(self, b):
         if not self._asbool(b):
             if b[0] == '!':  # logical negation:
-                return not (not not self._menu.lookup_parameter(b[1:]))
+                return not (not not self._lookup_parameter(b[1:]))
             else:
-                return not not self._menu.lookup_parameter(b)
+                return not not self._lookup_parameter(b)
         return True
+
+    def _lookup_parameter(self, literal):
+        value = None
+        if self._isfloat(literal):
+            value = float(literal)
+        else:
+            try:
+                key1, key2 = literal.split('.', 1)
+                value = self._menu.parameters[key1].get(key2)
+            except Exception:
+                logging.exception("Parameter lookup error")
+        return value
 
     def _asliteral(self, s):
         s = str(s).strip()
@@ -390,7 +402,7 @@ class MenuItem(MenuElement):
     def _parameter_aslist(self):
         lst = []
         for p in self._words_aslist(self.parameter):
-            lst.append(self._menu.lookup_parameter(p))
+            lst.append(self._lookup_parameter(p))
             if lst[-1] is None:
                 logging.error("Parameter '%s' not found" % str(p))
         return list(lst)
@@ -1184,13 +1196,6 @@ class MenuManager:
             self.run_script(container.get_leave_gcode())
             self.running = False
 
-    def _isfloat(self, value):
-        try:
-            float(value)
-            return True
-        except ValueError:
-            return False
-
     def run_action(self, action, *args):
         action = str(action).strip().lower()
         if action == 'back':
@@ -1211,18 +1216,6 @@ class MenuManager:
                 self.gcode.run_script(script)
             except Exception:
                 logging.exception("Script running error")
-
-    def lookup_parameter(self, literal):
-        value = None
-        if self._isfloat(literal):
-            value = float(literal)
-        else:
-            try:
-                key1, key2 = literal.split('.', 1)
-                value = self.parameters[key1].get(key2)
-            except Exception:
-                logging.exception("Parameter lookup error")
-        return value
 
     def add_menuitem(self, name, menu):
         if name in self.menuitems:
