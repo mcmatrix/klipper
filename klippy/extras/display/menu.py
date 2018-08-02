@@ -134,16 +134,14 @@ class MenuElement(object):
         return True
 
     def _lookup_parameter(self, literal):
-        value = None
         if self._isfloat(literal):
-            value = float(literal)
+            return float(literal)
         else:
             try:
                 key1, key2 = literal.split('.', 1)
-                value = self._menu.parameters[key1].get(key2)
+                return self._menu.parameters[key1].get(key2)
             except Exception:
-                logging.exception("Parameter lookup error")
-        return value
+                return None
 
     def _asliteral(self, s):
         s = str(s).strip()
@@ -388,9 +386,12 @@ class MenuItem(MenuElement):
                     fn = functionizer(fname, index)
                 else:
                     logging.error(
-                        "Invalid transform parameter: '%s'" % str(m.group(0)))
+                        "Unknown transform function: '%s'" % str(m.group(0)))
             except Exception:
                 logging.exception("Transform parsing error")
+        else:
+            logging.error(
+                "Invalid transform parameter: '%s'" % str(t))
         return fn
 
     def _transform_aslist(self):
