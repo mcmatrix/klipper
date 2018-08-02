@@ -812,7 +812,8 @@ menu_items = {
 # Default dimensions for lcds (rows, cols)
 LCD_dims = {'st7920': (4, 16), 'hd44780': (4, 20), 'uc1701': (4, 16)}
 
-TIMER_DELAY = 0.200
+MENU_UPDATE_DELAY = .100
+TIMER_DELAY = .200
 BLINK_FAST_SEQUENCE = (True, True, False, False)
 BLINK_SLOW_SEQUENCE = (True, True, True, True, False, False, False)
 
@@ -830,7 +831,6 @@ class MenuManager:
         self.blink_fast_idx = 0
         self.blink_slow_idx = 0
         self.timeout_idx = 0
-        self.config = config
         self.lcd_chip = lcd_chip
         self.printer = config.get_printer()
         self.gcode = self.printer.lookup_object('gcode')
@@ -851,6 +851,9 @@ class MenuManager:
         for name in self.objs.keys():
             if self.objs[name] is None:
                 self.objs[name] = self.printer.lookup_object(name, None)
+        # load servo name & output_pin names
+        self.lookup_section_names(config, 'output_pin')
+        self.lookup_section_names(config, 'servo')
         self.root = None
         self._root = config.get('menu_root', None)
         self.autorun = config.getboolean('menu_autorun', False)
@@ -859,6 +862,43 @@ class MenuManager:
         self.cols = config.getint('cols', dims[1])
         self.timeout = config.getint('menu_timeout', 0)
         self.timer = 0
+        # buttons
+        self.encoder_pins = config.get('encoder_pins', None)
+        self.click_pin = config.get('click_pin', None)
+        self.back_pin = config.get('back_pin', None)
+        self.up_pin = config.get('up_pin', None)
+        self.down_pin = config.get('down_pin', None)
+        self.kill_pin = config.get('kill_pin', None)
+        # printer objects
+        self.buttons = self.printer.try_load_module(config, "buttons")
+        # register itself for a printer_state callback
+        config.get_printer().add_object('menu', self)
+        # register buttons & encoder
+        if self.buttons:
+            if self.encoder_pins:
+                try:
+                    pin1, pin2 = self.encoder_pins.split(',')
+                except Exception:
+                    raise config.error("Unable to parse encoder_pins")
+                self.buttons.register_rotary_encoder(
+                    pin1.strip(), pin2.strip(),
+                    self.encoder_cw_callback, self.encoder_ccw_callback)
+            if self.click_pin:
+                self.buttons.register_button_push(
+                    self.click_pin, self.click_callback)
+            if self.back_pin:
+                self.buttons.register_button_push(
+                    self.back_pin, self.back_callback)
+            if self.up_pin:
+                self.buttons.register_button_push(
+                    self.up_pin, self.up_callback)
+            if self.down_pin:
+                self.buttons.register_button_push(
+                    self.down_pin, self.down_callback)
+            if self.kill_pin:
+                self.buttons.register_button_push(
+                    self.kill_pin, self.kill_callback)
+
         # Add MENU commands
         self.gcode.register_mux_command("MENU", "DO", 'dump', self.cmd_DO_DUMP,
                                         desc=self.cmd_DO_help)
@@ -878,9 +918,11 @@ class MenuManager:
             for name in self.objs.keys():
                 if self.objs[name] is None:
                     self.objs[name] = self.printer.lookup_object(name, None)
-            # load servo name & output_pin names
-            self.lookup_section_names(self.config, 'output_pin')
-            self.lookup_section_names(self.config, 'servo')
+                elif isinstance(self.objs[name], dict):
+                    for key, obj in self.objs[name].items():
+                        if isinstance(obj, str):
+                            self.objs[name][key] = self.printer.lookup_object(
+                                obj, None)
             # start timer
             reactor = self.printer.get_reactor()
             reactor.register_timer(self.timer_event, reactor.NOW)
@@ -1087,7 +1129,17 @@ class MenuManager:
         return lines
 
     def screen_update_event(self, eventtime):
-        pass
+        if self.is_running():
+            self.lcd_chip.clear()
+            for y, line in enumerate(self.render(eventtime)):
+                self.lcd_chip.write_text(0, y, line)
+            self.lcd_chip.flush()
+        elif not self.is_running() and self.autorun is True:
+            # lets start and populate the menu items
+            self.begin(eventtime)
+            return eventtime + MENU_UPDATE_DELAY
+        else:
+            return 0
 
     def up(self):
         container = self.stack_peek()
@@ -1241,8 +1293,7 @@ class MenuManager:
     def lookup_section_names(self, config, section):
         for cfg in config.get_prefix_sections('%s ' % section):
             name = " ".join(cfg.get_name().split()[1:])
-            self.objs[section][name] = self.printer.lookup_object(
-                cfg.get_name(), None)
+            self.objs[section][name] = cfg.get_name()
 
     def load_menuitems(self, config):
         for cfg in config.get_prefix_sections('menu '):
@@ -1272,3 +1323,35 @@ class MenuManager:
 
     def cmd_DO_BACK(self, params):
         self.back()
+
+    # buttons & encoder callbacks
+    def encoder_cw_callback(self, eventtime):
+        self.menu.up()
+
+    def encoder_ccw_callback(self, eventtime):
+        self.menu.down()
+
+    def click_callback(self, eventtime):
+        if self.click_pin:
+            if not self.is_running():
+                # lets start and populate the menu items
+                self.begin(eventtime)
+            elif self.is_running():
+                self.select()
+
+    def back_callback(self, eventtime):
+        if self.back_pin:
+            self.back()
+
+    def up_callback(self, eventtime):
+        if self.up_pin:
+            self.up()
+
+    def down_callback(self, eventtime):
+        if self.down_pin:
+            self.down()
+
+    def kill_callback(self, eventtime):
+        if self.kill_pin:
+            # Emergency Stop
+            self.printer.invoke_shutdown("Shutdown due to kill button!")
