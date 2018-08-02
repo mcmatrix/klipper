@@ -572,13 +572,14 @@ class MenuGroup(MenuContainer):
 
     def _call_selected(self, method=None):
         res = None
-        try:
-            if method is None:
-                res = self[self.selected]
-            else:
-                res = getattr(self[self.selected], method)()
-        except Exception:
-            logging.exception("Call selected error")
+        if self.selected is not None:
+            try:
+                if method is None:
+                    res = self[self.selected]
+                else:
+                    res = getattr(self[self.selected], method)()
+            except Exception:
+                logging.exception("Call selected error")
         return res
 
     def is_editing(self):
