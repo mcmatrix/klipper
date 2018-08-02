@@ -1145,6 +1145,7 @@ class MenuManager:
             for y, line in enumerate(self.render(eventtime)):
                 self.lcd_chip.write_text(0, y, line)
             self.lcd_chip.flush()
+            return eventtime + MENU_UPDATE_DELAY
         elif not self.is_running() and self.autorun is True:
             # lets start and populate the menu items
             self.begin(eventtime)
