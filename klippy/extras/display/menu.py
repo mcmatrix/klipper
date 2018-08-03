@@ -1372,11 +1372,11 @@ class MenuManager:
                     else:
                         container = self.stack_peek()
                         if isinstance(container, MenuDeck):
-                            root = container.root
-                            if (isinstance(root, MenuList)
+                            menu = container.menu
+                            if (isinstance(menu, MenuList)
                                     and not container.is_editing()
-                                    and root is not container):
-                                self.stack_push(root)
+                                    and menu is not container):
+                                self.stack_push(menu)
                                 self.top_row = 0
                                 self.selected = 0
                 else:
