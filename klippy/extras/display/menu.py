@@ -24,9 +24,9 @@ class MenuCursor:
 
 # Menu element baseclass
 class MenuElement(object):
-    def __init__(self, menu, config):
+    def __init__(self, manager, config):
         self.cursor = config.get('cursor', MenuCursor.SELECT)
-        self._menu = menu
+        self._manager = manager
         self._width = self._asint(config.get('width', '0'))
         self._scroll = self._asbool(config.get('scroll', 'false'))
         self._enable = self._aslist(config.get('enable', 'true'),
@@ -141,8 +141,8 @@ class MenuElement(object):
             keys = literal.rsplit('.', 1)
             name = keys[0] if keys[0:1] else None
             attr = keys[1] if keys[1:2] else None
-            if isinstance(self._menu.parameters, dict):
-                return (self._menu.parameters.get(name) or {}).get(attr)
+            if isinstance(self._manager.parameters, dict):
+                return (self._manager.parameters.get(name) or {}).get(attr)
             else:
                 logging.error("Parameter storage is not dictionary")
         return None
@@ -217,8 +217,8 @@ class MenuElement(object):
 
 # menu container baseclass
 class MenuContainer(MenuElement):
-    def __init__(self, menu, config):
-        super(MenuContainer, self).__init__(menu, config)
+    def __init__(self, manager, config):
+        super(MenuContainer, self).__init__(manager, config)
         self._show_back = self._asbool(config.get('show_back', 'true'))
         self._show_title = self._asbool(config.get('show_title', 'true'))
         self._allitems = []
@@ -240,7 +240,7 @@ class MenuContainer(MenuElement):
 
     def _lookup_item(self, s):
         if isinstance(s, str):
-            s = self._menu.lookup_menuitem(s.strip())
+            s = self._manager.lookup_menuitem(s.strip())
         return s
 
     def find_item(self, item):
@@ -268,9 +268,9 @@ class MenuContainer(MenuElement):
             name = '[..]'
             if self._show_title:
                 name += ' %s' % str(self._name)
-            self.append_item(MenuCommand(self._menu, {'name': name,
-                                                      'gcode': '',
-                                                      'action': 'back'}))
+            self.append_item(MenuCommand(self._manager, {'name': name,
+                                                         'gcode': '',
+                                                         'action': 'back'}))
         for name in self._names_aslist():
             self.append_item(name)
         self.update_items()
@@ -289,8 +289,8 @@ class MenuContainer(MenuElement):
 
 
 class MenuItem(MenuElement):
-    def __init__(self, menu, config):
-        super(MenuItem, self).__init__(menu, config)
+    def __init__(self, manager, config):
+        super(MenuItem, self).__init__(manager, config)
         self.parameter = config.get('parameter', '')
         self.transform = config.get('transform', '')
 
@@ -437,8 +437,8 @@ class MenuItem(MenuElement):
 
 
 class MenuCommand(MenuItem):
-    def __init__(self, menu, config):
-        super(MenuCommand, self).__init__(menu, config)
+    def __init__(self, manager, config):
+        super(MenuCommand, self).__init__(manager, config)
         self._gcode = config.get('gcode')
         self._action = config.get('action', None)
 
@@ -453,14 +453,14 @@ class MenuCommand(MenuItem):
             try:
                 fmt = self._get_formatted(self._action)
                 args = fmt.split()
-                self._menu.run_action(args[0], *args[1:])
+                self._manager.run_action(args[0], *args[1:])
             except Exception:
                 logging.exception("Action formatting failed")
 
 
 class MenuInput(MenuCommand):
-    def __init__(self, menu, config):
-        super(MenuInput, self).__init__(menu, config)
+    def __init__(self, manager, config):
+        super(MenuInput, self).__init__(manager, config)
         self._reverse = self._asbool(config.get('reverse', 'false'))
         self._realtime = self._asbool(config.get('realtime', 'false'))
         self._readonly = self._aslist(
@@ -487,7 +487,7 @@ class MenuInput(MenuCommand):
         return self._input_value is not None
 
     def _onchange(self):
-        self._menu.run_script(self.get_gcode())
+        self._manager.run_script(self.get_gcode())
 
     def init_value(self):
         self._input_value = None
@@ -536,8 +536,8 @@ class MenuInput(MenuCommand):
 
 
 class MenuGroup(MenuContainer):
-    def __init__(self, menu, config, sep=','):
-        super(MenuGroup, self).__init__(menu, config)
+    def __init__(self, manager, config, sep=','):
+        super(MenuGroup, self).__init__(manager, config)
         self._sep = sep
         self._show_back = False
         self.selected = None
@@ -567,9 +567,9 @@ class MenuGroup(MenuContainer):
     def _render_item(self, item, selected=False, scroll=False):
         name = "%s" % str(item.render(scroll))
         if selected and not self.is_editing():
-            name = name if self._menu.blink_slow_state else ' '*len(name)
+            name = name if self._manager.blink_slow_state else ' '*len(name)
         elif selected and self.is_editing():
-            name = name if self._menu.blink_fast_state else ' '*len(name)
+            name = name if self._manager.blink_fast_state else ' '*len(name)
         return name
 
     def _render(self):
@@ -639,8 +639,8 @@ class MenuGroup(MenuContainer):
 
 
 class MenuItemGroup(MenuGroup):
-    def __init__(self, menu, config, sep):
-        super(MenuItemGroup, self).__init__(menu, config, sep)
+    def __init__(self, manager, config, sep):
+        super(MenuItemGroup, self).__init__(manager, config, sep)
 
     def is_readonly(self):
         return True
@@ -650,8 +650,8 @@ class MenuItemGroup(MenuGroup):
 
 
 class MenuCycler(MenuGroup):
-    def __init__(self, menu, config, sep):
-        super(MenuCycler, self).__init__(menu, config, sep)
+    def __init__(self, manager, config, sep):
+        super(MenuCycler, self).__init__(manager, config, sep)
         self._interval = 0
         self.__interval_cnt = 0
         self.__alllen = 0
@@ -665,7 +665,7 @@ class MenuCycler(MenuGroup):
 
     def _lookup_item(self, item):
         if isinstance(item, str) and '|' in item:
-            item = MenuItemGroup(self._menu, {
+            item = MenuItemGroup(self._manager, {
                 'name': 'ItemGroup',
                 'items': item
             }, '|')
@@ -703,8 +703,8 @@ class MenuCycler(MenuGroup):
 
 
 class MenuList(MenuContainer):
-    def __init__(self, menu, config):
-        super(MenuList, self).__init__(menu, config)
+    def __init__(self, manager, config):
+        super(MenuList, self).__init__(manager, config)
         self._enter_gcode = config.get('enter_gcode', None)
         self._leave_gcode = config.get('leave_gcode', None)
         self.items = config.get('items')
@@ -718,7 +718,8 @@ class MenuList(MenuContainer):
 
     def _lookup_item(self, item):
         if isinstance(item, str) and ',' in item:
-            item = MenuGroup(self._menu, {'name': 'Group', 'items': item}, ',')
+            item = MenuGroup(self._manager, {'name': 'Group',
+                                             'items': item}, ',')
         return super(MenuList, self)._lookup_item(item)
 
     def update_items(self):
@@ -735,18 +736,18 @@ class MenuList(MenuContainer):
 
 
 class MenuVSDCard(MenuList):
-    def __init__(self, menu, config):
-        super(MenuVSDCard, self).__init__(menu, config)
+    def __init__(self, manager, config):
+        super(MenuVSDCard, self).__init__(manager, config)
 
     def _populate_files(self):
-        sdcard = self._menu.objs['virtual_sdcard']
+        sdcard = self._manager.objs['virtual_sdcard']
         if sdcard is not None:
             files = sdcard.get_file_list()
             for fname, fsize in files:
                 gcode = [
                     'M23 /%s' % str(fname)
                 ]
-                self.append_item(MenuCommand(self._menu, {
+                self.append_item(MenuCommand(self._manager, {
                     'name': '%s' % str(fname),
                     'cursor': '+',
                     'gcode': "\n".join(gcode)
@@ -758,8 +759,8 @@ class MenuVSDCard(MenuList):
 
 
 class MenuCard(MenuGroup):
-    def __init__(self, menu, config):
-        super(MenuCard, self).__init__(menu, config)
+    def __init__(self, manager, config):
+        super(MenuCard, self).__init__(manager, config)
         self.content = config.get('content')
 
     def _names_aslist(self):
@@ -778,7 +779,7 @@ class MenuCard(MenuGroup):
 
     def _lookup_item(self, item):
         if isinstance(item, str) and ',' in item:
-            item = MenuCycler(self._menu, {
+            item = MenuCycler(self._manager, {
                 'name': 'Cycler',
                 'items': item
             }, ',')
@@ -809,25 +810,24 @@ class MenuCard(MenuGroup):
 
 
 class MenuDeck(MenuList):
-    def __init__(self, menu, config):
-        super(MenuDeck, self).__init__(menu, config)
-        self._root = config.get('menu_root', None)
-        self.root = None
+    def __init__(self, manager, config):
+        super(MenuDeck, self).__init__(manager, config)
+        self._menu = config.get('longpress_menu', None)
+        self.menu = None
         self._show_back = False
         self._show_title = False
 
-    def _populate_root(self):
-        if self._root is not None:
-            root = self._menu.lookup_menuitem(self._root)
-            if isinstance(root, MenuContainer):
-                root.populate_items()
-                self.root = root
-        else:
-            self.root = None
+    def _populate_menu(self):
+        self.menu = None
+        if self._menu is not None:
+            menu = self._manager.lookup_menuitem(self._menu)
+            if isinstance(menu, MenuContainer):
+                menu.populate_items()
+                self.menu = menu
 
     def populate_items(self):
         super(MenuDeck, self).populate_items()
-        self._populate_root()
+        self._populate_menu()
 
     def _names_aslist(self):
         return self._aslist(self.items)
