@@ -122,7 +122,7 @@ class MenuElement(object):
                 ]) for l1 in lst
             ])
         except Exception:
-            logging.exception("Parsing error")
+            logging.exception("Boolean parsing error")
             return False
 
     def _lookup_bool(self, b):
@@ -137,11 +137,15 @@ class MenuElement(object):
         if self._isfloat(literal):
             return float(literal)
         else:
-            try:
-                key1, key2 = literal.split('.', 1)
-                return self._menu.parameters[key1].get(key2)
-            except Exception:
-                return None
+            # only 2 level dot notation
+            keys = literal.rsplit('.', 1)
+            name = keys[0] if keys[0:1] else None
+            attr = keys[1] if keys[1:2] else None
+            if isinstance(self._menu.parameters, dict):
+                return (self._menu.parameters.get(name) or {}).get(attr)
+            else:
+                logging.error("Parameter storage is not dictionary")
+        return None
 
     def _asliteral(self, s):
         s = str(s).strip()
@@ -181,7 +185,7 @@ class MenuElement(object):
         try:
             return list(value)
         except Exception:
-            logging.exception("Parsing error")
+            logging.exception("Lines as list parsing error")
             return list(default)
 
     def _words_aslist(self, value, sep=',', default=[]):
@@ -190,7 +194,7 @@ class MenuElement(object):
         try:
             return list(value)
         except Exception:
-            logging.exception("Parsing error")
+            logging.exception("Words as list parsing error")
             return list(default)
 
     def _aslist(self, value, flatten=True, default=[]):
@@ -920,7 +924,7 @@ class MenuManager:
             for cfg_name in self.printer.objects:
                 obj = self.printer.lookup_object(cfg_name, None)
                 if obj is not None:
-                    name = "_".join(str(cfg_name).split())
+                    name = ".".join(str(cfg_name).split())
                     self.objs[name] = obj
                     logging.debug("Load module '%s' -> %s" % (
                         str(name), str(obj.__class__)))
@@ -999,6 +1003,7 @@ class MenuManager:
         # getting info this way is more like hack
         # all modules should have special reporting method (maybe get_status)
         # for available parameters
+        # Only 2 level dot notation
         for name in self.objs.keys():
             try:
                 if self.objs[name] is not None:
@@ -1034,9 +1039,9 @@ class MenuManager:
                     elif class_name == 'PrinterLCD':
                         self.parameters[name].update({
                             'progress': self.objs[name].progress or 0,
-                            'progress.visible': bool(self.objs[name].progress),
+                            'progress_visible': bool(self.objs[name].progress),
                             'message': self.objs[name].message or '',
-                            'message.visible': bool(self.objs[name].message),
+                            'message_visible': bool(self.objs[name].message),
                             'is_enabled': True
                         })
                     elif class_name == 'PrinterHeaterFan':
