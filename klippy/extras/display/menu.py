@@ -358,7 +358,7 @@ class MenuItem(MenuElement):
         # transform: idx.func(a,b,...)
         m = re.search(r"^(\d*)(?:\.?)([\S]+)(\([\S]*\))$", t)
         if m is not None:
-            index = int(m.group(1)) or 0
+            index = int(m.group(1) or 0)
             fname = str(m.group(2)).lower()
             try:
                 o = ast.literal_eval(m.group(3))
@@ -451,7 +451,7 @@ class MenuCommand(MenuItem):
                 args = fmt.split()
                 self._menu.run_action(args[0], *args[1:])
             except Exception:
-                logging.exception("Action format error")
+                logging.exception("Action formatting failed")
 
 
 class MenuInput(MenuCommand):
@@ -462,6 +462,7 @@ class MenuInput(MenuCommand):
         self._readonly = self._aslist(
             config.get('readonly', 'false'), flatten=False)
         self._input_value = None
+        self.__last_value = None
         self._input_min = config.getfloat('input_min', sys.float_info.min)
         self._input_max = config.getfloat('input_max', sys.float_info.max)
         self._input_step = config.getfloat('input_step', above=0.)
@@ -481,12 +482,18 @@ class MenuInput(MenuCommand):
     def is_editing(self):
         return self._input_value is not None
 
+    def _onchange(self):
+        self._menu.run_script(self.get_gcode())
+
     def init_value(self):
         self._input_value = None
+        self.__last_value = None
         if not self.is_readonly():
             args = self._prepare_values()
             if len(args) > 0 and self._isfloat(args[0]):
                 self._input_value = float(args[0])
+                if self._realtime:
+                    self._onchange()
             else:
                 logging.error("Cannot init input value")
 
@@ -494,7 +501,7 @@ class MenuInput(MenuCommand):
         self._input_value = None
 
     def inc_value(self):
-        prev_value = self._input_value
+        last_value = self._input_value
         if self._input_value is None:
             return
 
@@ -505,11 +512,11 @@ class MenuInput(MenuCommand):
         self._input_value = min(self._input_max, max(
             self._input_min, self._input_value))
 
-        if self._realtime and prev_value != self._input_value:
-            self._menu.run_script(self.get_gcode())
+        if self._realtime and last_value != self._input_value:
+            self._onchange()
 
     def dec_value(self):
-        prev_value = self._input_value
+        last_value = self._input_value
         if self._input_value is None:
             return
 
@@ -520,8 +527,8 @@ class MenuInput(MenuCommand):
         self._input_value = min(self._input_max, max(
             self._input_min, self._input_value))
 
-        if self._realtime and prev_value != self._input_value:
-            self._menu.run_script(self.get_gcode())
+        if self._realtime and last_value != self._input_value:
+            self._onchange()
 
 
 class MenuGroup(MenuContainer):
@@ -1045,7 +1052,7 @@ class MenuManager:
                     })
             elif type(self.objs[name]) == dict:
                 self.parameters[name] = {}
-                if name == 'output_pin' or name == 'servo':
+                if name in ('output_pin', 'servo'):
                     for key, obj in self.objs[name].items():
                         try:
                             self.parameters[name].update({
@@ -1053,7 +1060,9 @@ class MenuManager:
                                 '%s.is_enabled' % str(key): True
                             })
                         except Exception:
-                            logging.exception('Parameter update error')
+                            logging.exception(
+                                "Parameter '%s.%s' update error" % (
+                                    str(name), str(key)))
                 else:
                     self.parameters[name].update({'is_enabled': False})
             else:
@@ -1256,9 +1265,13 @@ class MenuManager:
                 current()
                 self.run_script(current.get_gcode())
 
-    def exit(self):
+    def exit(self, force=False):
         container = self.stack_peek()
         if self.running and isinstance(container, MenuContainer):
+            current = container[self.selected]
+            if (not force and isinstance(current, (MenuInput, MenuGroup))
+                    and current.is_editing()):
+                return
             self.run_script(container.get_leave_gcode())
             self.running = False
 
