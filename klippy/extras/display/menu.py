@@ -855,25 +855,7 @@ class MenuManager:
         self.printer = config.get_printer()
         self.gcode = self.printer.lookup_object('gcode')
         self.parameters = {}
-        self.objs = {
-            'gcode': None,
-            'toolhead': None,
-            'fan': None,
-            'extruder0': None,
-            'extruder1': None,
-            'heater_bed': None,
-            'virtual_sdcard': None,
-            'display': None,
-            'output_pin': {},
-            'servo': {}
-        }
-        # try to load printer objects in this state
-        for name in self.objs.keys():
-            if self.objs[name] is None:
-                self.objs[name] = self.printer.lookup_object(name, None)
-        # load servo name & output_pin names
-        self.lookup_section_names(config, 'output_pin')
-        self.lookup_section_names(config, 'servo')
+        self.objs = {}
         self.root = None
         self._root = config.get('menu_root', None)
         self.autorun = config.getboolean('menu_autorun', False)
@@ -934,15 +916,14 @@ class MenuManager:
             # Load menu root
             if self._root is not None:
                 self.root = self.lookup_menuitem(self._root)
-            # Load printer objects available in ready state
-            for name in self.objs.keys():
-                if self.objs[name] is None:
-                    self.objs[name] = self.printer.lookup_object(name, None)
-                elif isinstance(self.objs[name], dict):
-                    for key, obj in self.objs[name].items():
-                        if isinstance(obj, str):
-                            self.objs[name][key] = self.printer.lookup_object(
-                                obj, None)
+            # Load all available printer objects
+            for cfg_name in self.printer.objects:
+                obj = self.printer.lookup_object(cfg_name, None)
+                if obj is not None:
+                    name = "_".join(str(cfg_name).split())
+                    self.objs[name] = obj
+                    logging.debug("Load module '%s' -> %s" % (
+                        str(name), str(obj.__class__)))
             # start timer
             reactor = self.printer.get_reactor()
             reactor.register_timer(self.timer_event, reactor.NOW)
@@ -1001,72 +982,74 @@ class MenuManager:
 
         self.running = False
 
-    def update_parameters(self, eventtime):
-        self.parameters = {
-            'screen': {
-                'eventtime': eventtime,
-                'is2004': (self.rows == 4 and self.cols == 20),
-                'is2002': (self.rows == 2 and self.cols == 20),
-                'is1604': (self.rows == 4 and self.cols == 16),
-                'is1602': (self.rows == 2 and self.cols == 16)
-            }
+    def get_status(self, eventtime):
+        return {
+            'eventtime': eventtime,
+            'timeout': self.timeout,
+            'autorun': self.autorun,
+            'isRunning': self.running,
+            'is2004': (self.rows == 4 and self.cols == 20),
+            'is2002': (self.rows == 2 and self.cols == 20),
+            'is1604': (self.rows == 4 and self.cols == 16),
+            'is1602': (self.rows == 2 and self.cols == 16)
         }
+
+    def update_parameters(self, eventtime):
+        self.parameters = {}
+        # getting info this way is more like hack
+        # all modules should have special reporting method (maybe get_status)
+        # for available parameters
         for name in self.objs.keys():
-            if self.objs[name] is not None and type(self.objs[name]) != dict:
-                try:
-                    self.parameters[name] = self.objs[name].get_status(
-                        eventtime)
-                except Exception:
-                    self.parameters[name] = {}
-                self.parameters[name].update({'is_enabled': True})
-                # get additional info
-                if name == 'toolhead':
-                    pos = self.objs[name].get_position()
-                    self.parameters[name].update({
-                        'xpos': pos[0],
-                        'ypos': pos[1],
-                        'zpos': pos[2],
-                        'epos': pos[3]
-                    })
-                    self.parameters[name].update({
-                        'is_printing':
-                            (self.parameters[name]['status'] == "Printing"),
-                        'is_ready':
-                            (self.parameters[name]['status'] == "Ready"),
-                        'is_idle':
-                            (self.parameters[name]['status'] == "Idle")
-                    })
-                elif name == 'extruder0':
-                    info = self.objs[name].get_heater().get_status(eventtime)
-                    self.parameters[name].update(info)
-                elif name == 'extruder1':
-                    info = self.objs[name].get_heater().get_status(eventtime)
-                    self.parameters[name].update(info)
-                elif name == 'display':
-                    self.parameters[name].update({
-                        'progress': self.objs[name].progress or 0,
-                        'progress.visible': not not self.objs[name].progress,
-                        'message': self.objs[name].message or '',
-                        'message.visible': not not self.objs[name].message,
-                        'is_enabled': True
-                    })
-            elif type(self.objs[name]) == dict:
-                self.parameters[name] = {}
-                if name in ('output_pin', 'servo'):
-                    for key, obj in self.objs[name].items():
-                        try:
-                            self.parameters[name].update({
-                                '%s.value' % str(key): obj.last_value,
-                                '%s.is_enabled' % str(key): True
-                            })
-                        except Exception:
-                            logging.exception(
-                                "Parameter '%s.%s' update error" % (
-                                    str(name), str(key)))
+            try:
+                if self.objs[name] is not None:
+                    class_name = str(self.objs[name].__class__.__name__)
+                    get_status = getattr(self.objs[name], "get_status", None)
+                    if callable(get_status):
+                        self.parameters[name] = get_status(eventtime)
+                    else:
+                        self.parameters[name] = {}
+
+                    self.parameters[name].update({'is_enabled': True})
+                    # get additional info
+                    if class_name == 'ToolHead':
+                        pos = self.objs[name].get_position()
+                        self.parameters[name].update({
+                            'xpos': pos[0],
+                            'ypos': pos[1],
+                            'zpos': pos[2],
+                            'epos': pos[3]
+                        })
+                        self.parameters[name].update({
+                            'is_printing': (
+                                self.parameters[name]['status'] == "Printing"),
+                            'is_ready': (
+                                self.parameters[name]['status'] == "Ready"),
+                            'is_idle': (
+                                self.parameters[name]['status'] == "Idle")
+                        })
+                    elif class_name == 'PrinterExtruder':
+                        info = self.objs[name].get_heater().get_status(
+                            eventtime)
+                        self.parameters[name].update(info)
+                    elif class_name == 'PrinterLCD':
+                        self.parameters[name].update({
+                            'progress': self.objs[name].progress or 0,
+                            'progress.visible': bool(self.objs[name].progress),
+                            'message': self.objs[name].message or '',
+                            'message.visible': bool(self.objs[name].message),
+                            'is_enabled': True
+                        })
+                    elif class_name == 'PrinterHeaterFan':
+                        info = self.objs[name].fan.get_status(eventtime)
+                        self.parameters[name].update(info)
+                    elif class_name in ('PrinterOutputPin', 'PrinterServo'):
+                        self.parameters[name].update({
+                            'value': self.objs[name].last_value
+                        })
                 else:
-                    self.parameters[name].update({'is_enabled': False})
-            else:
-                self.parameters[name] = {'is_enabled': False}
+                    self.parameters[name] = {'is_enabled': False}
+            except Exception:
+                logging.exception("Parameter '%s' update error" % str(name))
 
     def stack_push(self, container):
         if not isinstance(container, MenuContainer):
@@ -1316,11 +1299,6 @@ class MenuManager:
             else:
                 self._recursive_guard.append(name)
         return self.menuitems[name]
-
-    def lookup_section_names(self, config, section):
-        for cfg in config.get_prefix_sections('%s ' % section):
-            name = " ".join(cfg.get_name().split()[1:])
-            self.objs[section][name] = cfg.get_name()
 
     def load_menuitems(self, config):
         for cfg in config.get_prefix_sections('menu '):
