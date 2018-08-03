@@ -811,8 +811,23 @@ class MenuCard(MenuGroup):
 class MenuDeck(MenuList):
     def __init__(self, menu, config):
         super(MenuDeck, self).__init__(menu, config)
+        self._root = config.get('menu_root', None)
+        self.root = None
         self._show_back = False
         self._show_title = False
+
+    def _populate_root(self):
+        if self._root is not None:
+            root = self._menu.lookup_menuitem(self._root)
+            if isinstance(root, MenuContainer):
+                root.populate_items()
+                self.root = root
+        else:
+            self.root = None
+
+    def populate_items(self):
+        super(MenuDeck, self).populate_items()
+        self._populate_root()
 
     def _names_aslist(self):
         return self._aslist(self.items)
@@ -875,6 +890,7 @@ class MenuManager:
         self.up_pin = config.get('up_pin', None)
         self.down_pin = config.get('down_pin', None)
         self.kill_pin = config.get('kill_pin', None)
+        self._last_click_press = 0
         # printer objects
         self.buttons = self.printer.try_load_module(config, "buttons")
         # register itself for a printer_state callback
@@ -890,8 +906,10 @@ class MenuManager:
                     pin1.strip(), pin2.strip(),
                     self.encoder_cw_callback, self.encoder_ccw_callback)
             if self.click_pin:
-                self.buttons.register_button_push(
-                    self.click_pin, self.click_callback)
+                # self.buttons.register_button_push(
+                #    self.click_pin, self.click_callback)
+                self.buttons.register_buttons(
+                    [self.click_pin], self.click_callback)
             if self.back_pin:
                 self.buttons.register_button_push(
                     self.back_pin, self.back_callback)
@@ -1341,13 +1359,30 @@ class MenuManager:
     def encoder_ccw_callback(self, eventtime):
         self.down()
 
-    def click_callback(self, eventtime):
+    def click_callback(self, eventtime, state):
         if self.click_pin:
-            if not self.is_running():
-                # lets start and populate the menu items
-                self.begin(eventtime)
-            elif self.is_running():
-                self.select()
+            if state:
+                self._last_press = eventtime
+            else:
+                if eventtime - self._last_press > 1.0:
+                    # long click
+                    if not self.is_running():
+                        # lets start and populate the menu items
+                        self.begin(eventtime)
+                    else:
+                        container = self.stack_peek()
+                        if isinstance(container, MenuDeck):
+                            root = container.root
+                            if (isinstance(root, MenuList)
+                                    and not container.is_editing()
+                                    and root is not container):
+                                self.stack_push(root)
+                                self.top_row = 0
+                                self.selected = 0
+                else:
+                    # short click
+                    if self.is_running():
+                        self.select()
 
     def back_callback(self, eventtime):
         if self.back_pin:
