@@ -31,6 +31,7 @@ class MenuElement(object):
         self._enable = self._aslist(config.get('enable', 'true'),
                                     flatten=False)
         self._name = self._asliteral(config.get('name'))
+        self.__cfgname = " ".join(config.get_name().split()[1:])
         self.__scroll_offs = 0
         self.__scroll_diff = 0
         self.__scroll_dir = None
@@ -222,6 +223,8 @@ class MenuContainer(MenuElement):
         self._show_title = self._asbool(config.get('show_title', 'true'))
         self._allitems = []
         self._items = []
+        # recursive guard
+        self._parents = []
 
     # overload
     def _names_aslist(self):
@@ -252,12 +255,24 @@ class MenuContainer(MenuElement):
                     index = self._items.index(con)
         return index
 
+    def add_parents(self, parents):
+        if isinstance(parents, list):
+            self._parents.extend(parents)
+        else:
+            self._parents.append(parents)
+
+    def assert_recursive_relation(self):
+        assert self in self._parents, "Recursive relation of '%s'" % (
+            self.__cfgname,)
+
     def append_item(self, s):
         item = self._lookup_item(s)
         if item is not None:
             if not self.is_accepted(item):
                 raise error("Menu item '%s'is not accepted!" % str(type(item)))
             if isinstance(item, (MenuContainer)):
+                item.add_parents(self._parents)
+                item.assert_recursive_relation()
                 item.populate_items()
             self._allitems.append(item)
 
