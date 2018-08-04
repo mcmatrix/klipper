@@ -862,6 +862,7 @@ class MenuManager:
         self.running = False
         self.menuitems = {}
         self.menustack = []
+        self._autorun = False
         self._recursive_guard = []
         self.top_row = 0
         self.selected = 0
@@ -877,7 +878,6 @@ class MenuManager:
         self.objs = {}
         self.root = None
         self._root = config.get('menu_root', None)
-        self.autorun = config.getboolean('menu_autorun', False)
         dims = config.getchoice('lcd_type', LCD_dims)
         self.rows = config.getint('rows', dims[0])
         self.cols = config.getint('cols', dims[1])
@@ -926,18 +926,16 @@ class MenuManager:
         # Add MENU commands
         self.gcode.register_mux_command("MENU", "DO", 'dump', self.cmd_DO_DUMP,
                                         desc=self.cmd_DO_help)
-        self.gcode.register_mux_command("MENU", "DO", 'exit', self.cmd_DO_EXIT,
-                                        desc=self.cmd_DO_help)
-        self.gcode.register_mux_command("MENU", "DO", 'back', self.cmd_DO_BACK,
-                                        desc=self.cmd_DO_help)
         # load items
         self.load_menuitems(config)
+        # Load menu root
+        if self._root is not None:
+            self.root = self.lookup_menuitem(self._root)
+            if isinstance(self.root, MenuDeck):
+                self._autorun = True
 
     def printer_state(self, state):
         if state == 'ready':
-            # Load menu root
-            if self._root is not None:
-                self.root = self.lookup_menuitem(self._root)
             # Load all available printer objects
             for cfg_name in self.printer.objects:
                 obj = self.printer.lookup_object(cfg_name, None)
@@ -981,7 +979,7 @@ class MenuManager:
             self.timer = 0
 
     def _timeout_autorun_root(self):
-        return (self.autorun is True and self.root is not None
+        return (self._autorun is True and self.root is not None
                 and self.stack_peek() is self.root and self.selected == 0)
 
     def is_running(self):
@@ -1008,7 +1006,7 @@ class MenuManager:
         return {
             'eventtime': eventtime,
             'timeout': self.timeout,
-            'autorun': self.autorun,
+            'autorun': self._autorun,
             'isRunning': self.running,
             'is2004': (self.rows == 4 and self.cols == 20),
             'is2002': (self.rows == 2 and self.cols == 20),
@@ -1163,7 +1161,7 @@ class MenuManager:
                 self.lcd_chip.write_text(0, y, line)
             self.lcd_chip.flush()
             return eventtime + MENU_UPDATE_DELAY
-        elif not self.is_running() and self.autorun is True:
+        elif not self.is_running() and self._autorun is True:
             # lets start and populate the menu items
             self.begin(eventtime)
             return eventtime + MENU_UPDATE_DELAY
@@ -1329,7 +1327,7 @@ class MenuManager:
             item = cfg.getchoice('type', menu_items)(self, cfg)
             self.add_menuitem(name, item)
 
-    cmd_DO_help = "Menu do things (dump, exit, back)"
+    cmd_DO_help = "Menu do things"
 
     def cmd_DO_DUMP(self, params):
         for key1 in self.parameters:
@@ -1345,12 +1343,6 @@ class MenuManager:
                 msg = "{0} = {1}".format(key1, self.parameters.get(key1))
                 logging.info(msg)
                 self.gcode.respond_info(msg)
-
-    def cmd_DO_EXIT(self, params):
-        self.exit()
-
-    def cmd_DO_BACK(self, params):
-        self.back()
 
     # buttons & encoder callbacks
     def encoder_cw_callback(self, eventtime):
