@@ -31,7 +31,10 @@ class MenuElement(object):
         self._enable = self._aslist(config.get('enable', 'true'),
                                     flatten=False)
         self._name = self._asliteral(config.get('name'))
-        self.__cfgname = " ".join(config.get_name().split()[1:])
+        if type(config) is dict:
+            self._cfgname = self._name
+        else:
+            self._cfgname = " ".join(config.get_name().split()[1:])
         self.__scroll_offs = 0
         self.__scroll_diff = 0
         self.__scroll_dir = None
@@ -261,9 +264,9 @@ class MenuContainer(MenuElement):
         else:
             self._parents.append(parents)
 
-    def assert_recursive_relation(self):
-        assert self in self._parents, "Recursive relation of '%s'" % (
-            self.__cfgname,)
+    def assert_recursive_relation(self, parents=None):
+        assert self not in (parents or self._parents), \
+            "Recursive relation of '%s' container" % (self._cfgname,)
 
     def append_item(self, s):
         item = self._lookup_item(s)
@@ -272,6 +275,7 @@ class MenuContainer(MenuElement):
                 raise error("Menu item '%s'is not accepted!" % str(type(item)))
             if isinstance(item, (MenuContainer)):
                 item.add_parents(self._parents)
+                item.add_parents(self)
                 item.assert_recursive_relation()
                 item.populate_items()
             self._allitems.append(item)
@@ -836,6 +840,7 @@ class MenuDeck(MenuList):
         if self._menu is not None:
             menu = self._manager.lookup_menuitem(self._menu)
             if isinstance(menu, MenuContainer):
+                menu.assert_recursive_relation(self._parents)
                 menu.populate_items()
                 self.menu = menu
 
@@ -877,7 +882,6 @@ class MenuManager:
         self.menuitems = {}
         self.menustack = []
         self._autorun = False
-        self._recursive_guard = []
         self.top_row = 0
         self.selected = 0
         self.blink_fast_state = True
@@ -943,7 +947,7 @@ class MenuManager:
 
         # Parse local config file in same directory as current module
         fileconfig = ConfigParser.RawConfigParser()
-        localname = os.path.join(os.path.dirname(__file__), 'menu.cfg')
+        localname = os.path.join(os.path.dirname(__file__), 'menu1.cfg')
         fileconfig.read(localname)
         localconfig = klippy.ConfigWrapper(self.printer, fileconfig, {}, None)
 
@@ -1011,7 +1015,6 @@ class MenuManager:
 
     def begin(self, eventtime):
         self.menustack = []
-        self._recursive_guard = []
         self.top_row = 0
         self.selected = 0
         self.timer = 0
@@ -1330,19 +1333,12 @@ class MenuManager:
                 "Menu object '%s' already created" % (name,))
         self.menuitems[name] = menu
 
-    def lookup_menuitem(self, name, peek=False):
+    def lookup_menuitem(self, name):
         if name is None:
             return None
         if name not in self.menuitems:
             raise self.printer.config_error(
                 "Unknown menuitem '%s'" % (name,))
-        if not peek and isinstance(self.menuitems[name], MenuContainer):
-            if name in self._recursive_guard:
-                raise self.printer.config_error(
-                    "Containers can only be used once! "
-                    "Potential recursive relation of '%s'" % (name,))
-            else:
-                self._recursive_guard.append(name)
         return self.menuitems[name]
 
     def load_menuitems(self, config):
@@ -1399,6 +1395,9 @@ class MenuManager:
                     # short click
                     if self.is_running():
                         self.select()
+                    else:
+                        # lets start and populate the menu items
+                        self.begin(eventtime)
 
     def back_callback(self, eventtime):
         if self.back_pin:
