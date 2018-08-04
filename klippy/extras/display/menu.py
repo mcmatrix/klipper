@@ -5,10 +5,13 @@
 # Copyright (C) 2018  Janar Sööt <janar.soot@gmail.com>
 #
 # This file may be distributed under the terms of the GNU GPLv3 license.
+import os
+import ConfigParser
 import logging
 import sys
 import ast
 import re
+import klippy
 
 
 class error(Exception):
@@ -926,8 +929,18 @@ class MenuManager:
         # Add MENU commands
         self.gcode.register_mux_command("MENU", "DO", 'dump', self.cmd_DO_DUMP,
                                         desc=self.cmd_DO_help)
-        # load items
+
+        # Parse local config file in same directory as current module
+        fileconfig = ConfigParser.RawConfigParser()
+        localname = os.path.join(os.path.dirname(__file__), 'menu.cfg')
+        fileconfig.read(localname)
+        localconfig = klippy.ConfigWrapper(self.printer, fileconfig, {}, None)
+
+        # Load items from local config
+        self.load_menuitems(localconfig)
+        # Load items from main config
         self.load_menuitems(config)
+
         # Load menu root
         if self._root is not None:
             self.root = self.lookup_menuitem(self._root)
