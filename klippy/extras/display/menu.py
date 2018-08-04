@@ -5,12 +5,8 @@
 # Copyright (C) 2018  Janar Sööt <janar.soot@gmail.com>
 #
 # This file may be distributed under the terms of the GNU GPLv3 license.
-import os
-import ConfigParser
-import logging
-import sys
-import ast
-import re
+import os, ConfigParser, logging
+import sys, ast, re
 import klippy
 
 
@@ -317,13 +313,13 @@ class MenuItem(MenuElement):
 
             def map_fn(values):
                 return cast_fn(
-                    right_min + (values[index]-left_min)*scale_factor
+                    right_min + (values[index] - left_min) * scale_factor
                 )
             return map_fn
 
         def scaler(scale_factor, cast_fn, index=0):
             def scale_fn(values):
-                return cast_fn(values[index]*scale_factor)
+                return cast_fn(values[index] * scale_factor)
             return scale_fn
 
         def chooser(choices, cast_fn, index=0):
@@ -683,9 +679,9 @@ class MenuCycler(MenuGroup):
     def _second_tick(self, eventtime):
         super(MenuCycler, self)._second_tick(eventtime)
         if self._interval > 0:
-            self.__interval_cnt = (self.__interval_cnt+1) % self._interval
+            self.__interval_cnt = (self.__interval_cnt + 1) % self._interval
             if self.__interval_cnt == 0 and self.__alllen > 0:
-                self._curr_idx = (self._curr_idx+1) % self.__alllen
+                self._curr_idx = (self._curr_idx + 1) % self.__alllen
         else:
             self._curr_idx = 0
 
@@ -964,12 +960,12 @@ class MenuManager:
     def timer_event(self, eventtime):
         # take next from sequence
         self.blink_fast_idx = (
-            (self.blink_fast_idx+1) % len(BLINK_FAST_SEQUENCE)
+            (self.blink_fast_idx + 1) % len(BLINK_FAST_SEQUENCE)
         )
         self.blink_slow_idx = (
-            (self.blink_slow_idx+1) % len(BLINK_SLOW_SEQUENCE)
+            (self.blink_slow_idx + 1) % len(BLINK_SLOW_SEQUENCE)
         )
-        self.timeout_idx = (self.timeout_idx+1) % 5  # 0.2*5 = 1s
+        self.timeout_idx = (self.timeout_idx + 1) % 5  # 0.2*5 = 1s
         self.blink_fast_state = (
             not not BLINK_FAST_SEQUENCE[self.blink_fast_idx]
         )
@@ -1120,7 +1116,7 @@ class MenuManager:
     def stack_peek(self, lvl=0):
         container = None
         if self.stack_size() > lvl:
-            container = self.menustack[self.stack_size()-lvl-1]
+            container = self.menustack[self.stack_size() - lvl - 1]
         return container
 
     def render(self, eventtime):
@@ -1133,7 +1129,7 @@ class MenuManager:
             self.top_row = max(0, min(
                 self.top_row, len(container) - self.rows))
             self.selected = max(0, min(
-                self.selected, len(container)-1))
+                self.selected, len(container) - 1))
             if isinstance(container, MenuDeck):
                 if not container.is_editing():
                     container.update_items()
