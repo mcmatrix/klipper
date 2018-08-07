@@ -956,7 +956,7 @@ class MenuManager:
 
         # Parse local config file in same directory as current module
         fileconfig = ConfigParser.RawConfigParser()
-        localname = os.path.join(os.path.dirname(__file__), 'menu1.cfg')
+        localname = os.path.join(os.path.dirname(__file__), 'menu.cfg')
         fileconfig.read(localname)
         localconfig = klippy.ConfigWrapper(self.printer, fileconfig, {}, None)
 
