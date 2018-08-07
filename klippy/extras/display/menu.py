@@ -23,18 +23,15 @@ class MenuCursor:
 
 # Menu element baseclass
 class MenuElement(object):
-    def __init__(self, manager, config):
+    def __init__(self, manager, config, namespace=''):
         self.cursor = config.get('cursor', MenuCursor.SELECT)
+        self._namespace = namespace
         self._manager = manager
         self._width = self._asint(config.get('width', '0'))
         self._scroll = self._asbool(config.get('scroll', 'false'))
         self._enable = self._aslist(config.get('enable', 'true'),
                                     flatten=False)
         self._name = self._asliteral(config.get('name'))
-        if type(config) is dict:
-            self._cfgname = self._name
-        else:
-            self._cfgname = " ".join(config.get_name().split()[1:])
         self.__scroll_offs = 0
         self.__scroll_diff = 0
         self.__scroll_dir = None
@@ -217,11 +214,19 @@ class MenuElement(object):
         except ValueError:
             return False
 
+    @property
+    def namespace(self):
+        return self._namespace
+
+    @namespace.setter
+    def namespace(self, ns):
+        self._namespace = ns
+
 
 # menu container baseclass
 class MenuContainer(MenuElement):
-    def __init__(self, manager, config):
-        super(MenuContainer, self).__init__(manager, config)
+    def __init__(self, manager, config, namespace=''):
+        super(MenuContainer, self).__init__(manager, config, namespace)
         self._show_back = self._asbool(config.get('show_back', 'true'))
         self._show_title = self._asbool(config.get('show_title', 'true'))
         self._allitems = []
@@ -243,10 +248,13 @@ class MenuContainer(MenuElement):
     def is_editing(self):
         return any([item.is_editing() for item in self._items])
 
-    def _lookup_item(self, s):
-        if isinstance(s, str):
-            s = self._manager.lookup_menuitem(s.strip())
-        return s
+    def _lookup_item(self, item):
+        if isinstance(item, str):
+            s = item.strip()
+            if s.startswith('.'):
+                s = ' '.join([self.namespace, s[1:]])
+            item = self._manager.lookup_menuitem(s)
+        return item
 
     def find_item(self, item):
         index = None
@@ -266,7 +274,7 @@ class MenuContainer(MenuElement):
 
     def assert_recursive_relation(self, parents=None):
         assert self not in (parents or self._parents), \
-            "Recursive relation of '%s' container" % (self._cfgname,)
+            "Recursive relation of '%s' container" % (self.namespace,)
 
     def append_item(self, s):
         item = self._lookup_item(s)
@@ -286,9 +294,8 @@ class MenuContainer(MenuElement):
             name = '[..]'
             if self._show_title:
                 name += ' %s' % str(self._name)
-            self.append_item(MenuCommand(self._manager, {'name': name,
-                                                         'gcode': '',
-                                                         'action': 'back'}))
+            self.append_item(MenuCommand(self._manager, {
+                'name': name, 'gcode': '', 'action': 'back'}, self.namespace))
         for name in self._names_aslist():
             self.append_item(name)
         self.update_items()
@@ -307,8 +314,8 @@ class MenuContainer(MenuElement):
 
 
 class MenuItem(MenuElement):
-    def __init__(self, manager, config):
-        super(MenuItem, self).__init__(manager, config)
+    def __init__(self, manager, config, namespace=''):
+        super(MenuItem, self).__init__(manager, config, namespace)
         self.parameter = config.get('parameter', '')
         self.transform = config.get('transform', '')
 
@@ -455,8 +462,8 @@ class MenuItem(MenuElement):
 
 
 class MenuCommand(MenuItem):
-    def __init__(self, manager, config):
-        super(MenuCommand, self).__init__(manager, config)
+    def __init__(self, manager, config, namespace=''):
+        super(MenuCommand, self).__init__(manager, config, namespace)
         self._gcode = config.get('gcode')
         self._action = config.get('action', None)
 
@@ -477,8 +484,8 @@ class MenuCommand(MenuItem):
 
 
 class MenuInput(MenuCommand):
-    def __init__(self, manager, config):
-        super(MenuInput, self).__init__(manager, config)
+    def __init__(self, manager, config, namespace=''):
+        super(MenuInput, self).__init__(manager, config, namespace)
         self._reverse = self._asbool(config.get('reverse', 'false'))
         self._realtime = self._asbool(config.get('realtime', 'false'))
         self._readonly = self._aslist(
@@ -554,8 +561,8 @@ class MenuInput(MenuCommand):
 
 
 class MenuGroup(MenuContainer):
-    def __init__(self, manager, config, sep=','):
-        super(MenuGroup, self).__init__(manager, config)
+    def __init__(self, manager, config, namespace='', sep=','):
+        super(MenuGroup, self).__init__(manager, config, namespace)
         self._sep = sep
         self._show_back = False
         self.selected = None
@@ -657,8 +664,8 @@ class MenuGroup(MenuContainer):
 
 
 class MenuItemGroup(MenuGroup):
-    def __init__(self, manager, config, sep):
-        super(MenuItemGroup, self).__init__(manager, config, sep)
+    def __init__(self, manager, config, namespace='', sep='|'):
+        super(MenuItemGroup, self).__init__(manager, config, namespace, sep)
 
     def is_readonly(self):
         return True
@@ -668,8 +675,8 @@ class MenuItemGroup(MenuGroup):
 
 
 class MenuCycler(MenuGroup):
-    def __init__(self, manager, config, sep):
-        super(MenuCycler, self).__init__(manager, config, sep)
+    def __init__(self, manager, config, namespace='', sep=','):
+        super(MenuCycler, self).__init__(manager, config, namespace, sep)
         self._interval = 0
         self.__interval_cnt = 0
         self.__alllen = 0
@@ -684,9 +691,9 @@ class MenuCycler(MenuGroup):
     def _lookup_item(self, item):
         if isinstance(item, str) and '|' in item:
             item = MenuItemGroup(self._manager, {
-                'name': 'ItemGroup',
+                'name': ' '.join([self._name, 'ItemGroup']),
                 'items': item
-            }, '|')
+            }, self.namespace, '|')
         elif isinstance(item, str) and item.isdigit():
             try:
                 self._interval = max(0, int(item))
@@ -721,8 +728,8 @@ class MenuCycler(MenuGroup):
 
 
 class MenuList(MenuContainer):
-    def __init__(self, manager, config):
-        super(MenuList, self).__init__(manager, config)
+    def __init__(self, manager, config, namespace=''):
+        super(MenuList, self).__init__(manager, config, namespace)
         self._enter_gcode = config.get('enter_gcode', None)
         self._leave_gcode = config.get('leave_gcode', None)
         self.items = config.get('items')
@@ -736,8 +743,10 @@ class MenuList(MenuContainer):
 
     def _lookup_item(self, item):
         if isinstance(item, str) and ',' in item:
-            item = MenuGroup(self._manager, {'name': 'Group',
-                                             'items': item}, ',')
+            item = MenuGroup(self._manager, {
+                'name': ' '.join([self._name, 'Group']),
+                'items': item
+            }, self.namespace, ',')
         return super(MenuList, self)._lookup_item(item)
 
     def update_items(self):
@@ -754,8 +763,8 @@ class MenuList(MenuContainer):
 
 
 class MenuVSDCard(MenuList):
-    def __init__(self, manager, config):
-        super(MenuVSDCard, self).__init__(manager, config)
+    def __init__(self, manager, config, namespace=''):
+        super(MenuVSDCard, self).__init__(manager, config, namespace)
 
     def _populate_files(self):
         sdcard = self._manager.objs['virtual_sdcard']
@@ -777,8 +786,8 @@ class MenuVSDCard(MenuList):
 
 
 class MenuCard(MenuGroup):
-    def __init__(self, manager, config):
-        super(MenuCard, self).__init__(manager, config)
+    def __init__(self, manager, config, namespace=''):
+        super(MenuCard, self).__init__(manager, config, namespace)
         self.content = config.get('content')
 
     def _names_aslist(self):
@@ -798,9 +807,9 @@ class MenuCard(MenuGroup):
     def _lookup_item(self, item):
         if isinstance(item, str) and ',' in item:
             item = MenuCycler(self._manager, {
-                'name': 'Cycler',
+                'name': ' '.join([self._name, 'Cycler']),
                 'items': item
-            }, ',')
+            }, self.namespace, ',')
         return super(MenuCard, self)._lookup_item(item)
 
     def render_content(self, eventtime):
@@ -828,8 +837,8 @@ class MenuCard(MenuGroup):
 
 
 class MenuDeck(MenuList):
-    def __init__(self, manager, config):
-        super(MenuDeck, self).__init__(manager, config)
+    def __init__(self, manager, config, namespace=''):
+        super(MenuDeck, self).__init__(manager, config, namespace)
         self._menu = config.get('longpress_menu', None)
         self.menu = None
         self._show_back = False
@@ -1329,8 +1338,9 @@ class MenuManager:
 
     def add_menuitem(self, name, menu):
         if name in self.menuitems:
-            raise self.printer.config_error(
-                "Menu object '%s' already created" % (name,))
+            logging.info(
+                "Declaration of '%s' hides "
+                "previous menuitem declaration" % (name,))
         self.menuitems[name] = menu
 
     def lookup_menuitem(self, name):
@@ -1344,7 +1354,7 @@ class MenuManager:
     def load_menuitems(self, config):
         for cfg in config.get_prefix_sections('menu '):
             name = " ".join(cfg.get_name().split()[1:])
-            item = cfg.getchoice('type', menu_items)(self, cfg)
+            item = cfg.getchoice('type', menu_items)(self, cfg, name)
             self.add_menuitem(name, item)
 
     cmd_DO_help = "Menu do things"
