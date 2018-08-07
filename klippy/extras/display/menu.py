@@ -813,6 +813,10 @@ class MenuCard(MenuGroup):
         return super(MenuCard, self)._lookup_item(item)
 
     def render_content(self, eventtime):
+        def _custom_chars(match):
+            match = match.group()
+            return "%c" % (int(str(match)[2:], 16),)
+
         if self.selected is not None:
             self.selected = (
                 (self.selected % len(self)) if len(self) > 0 else None)
@@ -827,7 +831,8 @@ class MenuCard(MenuGroup):
         lines = []
         for line in self._content_aslist():
             try:
-                lines.append(str(line).format(*items))
+                line = re.sub(r'\\x[0-9a-fA-F]+', _custom_chars, str(line))
+                lines.append(line.format(*items))
             except Exception:
                 logging.exception('Card rendering error')
         return lines
