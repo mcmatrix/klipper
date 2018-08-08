@@ -813,10 +813,6 @@ class MenuCard(MenuGroup):
         return super(MenuCard, self)._lookup_item(item)
 
     def render_content(self, eventtime):
-        def _custom_chars(match):
-            match = match.group()
-            return "%c" % (int(str(match)[2:], 16),)
-
         if self.selected is not None:
             self.selected = (
                 (self.selected % len(self)) if len(self) > 0 else None)
@@ -831,8 +827,7 @@ class MenuCard(MenuGroup):
         lines = []
         for line in self._content_aslist():
             try:
-                line = re.sub(r'\\x[0-9a-fA-F]+', _custom_chars, str(line))
-                lines.append(line.format(*items))
+                lines.append(str(line).format(*items))
             except Exception:
                 logging.exception('Card rendering error')
         return lines
@@ -1151,6 +1146,18 @@ class MenuManager:
             container = self.menustack[self.stack_size() - lvl - 1]
         return container
 
+    def _unescape_cchars(self, text):
+        def fixup(m):
+            text = str(m.group(0))
+            if text[:2] == "\\x":
+                try:
+                    return "%c" % (int(text[2:], 16),)
+                except ValueError:
+                    logging.exception('Custom character unescape error')
+            else:
+                return text
+        return re.sub(r'\\x[0-9a-f]{2}', fixup, str(text), flags=re.IGNORECASE)
+
     def render(self, eventtime):
         lines = []
         self.update_parameters(eventtime)
@@ -1199,7 +1206,7 @@ class MenuManager:
         if self.is_running():
             self.lcd_chip.clear()
             for y, line in enumerate(self.render(eventtime)):
-                self.lcd_chip.write_text(0, y, line)
+                self.lcd_chip.write_text(0, y, self._unescape_cchars(line))
             self.lcd_chip.flush()
             return eventtime + MENU_UPDATE_DELAY
         elif not self.is_running() and self._autorun is True:
