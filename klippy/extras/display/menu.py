@@ -385,7 +385,7 @@ class MenuItem(MenuElement):
         fn = None
         t = str(t).strip()
         # transform: idx.func(a,b,...)
-        m = re.search(r"^(\d*)(?:\.?)([\S]+)(\([\S]*\))$", t)
+        m = re.search(r"^(\d*)(?:\.?)([\S]+)(\(.*\))$", t)
         if m is not None:
             index = int(m.group(1) or 0)
             fname = str(m.group(2)).lower()
@@ -1047,7 +1047,9 @@ class MenuManager:
             'is2004': (self.rows == 4 and self.cols == 20),
             'is2002': (self.rows == 2 and self.cols == 20),
             'is1604': (self.rows == 4 and self.cols == 16),
-            'is1602': (self.rows == 2 and self.cols == 16)
+            'is1602': (self.rows == 2 and self.cols == 16),
+            'is20xx': (self.cols == 20),
+            'is16xx': (self.cols == 16)
         }
 
     def update_parameters(self, eventtime):
@@ -1091,9 +1093,7 @@ class MenuManager:
                     elif class_name == 'PrinterLCD':
                         self.parameters[name].update({
                             'progress': self.objs[name].progress or 0,
-                            'progress_visible': bool(self.objs[name].progress),
                             'message': self.objs[name].message or '',
-                            'message_visible': bool(self.objs[name].message),
                             'is_enabled': True
                         })
                     elif class_name == 'PrinterHeaterFan':
