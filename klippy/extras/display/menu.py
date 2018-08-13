@@ -767,7 +767,7 @@ class MenuVSDCard(MenuList):
         super(MenuVSDCard, self).__init__(manager, config, namespace)
 
     def _populate_files(self):
-        sdcard = self._manager.objs['virtual_sdcard']
+        sdcard = self._manager.objs.get('virtual_sdcard')
         if sdcard is not None:
             files = sdcard.get_file_list()
             for fname, fsize in files:
