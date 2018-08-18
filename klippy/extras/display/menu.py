@@ -1326,18 +1326,20 @@ class MenuManager:
             self.running = False
 
     def run_action(self, action, *args):
-        action = str(action).strip().lower()
-        if action == 'back':
-            self.back()
-        elif action == 'exit':
-            self.exit()
-        elif action == 'log':
-            try:
+        try:
+            action = str(action).strip().lower()
+            if action == 'back':
+                self.back()
+            elif action == 'exit':
+                self.exit()
+            elif action == 'echo':
+                self.gcode.respond_info("{}".format(' '.join(map(str, args))))
+            elif action == 'log':
                 logging.info("Info from log action: {}".format(*args))
-            except Exception:
-                logging.exception("Malformed log action call")
-        else:
-            logging.error("Unknown action %s" % (action))
+            else:
+                logging.error("Unknown action %s" % (action))
+        except Exception:
+            logging.exception("Malformed action call")
 
     def run_script(self, script):
         if script is not None:
