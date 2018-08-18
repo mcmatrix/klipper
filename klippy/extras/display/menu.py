@@ -904,7 +904,7 @@ class MenuManager:
         self.parameters = {}
         self.objs = {}
         self.root = None
-        self._root = config.get('menu_root', None)
+        self._root = config.get('menu_root', '__main')
         dims = config.getchoice('lcd_type', LCD_dims)
         self.rows = config.getint('rows', dims[0])
         self.cols = config.getint('cols', dims[1])
@@ -933,8 +933,6 @@ class MenuManager:
                     pin1.strip(), pin2.strip(),
                     self.encoder_cw_callback, self.encoder_ccw_callback)
             if self.click_pin:
-                # self.buttons.register_button_push(
-                #    self.click_pin, self.click_callback)
                 self.buttons.register_buttons(
                     [self.click_pin], self.click_callback)
             if self.back_pin:
