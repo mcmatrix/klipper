@@ -1332,10 +1332,8 @@ class MenuManager:
                 self.back()
             elif action == 'exit':
                 self.exit()
-            elif action == 'echo':
+            elif action == 'respond':
                 self.gcode.respond_info("{}".format(' '.join(map(str, args))))
-            elif action == 'log':
-                logging.info("Info from log action: {}".format(*args))
             else:
                 logging.error("Unknown action %s" % (action))
         except Exception:
