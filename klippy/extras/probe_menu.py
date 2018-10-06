@@ -44,8 +44,9 @@ class ProbeHelperMenu:
         return {
             'input': self._wait_for_input,
             'running': self._wizard_running,
-            'index': self._points_current,
-            'length': self._points_count
+            'index': (self._points_current+1),
+            'length': (self._points_count+1),
+            'remaining': max(0, self._points_count-self._points_current)
         }
 
     def start_probe_wizard(self):
