@@ -11,8 +11,7 @@ import logging, os
 class ProbeHelperMenu:
     def __init__(self, config):
         self.printer = config.get_printer()
-        self.toolhead = self.printer.lookup_object('toolhead')
-        self.menu = None
+        self.toolhead = self.menu = None
         # Load menu system
         if(config.has_section('display')
                 and self.printer.try_load_module(config, 'display')):
@@ -24,6 +23,10 @@ class ProbeHelperMenu:
         # Probing context
         self._wait_for_input = False
         self._wizard_running = False
+
+    def printer_state(self, state):
+        if state == 'ready':
+            self.toolhead = self.printer.lookup_object('toolhead')
 
     def printer_event(self, event, *args):
         if event == "probe:start_manual_probe":
