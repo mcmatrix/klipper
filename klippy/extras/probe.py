@@ -170,6 +170,9 @@ class ProbePointsHelper:
         curpos[0] = x
         curpos[1] = y
         curpos[2] = self.horizontal_move_z
+        self.printer.notify_event(
+            "probe:next_position", self.toolhead.get_last_move_time(),
+            curpos, len(self.results), len(self.probe_points))
         try:
             self.toolhead.move(curpos, self.speed)
         except homing.EndstopError as e:
