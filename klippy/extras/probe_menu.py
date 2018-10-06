@@ -79,5 +79,5 @@ class ProbeHelperMenu:
         self.close_probe_wizard()
 
 
-def load_config_prefix(config):
+def load_config(config):
     return ProbeHelperMenu(config)
