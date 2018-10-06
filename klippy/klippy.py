@@ -192,7 +192,7 @@ class Printer:
         self.run_result = result
         self.reactor.end()
     def notify_event(self, event, *args):
-        for o in self.lookup_objects():
+        for n, o in self.lookup_objects():
             if hasattr(o, 'printer_event'):
                 o.printer_event(event, *args)
 
