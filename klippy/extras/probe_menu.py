@@ -41,15 +41,15 @@ class ProbeHelperMenu:
 
     def start_probe_wizard(self):
         if self.menu:
-            self.menu.register_object(self, 'probe_menu')
+            # self.menu.register_object(self, 'probe_menu', override=True)
             self._wizard_running = True
             try:
-                self.menu.restart_root('__probe_helper', True)
+                self.menu.restart_root('__probe_helper')
             except (self.menu.error, self.printer.config_error) as e:
                 msg = "Could not load probe menu.\n%s" % (e.message,)
                 logging.exception(msg)
                 self.gcode.respond_info(msg)
-                self.menu.unregister_object('probe_menu')
+                # self.menu.unregister_object('probe_menu')
                 self.menu.restart_root()
                 self.menu = None
                 self._wizard_running = False
@@ -58,7 +58,7 @@ class ProbeHelperMenu:
         self._wizard_running = False
         if self.menu:
             self.menu.restart_root()
-            self.menu.unregister_object('probe_menu')
+            # self.menu.unregister_object('probe_menu')
 
     # probe event methotds
     def start_manual_probe(self, print_time):
@@ -74,3 +74,7 @@ class ProbeHelperMenu:
     def finalize_probe(self, print_time, success):
         self._wait_for_input = False
         self.close_probe_wizard()
+
+
+def load_config_prefix(config):
+    return ProbeHelperMenu(config)
