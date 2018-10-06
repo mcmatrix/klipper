@@ -23,6 +23,8 @@ class ProbeHelperMenu:
         # Probing context
         self._wait_for_input = False
         self._wizard_running = False
+        self._points_current = 0
+        self._points_count = 0
 
     def printer_state(self, state):
         if state == 'ready':
@@ -33,13 +35,17 @@ class ProbeHelperMenu:
             self.start_manual_probe(*args)
         elif event == "probe:end_manual_probe":
             self.end_manual_probe(*args)
+        elif event == "probe:next_position":
+            self.next_position(*args)
         elif event == "probe:finalize_probe":
             self.finalize_probe(*args)
 
     def get_status(self, eventtime):
         return {
             'input': self._wait_for_input,
-            'running': self._wizard_running
+            'running': self._wizard_running,
+            'index': self._points_current,
+            'length': self._points_count
         }
 
     def start_probe_wizard(self):
@@ -73,6 +79,10 @@ class ProbeHelperMenu:
 
     def end_manual_probe(self, print_time):
         self._wait_for_input = False
+
+    def next_position(self, print_time, curpos, index, length):
+        self._points_current = index
+        self._points_count = length
 
     def finalize_probe(self, success):
         self._wait_for_input = False
