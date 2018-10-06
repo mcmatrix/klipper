@@ -71,7 +71,7 @@ class ProbeHelperMenu:
     def end_manual_probe(self, print_time):
         self._wait_for_input = False
 
-    def finalize_probe(self, print_time, success):
+    def finalize_probe(self, success):
         self._wait_for_input = False
         self.close_probe_wizard()
 
