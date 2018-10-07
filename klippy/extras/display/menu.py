@@ -59,6 +59,13 @@ class MenuElement(object):
 
     # override
     def is_enabled(self):
+        return self.eval_enable()
+
+    # override
+    def reset_editing(self):
+        pass
+
+    def eval_enable(self):
         return self._parse_bool(self._enable)
 
     def init(self):
@@ -245,6 +252,11 @@ class MenuContainer(MenuElement):
 
     def is_editing(self):
         return any([item.is_editing() for item in self._items])
+
+    def reset_editing(self):
+        for item in self._items:
+            if item.is_editing():
+                item.reset_editing()
 
     def _lookup_item(self, item):
         if isinstance(item, str):
@@ -510,6 +522,9 @@ class MenuInput(MenuCommand):
     def is_editing(self):
         return self._input_value is not None
 
+    def reset_editing(self):
+        self.reset_value()
+
     def _onchange(self):
         self._manager.queue_gcode(self.get_gcode())
 
@@ -569,6 +584,7 @@ class MenuGroup(MenuContainer):
         self._sep = sep
         self._show_back = False
         self.selected = None
+        self.use_cursor = self._asbool(config.get('use_cursor', 'false'))
         self.items = config.get('items')
 
     def is_accepted(self, item):
@@ -595,9 +611,20 @@ class MenuGroup(MenuContainer):
     def _render_item(self, item, selected=False, scroll=False):
         name = "%s" % str(item.render(scroll))
         if selected and not self.is_editing():
-            name = name if self._manager.blink_slow_state else ' '*len(name)
+            if self.use_cursor:
+                name = (item.cursor if isinstance(item, MenuElement)
+                        else MenuCursor.SELECT) + name
+            else:
+                name = (name if self._manager.blink_slow_state
+                        else ' '*len(name))
         elif selected and self.is_editing():
-            name = name if self._manager.blink_fast_state else ' '*len(name)
+            if self.use_cursor:
+                name = MenuCursor.EDIT + name
+            else:
+                name = (name if self._manager.blink_fast_state
+                        else ' '*len(name))
+        elif self.use_cursor:
+            name = MenuCursor.NONE + name
         return name
 
     def _render(self):
@@ -621,6 +648,9 @@ class MenuGroup(MenuContainer):
             except Exception:
                 logging.exception("Call selected error")
         return res
+
+    def reset_editing(self):
+        return self._call_selected('reset_editing')
 
     def is_editing(self):
         return self._call_selected('is_editing')
@@ -873,6 +903,30 @@ class MenuDeck(MenuList):
         return self._name
 
 
+class MenuStack(MenuDeck):
+    def __init__(self, manager, config, namespace=''):
+        super(MenuStack, self).__init__(manager, config, namespace)
+        self._respect_editing = self._asbool(
+            config.get('respect_editing', 'false'))
+
+    def update_items(self):
+        if self._respect_editing and self.is_editing():
+            return
+        _item = self._items[0] if len(self._items) else None
+        items = [item for item in self._allitems if item.eval_enable()]
+        if len(items) > 0:
+            self._items = items[0:1]
+        else:
+            self._items = self._allitems[0:1]
+        if(isinstance(_item, MenuElement) and _item is not self._items[0]
+           and not self._respect_editing):
+            _item.reset_editing()
+
+        for item in self._items:
+            if isinstance(item, MenuGroup) and not item.is_editing():
+                item.update_items()
+
+
 menu_items = {
     'item': MenuItem,
     'command': MenuCommand,
@@ -880,6 +934,7 @@ menu_items = {
     'list': MenuList,
     'vsdcard': MenuVSDCard,
     'deck': MenuDeck,
+    'stack': MenuStack,
     'card': MenuCard
 }
 # Default dimensions for lcds (rows, cols)
@@ -896,6 +951,7 @@ class MenuManager:
         self.running = False
         self.menuitems = {}
         self.menustack = []
+        self._force_reset_editing = False
         self._autorun = False
         self.top_row = 0
         self.selected = 0
@@ -906,6 +962,7 @@ class MenuManager:
         self.timeout_idx = 0
         self.lcd_chip = lcd_chip
         self.printer = config.get_printer()
+        self.pconfig = self.printer.lookup_object('configfile')
         self.gcode = self.printer.lookup_object('gcode')
         self.gcode_queue = []
         self.parameters = {}
@@ -963,21 +1020,12 @@ class MenuManager:
         self.gcode.register_mux_command("MENU", "DO", 'dump', self.cmd_DO_DUMP,
                                         desc=self.cmd_DO_help)
 
-        # Parse local config file in same directory as current module
-        pconfig = self.printer.lookup_object('configfile')
-        localname = os.path.join(os.path.dirname(__file__), 'menu.cfg')
-        localconfig = pconfig.read_config(localname)
-
-        # Load items from local config
-        self.load_menuitems(localconfig)
+        # Load local config file in same directory as current module
+        self.load_config(os.path.dirname(__file__), 'menu.cfg')
         # Load items from main config
         self.load_menuitems(config)
-
         # Load menu root
-        if self._root is not None:
-            self.root = self.lookup_menuitem(self._root)
-            if isinstance(self.root, MenuDeck):
-                self._autorun = True
+        self.load_root()
 
     def printer_state(self, state):
         if state == 'ready':
@@ -1027,11 +1075,42 @@ class MenuManager:
         return (self._autorun is True and self.root is not None
                 and self.stack_peek() is self.root and self.selected == 0)
 
+    def restart_root(self, root=None, force_exit=True):
+        if self.is_running():
+            self.exit(force_exit)
+        self.load_root(root)
+
+    def load_root(self, root=None, autorun=False):
+        root = self._root if root is None else root
+        if root is not None:
+            self.root = self.lookup_menuitem(root)
+            if isinstance(self.root, MenuDeck):
+                self._autorun = True
+            else:
+                self._autorun = autorun
+
+    def register_object(self, obj, name=None, override=False):
+        # register an object with a "get_status" callback
+        if obj is not None:
+            if name is None:
+                name = obj.__class__.__name__
+            if override or name not in self.objs:
+                self.objs[name] = obj
+
+    def unregister_object(self, name):
+        # unregister an object from "get_status" callback list
+        if name is not None:
+            if not isinstance(name, str):
+                name = name.__class__.__name__
+            if name in self.objs:
+                self.objs.pop(name)
+
     def is_running(self):
         return self.running
 
     def begin(self, eventtime):
         self.menustack = []
+        self._force_reset_editing = False
         self.top_row = 0
         self.selected = 0
         self.timer = 0
@@ -1062,15 +1141,16 @@ class MenuManager:
 
     def update_parameters(self, eventtime):
         self.parameters = {}
+        objs = dict(self.objs)
         # getting info this way is more like hack
         # all modules should have special reporting method (maybe get_status)
         # for available parameters
         # Only 2 level dot notation
-        for name in self.objs.keys():
+        for name in objs.keys():
             try:
-                if self.objs[name] is not None:
-                    class_name = str(self.objs[name].__class__.__name__)
-                    get_status = getattr(self.objs[name], "get_status", None)
+                if objs[name] is not None:
+                    class_name = str(objs[name].__class__.__name__)
+                    get_status = getattr(objs[name], "get_status", None)
                     if callable(get_status):
                         self.parameters[name] = get_status(eventtime)
                     else:
@@ -1079,7 +1159,7 @@ class MenuManager:
                     self.parameters[name].update({'is_enabled': True})
                     # get additional info
                     if class_name == 'ToolHead':
-                        pos = self.objs[name].get_position()
+                        pos = objs[name].get_position()
                         self.parameters[name].update({
                             'xpos': pos[0],
                             'ypos': pos[1],
@@ -1095,21 +1175,21 @@ class MenuManager:
                                 self.parameters[name]['status'] == "Idle")
                         })
                     elif class_name == 'PrinterExtruder':
-                        info = self.objs[name].get_heater().get_status(
+                        info = objs[name].get_heater().get_status(
                             eventtime)
                         self.parameters[name].update(info)
                     elif class_name == 'PrinterLCD':
                         self.parameters[name].update({
-                            'progress': self.objs[name].progress or 0,
-                            'message': self.objs[name].message or '',
+                            'progress': objs[name].progress or 0,
+                            'message': objs[name].message or '',
                             'is_enabled': True
                         })
                     elif class_name == 'PrinterHeaterFan':
-                        info = self.objs[name].fan.get_status(eventtime)
+                        info = objs[name].fan.get_status(eventtime)
                         self.parameters[name].update(info)
                     elif class_name in ('PrinterOutputPin', 'PrinterServo'):
                         self.parameters[name].update({
-                            'value': self.objs[name].last_value
+                            'value': objs[name].last_value
                         })
                 else:
                     self.parameters[name] = {'is_enabled': False}
@@ -1172,14 +1252,18 @@ class MenuManager:
         container = self.stack_peek()
         if self.running and isinstance(container, MenuContainer):
             container.heartbeat(eventtime)
+            if self._force_reset_editing is True:
+                self._force_reset_editing = False
+                container.reset_editing()
+            if(isinstance(container, MenuStack) or (isinstance(
+                    container, MenuDeck) and not container.is_editing())):
+                container.update_items()
             # clamps
             self.top_row = max(0, min(
                 self.top_row, len(container) - self.rows))
             self.selected = max(0, min(
                 self.selected, len(container) - 1))
             if isinstance(container, MenuDeck):
-                if not container.is_editing():
-                    container.update_items()
                 container[self.selected].heartbeat(eventtime)
                 lines = container[self.selected].render_content(eventtime)
             else:
@@ -1325,6 +1409,9 @@ class MenuManager:
                 current()
                 self.queue_gcode(current.get_gcode())
 
+    def reset_editing(self):
+        self._force_reset_editing = True
+
     def exit(self, force=False):
         container = self.stack_peek()
         if self.running and isinstance(container, MenuContainer):
@@ -1380,6 +1467,18 @@ class MenuManager:
             raise self.printer.config_error(
                 "Unknown menuitem '%s'" % (name,))
         return self.menuitems[name]
+
+    def load_config(self, *args):
+        cfg = None
+        filename = os.path.join(*args)
+        try:
+            cfg = self.pconfig.read_config(filename)
+        except Exception:
+            raise self.printer.config_error(
+                "Cannot load config '%s'" % (filename,))
+        if cfg:
+            self.load_menuitems(cfg)
+        return cfg
 
     def load_menuitems(self, config):
         for cfg in config.get_prefix_sections('menu '):
