@@ -378,6 +378,7 @@ class ToolHead:
         self.extruder = extruder
         self.move_queue.set_extruder(extruder)
         self.commanded_pos[3] = extrude_pos
+        self.printer.send_event('toolhead:extruder_activate')
     def get_extruder(self):
         return self.extruder
     # Misc commands

@@ -217,6 +217,7 @@ class ProbePointsHelper:
             self.gcode.register_command('NEXT', None)
             self.gcode.register_command('NEXT', self.cmd_NEXT,
                                         desc=self.cmd_NEXT_help)
+            self.printer.send_event("probe:start_manual_probe")
         else:
             # Perform automatic probing
             while self.busy:
@@ -227,8 +228,11 @@ class ProbePointsHelper:
         # Record current position for manual probe
         self.toolhead.get_last_move_time()
         self.results.append(self.toolhead.get_kinematics().calc_position())
+        self.printer.send_event("probe:end_manual_probe")
         # Move to next position
         self._move_next()
+        if self.busy:
+            self.printer.send_event("probe:start_manual_probe")
     def _finalize(self, success):
         self.busy = False
         self.gcode.reset_last_position()

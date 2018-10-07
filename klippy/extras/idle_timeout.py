@@ -32,6 +32,7 @@ class IdleTimeout:
                 # Raced with incoming g-code commands
                 return
         self.last_timeout = self.toolhead.get_last_move_time()
+        self.printer.send_event('idle_timeout:idle')
     def timeout_handler(self, eventtime):
         info = self.toolhead.get_status(eventtime)
         print_time = info['print_time']
