@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 # Menu based probing wizard
 #
-# Copyright (C) 2018  Eric Callahan <arksine.code@gmail.com>
 # Copyright (C) 2018  Janar Sööt <janar.soot@gmail.com>
 #
 # This file may be distributed under the terms of the GNU GPLv3 license.
@@ -12,14 +11,12 @@ class ProbeHelperMenu:
     def __init__(self, config):
         self.printer = config.get_printer()
         self.toolhead = self.menu = None
-        # Load menu system
-        if(config.has_section('display')
-                and self.printer.try_load_module(config, 'display')):
-            self.menu = self.printer.try_load_module(config, 'menu')
-        # Load probe menu
-        if self.menu:
-            self.menu.load_config(os.path.join(
-                os.path.dirname(__file__), 'probe_menu.cfg'))
+        # Load display
+        display = self.printer.try_load_module(config, 'display')
+        # Load menu
+        if display is not None:
+            self.menu = display.get_menu()
+            self.menu.load_config(os.path.dirname(__file__), 'probe_menu.cfg')
         # Probing context
         self._wait_for_input = False
         self._wizard_running = False
