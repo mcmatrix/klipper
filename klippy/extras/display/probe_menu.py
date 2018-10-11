@@ -8,15 +8,12 @@ import logging, os
 
 
 class ProbeHelperMenu:
-    def __init__(self, config):
+    def __init__(self, config, menu):
         self.printer = config.get_printer()
-        self.toolhead = self.menu = None
-        # Load display
-        display = self.printer.try_load_module(config, 'display')
+        self.toolhead = None
         # Load menu
-        if display is not None:
-            self.menu = display.get_menu()
-            self.menu.load_config(os.path.dirname(__file__), 'probe_menu.cfg')
+        self.menu = menu
+        self.menu.load_config(os.path.dirname(__file__), 'probe_menu.cfg')
         # Probing context
         self._wait_for_input = False
         self._wizard_running = False
