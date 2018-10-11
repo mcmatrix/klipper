@@ -22,6 +22,8 @@ class ProbeHelperMenu:
         self._wizard_running = False
         self._points_current = 0
         self._points_count = 0
+        # register itself for a printer_state callback
+        self.printer.add_object('probe_menu', self)
         # Register event handler
         self.printer.register_event_handler("probe:start_manual_probe",
                                             self.handle_probe_start)
@@ -45,15 +47,16 @@ class ProbeHelperMenu:
 
     def start_probe_wizard(self):
         if self.menu:
-            self.menu.register_object(self, 'probe_menu', override=True)
             self._wizard_running = True
             self.menu.restart_root(self.probe_menuroot)
 
     def close_probe_wizard(self, eventtime):
+        self._wait_for_input = False
         self._wizard_running = False
+        self._points_current = 0
+        self._points_count = 0
         if self.menu:
             self.menu.restart_root()
-            self.menu.unregister_object('probe_menu')
 
     def wait_toolhead_moves(self, eventtime, print_time):
         est_print_time = self.toolhead.get_status(
@@ -77,6 +80,7 @@ class ProbeHelperMenu:
 
     def handle_probe_finalize(self, print_time, success):
         self._wait_for_input = False
+        self._wizard_running = False
         self.menu.after(2., self.close_probe_wizard)
 
 
