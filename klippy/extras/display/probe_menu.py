@@ -61,26 +61,23 @@ class ProbeHelperMenu:
         if est_print_time >= print_time:
             self._wait_for_input = True
         else:
-            self.menu.after(500, self.wait_toolhead_moves, print_time)
+            self.menu.after(0.5, self.wait_toolhead_moves, print_time)
 
     # probe event methods
-    def handle_probe_start(self, print_time):
+    def handle_probe_start(self, print_time, points, results):
         self._wait_for_input = False
+        self._points_current = len(results)
+        self._points_count = len(points)
         if not self._wizard_running:
             self.start_probe_wizard()
-        reactor = self.printer.get_reactor()
-        self.wait_toolhead_moves(reactor.monotonic(), print_time)
+        self.menu.after(0, self.wait_toolhead_moves, print_time)
 
     def handle_probe_end(self, print_time):
         self._wait_for_input = False
 
-    def next_position(self, print_time, curpos, index, length):
-        self._points_current = index
-        self._points_count = length
-
     def handle_probe_finalize(self, print_time, success):
         self._wait_for_input = False
-        self.menu.after(2000, self.close_probe_wizard)
+        self.menu.after(2., self.close_probe_wizard)
 
 
 def load_config(config):
