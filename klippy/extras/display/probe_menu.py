@@ -20,6 +20,7 @@ class ProbeHelperMenu:
         # Probing context
         self._wait_for_input = False
         self._wizard_running = False
+        self._end_status = 0
         self._points_current = 0
         self._points_count = 0
         # register itself for a printer_state callback
@@ -41,7 +42,8 @@ class ProbeHelperMenu:
             'input': self._wait_for_input,
             'running': self._wizard_running,
             'index': (self._points_current+1),
-            'length': (self._points_count),
+            'length': self._points_count,
+            'end_status': self._end_status,
             'remaining': max(0, self._points_count-(self._points_current+1))
         }
 
@@ -53,6 +55,7 @@ class ProbeHelperMenu:
     def close_probe_wizard(self, eventtime):
         self._wait_for_input = False
         self._wizard_running = False
+        self._end_status = 0
         self._points_current = 0
         self._points_count = 0
         if self.menu:
@@ -81,6 +84,7 @@ class ProbeHelperMenu:
     def handle_probe_finalize(self, print_time, success):
         self._wait_for_input = False
         self._wizard_running = False
+        self._end_status = success
         self.menu.after(2., self.close_probe_wizard)
 
 
