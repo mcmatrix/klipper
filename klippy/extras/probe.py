@@ -234,10 +234,7 @@ class ProbePointsHelper:
         # Record current position for manual probe
         self.toolhead.get_last_move_time()
         # Send manual probing event
-        self.printer.send_event(
-            "probe:end_manual_probing",
-            self.toolhead.get_last_move_time()
-        )
+        self.printer.send_event("probe:end_manual_probing")
         self.results.append(self.toolhead.get_kinematics().calc_position())
         # Move to next position
         self._move_next()
