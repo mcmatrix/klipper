@@ -85,7 +85,7 @@ class ProbeHelperMenu:
         self._wait_for_input = False
         self._wizard_running = False
         self._end_status = success
-        self.menu.after(2., self.close_probe_wizard)
+        self.menu.after(4., self.close_probe_wizard)
 
 
 def load_config(config):
