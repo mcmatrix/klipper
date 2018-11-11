@@ -12,10 +12,10 @@ class ProbeHelperMenu:
         self.printer = config.get_printer()
         self.toolhead = None
         # Load menu
-        self.probe_menuroot = "__probe_helper"
         self.menu = menu
         self.menu.load_config(os.path.dirname(__file__), 'probe_menu.cfg')
         # check menuitem
+        self.probe_menuroot = "__probe_helper"
         self.menu.lookup_menuitem(self.probe_menuroot)
         # Probing context
         self._wait_for_input = False
@@ -26,11 +26,11 @@ class ProbeHelperMenu:
         # register itself for a printer_state callback
         self.printer.add_object('probe_menu', self)
         # Register event handler
-        self.printer.register_event_handler("probe:start_manual_probe",
-                                            self.handle_probe_start)
-        self.printer.register_event_handler("probe:end_manual_probe",
-                                            self.handle_probe_end)
-        self.printer.register_event_handler("probe:finalize_probe",
+        self.printer.register_event_handler("probe:start_manual_probing",
+                                            self.handle_probing_start)
+        self.printer.register_event_handler("probe:end_manual_probing",
+                                            self.handle_probing_end)
+        self.printer.register_event_handler("probe:finalize",
                                             self.handle_probe_finalize)
 
     def printer_state(self, state):
@@ -43,8 +43,8 @@ class ProbeHelperMenu:
             'running': self._wizard_running,
             'index': (self._points_current+1),
             'length': self._points_count,
-            'end_status': self._end_status,
-            'remaining': max(0, self._points_count-(self._points_current+1))
+            'remaining': max(0, self._points_count-(self._points_current+1)),
+            'end_status': self._end_status
         }
 
     def start_probe_wizard(self):
@@ -61,27 +61,27 @@ class ProbeHelperMenu:
         if self.menu:
             self.menu.restart_root()
 
-    def wait_toolhead_moves(self, eventtime, print_time):
-        est_print_time = self.toolhead.get_status(
-            eventtime)['estimated_print_time']
-        if est_print_time >= print_time:
+    def wait_toolhead_moves(self, eventtime, event_print_time):
+        print_time, est_print_time, lookahead_empty = self.toolhead.check_busy(
+            eventtime)
+        if est_print_time >= event_print_time:
             self._wait_for_input = True
         else:
-            self.menu.after(0.5, self.wait_toolhead_moves, print_time)
+            self.menu.after(0.5, self.wait_toolhead_moves, event_print_time)
 
     # probe event methods
-    def handle_probe_start(self, print_time, points, results):
+    def handle_probing_start(self, event_print_time, points):
         self._wait_for_input = False
-        self._points_current = len(results)
-        self._points_count = len(points)
+        self._points_current = len(points[0])
+        self._points_count = len(points[1])
         if not self._wizard_running:
             self.start_probe_wizard()
-        self.menu.after(0, self.wait_toolhead_moves, print_time)
+        self.menu.after(0, self.wait_toolhead_moves, event_print_time)
 
-    def handle_probe_end(self, print_time):
+    def handle_probing_end(self):
         self._wait_for_input = False
 
-    def handle_probe_finalize(self, print_time, success):
+    def handle_probe_finalize(self, success):
         self._wait_for_input = False
         self._wizard_running = False
         self._end_status = success
