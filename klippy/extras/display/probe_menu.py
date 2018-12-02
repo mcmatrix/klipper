@@ -49,6 +49,15 @@ class ProbeHelperMenu:
             'end_status': self._end_status
         }
 
+    def display_done(self, eventtime):
+        self.menu.restart_root(self.probe_menu_done)
+
+    def display_adjust(self, eventtime):
+        self.menu.restart_root(self.probe_menu_adjust)
+
+    def display_moving(self, eventtime):
+        self.menu.restart_root(self.probe_menu_moving)
+
     def close_probe_wizard(self, eventtime):
         self._wizard_running = False
         self._end_status = 0
@@ -61,7 +70,7 @@ class ProbeHelperMenu:
         print_time, est_print_time, lookahead_empty = self.toolhead.check_busy(
             eventtime)
         if est_print_time >= event_print_time:
-            self.menu.restart_root(self.probe_menu_adjust)
+            self.display_adjust(eventtime)
         else:
             self.menu.after(0.5, self.wait_toolhead_moves, event_print_time)
 
@@ -70,18 +79,15 @@ class ProbeHelperMenu:
         self._points_current, self._points_count = points
         if not self._wizard_running:
             self._wizard_running = True
-            # self.menu.restart_root(self.probe_menu_moving)
-            self.menu.after(0, self.menu.restart_root, self.probe_menu_moving)
+            self.menu.after(0, self.display_moving)
         self.menu.after(0, self.wait_toolhead_moves, event_print_time)
 
     def handle_probing_end(self):
-        # self.menu.restart_root(self.probe_menu_moving)
-        self.menu.after(0, self.menu.restart_root, self.probe_menu_moving)
+        self.menu.after(0, self.display_moving)
 
     def handle_probe_finalize(self, success):
         self._end_status = success
-        # self.menu.restart_root(self.probe_menu_done)
-        self.menu.after(0, self.menu.restart_root, self.probe_menu_done)
+        self.menu.after(0, self.display_done)
         self.menu.after(4., self.close_probe_wizard)
 
 
