@@ -15,9 +15,9 @@ class ProbeHelperMenu:
         self.menu = menu
         self.menu.load_config(os.path.dirname(__file__), 'probe_menu.cfg')
         # menuitem names
-        self.probe_menu_done = "__probe_helper_card_done"
-        self.probe_menu_adjust = "__probe_helper_card_adjust"
-        self.probe_menu_moving = "__probe_helper_card_moving"
+        self.probe_menu_done = "__probe_helper_done"
+        self.probe_menu_adjust = "__probe_helper_adjust"
+        self.probe_menu_moving = "__probe_helper_moving"
         # check menuitem
         self.menu.lookup_menuitem(self.probe_menu_done)
         self.menu.lookup_menuitem(self.probe_menu_adjust)
