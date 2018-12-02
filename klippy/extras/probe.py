@@ -222,7 +222,7 @@ class ProbePointsHelper:
             self.printer.send_event(
                 "probe:start_manual_probing",
                 self.toolhead.get_last_move_time(),
-                (list(self.results), list(self.probe_points))
+                (len(self.results), len(self.probe_points))
             )
         else:
             # Perform automatic probing
