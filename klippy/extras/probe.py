@@ -157,6 +157,8 @@ class ProbePointsHelper:
         except homing.EndstopError as e:
             self._finalize(False)
             raise self.gcode.error(str(e))
+    def _get_probing_progress(self):
+        return (len(self.results), len(self.probe_points))
     def _move_next(self):
         # Lift toolhead
         self._lift_z(self.horizontal_move_z)
@@ -222,7 +224,7 @@ class ProbePointsHelper:
             self.printer.send_event(
                 "probe:start_manual_probing",
                 self.toolhead.get_last_move_time(),
-                (len(self.results), len(self.probe_points))
+                self._get_probing_progress()
             )
         else:
             # Perform automatic probing
@@ -243,7 +245,7 @@ class ProbePointsHelper:
             self.printer.send_event(
                 "probe:start_manual_probing",
                 self.toolhead.get_last_move_time(),
-                (list(self.results), list(self.probe_points))
+                self._get_probing_progress()
             )
     def _finalize(self, success):
         self.busy = False
