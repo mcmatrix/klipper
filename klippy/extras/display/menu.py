@@ -36,6 +36,11 @@ class MenuElement(object):
         self.__last_state = True
         if len(self.cursor) < 1:
             raise error("Cursor with unexpected length, expecting 1.")
+        self.begin()
+
+    # override
+    def begin(self):
+        pass
 
     # override
     def _render(self):
@@ -236,6 +241,9 @@ class MenuContainer(MenuElement):
         self._show_title = self._asbool(config.get('show_title', 'true'))
         self._allitems = []
         self._items = []
+
+    def begin(self):
+        super(MenuContainer, self).begin()
         # recursive guard
         self._parents = []
 
@@ -291,6 +299,8 @@ class MenuContainer(MenuElement):
         if item is not None:
             if not self.is_accepted(item):
                 raise error("Menu item '%s'is not accepted!" % str(type(item)))
+            if isinstance(item, (MenuElement)):
+                item.begin()
             if isinstance(item, (MenuContainer)):
                 item.add_parents(self._parents)
                 item.add_parents(self)
@@ -502,13 +512,16 @@ class MenuInput(MenuCommand):
         self._realtime = self._asbool(config.get('realtime', 'false'))
         self._readonly = self._aslist(
             config.get('readonly', 'false'), flatten=False)
-        self._input_value = None
-        self.__last_value = None
         self._input_min = config.getfloat('input_min', sys.float_info.min)
         self._input_max = config.getfloat('input_max', sys.float_info.max)
         self._input_step = config.getfloat('input_step', above=0.)
         self._input_step2 = config.getfloat('input_step2', 0, minval=0.)
         self._longpress_gcode = config.get('longpress_gcode', '')
+
+    def begin(self):
+        super(MenuInput, self).begin()
+        self._input_value = None
+        self.__last_value = None
 
     def is_scrollable(self):
         return False
@@ -589,10 +602,13 @@ class MenuGroup(MenuContainer):
         super(MenuGroup, self).__init__(manager, config, namespace)
         self._sep = sep
         self._show_back = False
-        self.selected = None
-        self._leaving_dir = None  # 0 - bottom, 1 - top, None - undefined
         self.use_cursor = self._asbool(config.get('use_cursor', 'false'))
         self.items = config.get('items', '')
+
+    def begin(self):
+        super(MenuGroup, self).begin()
+        self.selected = None
+        self._leaving_dir = None  # 0 - bottom, 1 - top, None - undefined
 
     def is_accepted(self, item):
         return (super(MenuGroup, self).is_accepted(item)
@@ -724,6 +740,9 @@ class MenuItemGroup(MenuGroup):
 class MenuCycler(MenuGroup):
     def __init__(self, manager, config, namespace='', sep=','):
         super(MenuCycler, self).__init__(manager, config, namespace, sep)
+
+    def begin(self):
+        super(MenuCycler, self).begin()
         self._interval = 0
         self.__interval_cnt = 0
         self.__alllen = 0
