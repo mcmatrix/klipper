@@ -590,6 +590,7 @@ class MenuGroup(MenuContainer):
         self._sep = sep
         self._show_back = False
         self.selected = None
+        self._leaving_dir = None  # 0 - bottom, 1 - top, None - undefined
         self.use_cursor = self._asbool(config.get('use_cursor', 'false'))
         self.items = config.get('items', '')
 
@@ -676,6 +677,7 @@ class MenuGroup(MenuContainer):
         elif self.selected < len(self) - 1:
             self.selected += 1
         else:
+            self._leaving_dir = 1
             self.selected = None
         # skip readonly
         while (self.selected is not None
@@ -684,6 +686,7 @@ class MenuGroup(MenuContainer):
             if self.selected < len(self) - 1:
                 self.selected = (self.selected + 1)
             else:
+                self._leaving_dir = 1
                 self.selected = None
         return self.selected
 
@@ -693,12 +696,17 @@ class MenuGroup(MenuContainer):
         elif self.selected > 0:
             self.selected -= 1
         else:
+            self._leaving_dir = 0
             self.selected = None
         # skip readonly
         while (self.selected is not None
                 and self.selected >= 0
                 and self._call_selected('is_readonly')):
-            self.selected = (self.selected - 1) if self.selected > 0 else None
+            if self.selected > 0:
+                self.selected = (self.selected - 1)
+            else:
+                self._leaving_dir = 0
+                self.selected = None
         return self.selected
 
 
@@ -831,8 +839,6 @@ class MenuCard(MenuGroup):
     def __init__(self, manager, config, namespace=''):
         super(MenuCard, self).__init__(manager, config, namespace)
         self.content = config.get('content')
-        self._allow_without_selection = self._asbool(
-            config.get('allow_without_selection', 'true'))
         if not self.items:
             self.content = self._parse_content_items(self.content)
 
@@ -882,12 +888,19 @@ class MenuCard(MenuGroup):
             }, self.namespace, ',')
         return super(MenuCard, self)._lookup_item(item)
 
-    def render_content(self, eventtime):
+    def render_content(self, eventtime, init_selection=False):
         if self.selected is not None:
             self.selected = (
                 (self.selected % len(self)) if len(self) > 0 else None)
-        if self._allow_without_selection is False and self.selected is None:
-            self.selected = 0 if len(self) > 0 else None
+        else:
+            if self._leaving_dir == 0 and len(self) > 0:
+                self.find_next_item()
+            elif self._leaving_dir == 1 and len(self) > 0:
+                self.find_prev_item()
+            elif init_selection is True:
+                self.find_next_item()
+            else:
+                self.selected = None
 
         items = []
         for i, item in enumerate(self):
@@ -912,21 +925,20 @@ class MenuDeck(MenuList):
     def __init__(self, manager, config, namespace=''):
         super(MenuDeck, self).__init__(manager, config, namespace)
         self._menu = config.get('longpress_menu', None)
+        self.init_selection = self._asbool(
+            config.get('init_selection', 'false'))
         self.menu = None
         self._show_back = False
         self._show_title = False
         if not self.items:
-            card = MenuCard(self._manager, {
-                'name': ' '.join([self._name, 'Card']),
-                'use_cursor': config.get('use_cursor', 'false'),
-                'allow_without_selection': config.get(
-                    'allow_without_selection', 'true'),
-                'content': config.get('content')
-            }, self.namespace)
+            card = MenuCard(self._manager, config, self.namespace)
             name = " ".join(
                 config.get_name().split()[1:]) + "__singlecarddeck__"
             self._manager.add_menuitem(name, card)
             self.items = name
+
+    def get_init_selection(self):
+        return self.init_selection
 
     def _populate_menu(self):
         self.menu = None
@@ -1086,16 +1098,28 @@ class MenuManager:
     def timeout_check(self, eventtime):
         # check timeout
         if (self.is_running() and self.timeout > 0
-                and not self._timeout_autorun_root()):
+                and self.root is not None
+                and self._allow_timeout()):
             if self.timer >= self.timeout:
                 self.exit()
-            self.timer += 1
+            else:
+                self.timer += 1
         else:
             self.timer = 0
 
-    def _timeout_autorun_root(self):
-        return (self._autorun is True and self.root is not None
-                and self.stack_peek() is self.root and self.selected == 0)
+    def _allow_timeout(self):
+        container = self.stack_peek()
+        if (container is self.root
+                and self.selected == 0
+                and self._autorun is True):
+            current = container[0] if len(container) > 0 else None
+            if (isinstance(container, MenuDeck)
+                    and isinstance(current, MenuCard)
+                    and container.get_init_selection() is False
+                    and current.selected_item() is not None):
+                return True
+            return False
+        return True
 
     def restart_root(self, root=None, force_exit=True):
         if self.is_running():
@@ -1295,7 +1319,8 @@ class MenuManager:
                 self.selected, len(container) - 1))
             if isinstance(container, MenuDeck):
                 container[self.selected].heartbeat(eventtime)
-                lines = container[self.selected].render_content(eventtime)
+                lines = container[self.selected].render_content(
+                    eventtime, container.get_init_selection())
             else:
                 for row in range(self.top_row, self.top_row + self.rows):
                     s = ""
@@ -1418,7 +1443,7 @@ class MenuManager:
                 self.stack_pop()
                 self.running = False
 
-    def select(self, long_press=False):
+    def enter(self, long_press=False):
         container = self.stack_peek()
         if self.running and isinstance(container, MenuContainer):
             self.timer = 0
@@ -1566,7 +1591,7 @@ class MenuManager:
 
     def _short_click_callback(self, eventtime):
         if self.is_running():
-            self.select()
+            self.enter()
         else:
             # lets start and populate the menu items
             self.begin(eventtime)
@@ -1587,7 +1612,7 @@ class MenuManager:
                     self.selected = 0
                     return
             if container.is_editing():
-                self.select(True)
+                self.enter(True)
 
     def back_callback(self, eventtime):
         if self.back_pin:
