@@ -515,6 +515,8 @@ class MenuInput(MenuCommand):
         self._realtime = self._asbool(config.get('realtime', 'false'))
         self._readonly = self._aslist(
             config.get('readonly', 'false'), flatten=False)
+        self._trap_selection = self._asbool(
+            config.get('trap_selection', 'false'))
         self._input_min = config.getfloat('input_min', sys.float_info.min)
         self._input_max = config.getfloat('input_max', sys.float_info.max)
         self._input_step = config.getfloat('input_step', above=0.)
@@ -533,6 +535,9 @@ class MenuInput(MenuCommand):
 
     def is_readonly(self):
         return self._parse_bool(self._readonly)
+
+    def is_trap(self):
+        return self._trap_selection
 
     def _render(self):
         return self._get_formatted(self._name, self._input_value)
@@ -702,6 +707,19 @@ class MenuGroup(MenuContainer):
 
     def selected_item(self):
         return self._call_selected()
+
+    def select_item(self, needle):
+        if isinstance(needle, MenuElement) and not needle.is_readonly():
+            if self._call_selected() is not needle:
+                self.selected = None
+                self._leaving_dir = None
+                for i, item in enumerate(self):
+                    if item is needle:
+                        self.selected = i
+                        break
+        else:
+            logging.error("Cannot select read-only item")
+        return self.selected
 
     def find_next_item(self):
         if self.selected is None:
@@ -923,7 +941,19 @@ class MenuCard(MenuGroup):
             }, self.namespace, ',')
         return super(MenuCard, self)._lookup_item(item)
 
+    def _select_trapped(self):
+        for item in self._items:
+            if (isinstance(item, MenuInput)
+                    and item.is_trap()
+                    and self.select_item(item) is not None):
+                if not item.is_editing():
+                    if self.is_editing():
+                        self.reset_editing()
+                    item.init_value()
+                break
+
     def render_content(self, eventtime, init_selection=False):
+        self._select_trapped()
         if self.selected is not None:
             self.selected = (
                 (self.selected % len(self)) if len(self) > 0 else None)
@@ -972,7 +1002,7 @@ class MenuDeck(MenuList):
             self._manager.add_menuitem(name, card)
             self.items = name
 
-    def get_init_selection(self):
+    def is_init_selection(self):
         return self.init_selection
 
     def _populate_menu(self):
@@ -1150,7 +1180,7 @@ class MenuManager:
             current = container[0] if len(container) > 0 else None
             if (isinstance(container, MenuDeck)
                     and isinstance(current, MenuCard)
-                    and container.get_init_selection() is False
+                    and container.is_init_selection() is False
                     and current.selected_item() is not None):
                 return True
             return False
@@ -1355,7 +1385,7 @@ class MenuManager:
             if isinstance(container, MenuDeck):
                 container[self.selected].heartbeat(eventtime)
                 lines = container[self.selected].render_content(
-                    eventtime, container.get_init_selection())
+                    eventtime, container.is_init_selection())
             else:
                 for row in range(self.top_row, self.top_row + self.rows):
                     s = ""
