@@ -498,14 +498,20 @@ class MenuCommand(MenuItem):
     def get_gcode(self):
         return self._get_formatted(self._gcode)
 
-    def __call__(self):
-        if self._action is not None:
+    def _call_action(self, action, val=None):
+        if action is not None:
             try:
-                fmt = self._get_formatted(self._action)
+                fmt = self._get_formatted(action, val)
                 args = fmt.split()
                 self._manager.run_action(args[0], *args[1:])
             except Exception:
                 logging.exception("Action formatting failed")
+
+    def call_action(self):
+        self._call_action(self, self._action)
+
+    def __call__(self):
+        self.call_action()
 
 
 class MenuInput(MenuCommand):
@@ -522,6 +528,7 @@ class MenuInput(MenuCommand):
         self._input_step = config.getfloat('input_step', above=0.)
         self._input_step2 = config.getfloat('input_step2', 0, minval=0.)
         self._longpress_gcode = config.get('longpress_gcode', '')
+        self._longpress_action = config.get('longpress_action', None)
 
     def init(self):
         super(MenuInput, self).init()
@@ -616,6 +623,12 @@ class MenuInput(MenuCommand):
 
         if self._realtime and last_value != self._input_value:
             self._value_changed()
+
+    def call_action(self):
+        self._call_action(self, self._action, self._input_value)
+
+    def call_longpress_action(self):
+        self._call_action(self, self._longpress_action, self._input_value)
 
 
 class MenuGroup(MenuContainer):
