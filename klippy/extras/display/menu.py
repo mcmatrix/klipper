@@ -30,16 +30,17 @@ class MenuElement(object):
         self._enable = self._aslist(config.get('enable', 'true'),
                                     flatten=False)
         self._name = self._asliteral(config.get('name'))
+        self._last_heartbeat = None
         self.__scroll_offs = 0
         self.__scroll_diff = 0
         self.__scroll_dir = None
         self.__last_state = True
         if len(self.cursor) < 1:
             raise error("Cursor with unexpected length, expecting 1.")
-        self.begin()
+        self.init()
 
     # override
-    def begin(self):
+    def init(self):
         pass
 
     # override
@@ -73,10 +74,12 @@ class MenuElement(object):
     def eval_enable(self):
         return self._parse_bool(self._enable)
 
-    def init(self):
+    # Called when a item is selected
+    def select(self):
         self.__clear_scroll()
 
     def heartbeat(self, eventtime):
+        self._last_heartbeat = eventtime
         state = bool(int(eventtime) & 1)
         if self.__last_state ^ state:
             self.__last_state = state
@@ -242,8 +245,8 @@ class MenuContainer(MenuElement):
         self._allitems = []
         self._items = []
 
-    def begin(self):
-        super(MenuContainer, self).begin()
+    def init(self):
+        super(MenuContainer, self).init()
         # recursive guard
         self._parents = []
 
@@ -300,7 +303,7 @@ class MenuContainer(MenuElement):
             if not self.is_accepted(item):
                 raise error("Menu item '%s'is not accepted!" % str(type(item)))
             if isinstance(item, (MenuElement)):
-                item.begin()
+                item.init()
             if isinstance(item, (MenuContainer)):
                 item.add_parents(self._parents)
                 item.add_parents(self)
@@ -518,8 +521,10 @@ class MenuInput(MenuCommand):
         self._input_step2 = config.getfloat('input_step2', 0, minval=0.)
         self._longpress_gcode = config.get('longpress_gcode', '')
 
-    def begin(self):
-        super(MenuInput, self).begin()
+    def init(self):
+        super(MenuInput, self).init()
+        self._is_dirty = False
+        self.__last_change = None
         self._input_value = None
         self.__last_value = None
 
@@ -544,8 +549,19 @@ class MenuInput(MenuCommand):
     def reset_editing(self):
         self.reset_value()
 
-    def _onchange(self):
-        self._manager.queue_gcode(self.get_gcode())
+    def heartbeat(self, eventtime):
+        super(MenuInput, self).heartbeat(eventtime)
+        if (self._realtime
+                and self._is_dirty is True
+                and self.__last_change is not None
+                and self._input_value is not None
+                and (eventtime - self.__last_change) > 0.200):
+            self._manager.queue_gcode(self.get_gcode())
+            self._is_dirty = False
+
+    def _value_changed(self):
+        self.__last_change = self._last_heartbeat
+        self._is_dirty = True
 
     def init_value(self):
         self._input_value = None
@@ -555,7 +571,7 @@ class MenuInput(MenuCommand):
             if len(args) > 0 and self._isfloat(args[0]):
                 self._input_value = float(args[0])
                 if self._realtime:
-                    self._onchange()
+                    self._value_changed()
             else:
                 logging.error("Cannot init input value")
 
@@ -577,7 +593,7 @@ class MenuInput(MenuCommand):
             self._input_min, self._input_value))
 
         if self._realtime and last_value != self._input_value:
-            self._onchange()
+            self._value_changed()
 
     def dec_value(self, fast_rate=False):
         last_value = self._input_value
@@ -594,7 +610,7 @@ class MenuInput(MenuCommand):
             self._input_min, self._input_value))
 
         if self._realtime and last_value != self._input_value:
-            self._onchange()
+            self._value_changed()
 
 
 class MenuGroup(MenuContainer):
@@ -605,8 +621,8 @@ class MenuGroup(MenuContainer):
         self.use_cursor = self._asbool(config.get('use_cursor', 'false'))
         self.items = config.get('items', '')
 
-    def begin(self):
-        super(MenuGroup, self).begin()
+    def init(self):
+        super(MenuGroup, self).init()
         self.selected = None
         self._leaving_dir = None  # 0 - bottom, 1 - top, None - undefined
 
@@ -626,10 +642,10 @@ class MenuGroup(MenuContainer):
     def _names_aslist(self):
         return self._words_aslist(self.items, sep=self._sep)
 
-    def init(self):
-        super(MenuGroup, self).init()
+    def select(self):
+        super(MenuGroup, self).select()
         for item in self._items:
-            item.init()
+            item.select()
 
     def _render_item(self, item, selected=False, scroll=False):
         name = "%s" % str(item.render(scroll))
@@ -741,8 +757,8 @@ class MenuCycler(MenuGroup):
     def __init__(self, manager, config, namespace='', sep=','):
         super(MenuCycler, self).__init__(manager, config, namespace, sep)
 
-    def begin(self):
-        super(MenuCycler, self).begin()
+    def init(self):
+        super(MenuCycler, self).init()
         self._interval = 0
         self.__interval_cnt = 0
         self.__alllen = 0
@@ -1403,7 +1419,7 @@ class MenuManager:
                     self.selected -= 1
                 # init element
                 if isinstance(container[self.selected], MenuElement):
-                    container[self.selected].init()
+                    container[self.selected].select()
                 # wind up group last item or init item
                 if isinstance(container[self.selected], MenuGroup):
                     container[self.selected].find_prev_item()
@@ -1429,7 +1445,7 @@ class MenuManager:
                     self.selected += 1
                 # init element
                 if isinstance(container[self.selected], MenuElement):
-                    container[self.selected].init()
+                    container[self.selected].select()
                 # wind up group first item
                 if isinstance(container[self.selected], MenuGroup):
                     container[self.selected].find_next_item()
@@ -1454,7 +1470,7 @@ class MenuManager:
                     self.selected = 0
                 # init element
                 if isinstance(parent[self.selected], MenuElement):
-                    parent[self.selected].init()
+                    parent[self.selected].select()
                 # wind up group first item or init item
                 if isinstance(parent[self.selected], MenuGroup):
                     parent[self.selected].find_next_item()
