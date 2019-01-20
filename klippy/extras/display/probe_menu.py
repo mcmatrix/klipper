@@ -16,18 +16,18 @@ class ProbeHelperMenu:
         self.menu.load_config(os.path.dirname(__file__), 'probe_menu.cfg')
         # menuitem names
         self.probe_menu_done = "__probe_helper_done"
-        self.probe_menu_adjust_1 = "__probe_helper_adjust_1mm"
-        self.probe_menu_adjust_01 = "__probe_helper_adjust_01mm"
+        self.probe_menu_adjust_100 = "__probe_helper_adjust_1mm"
+        self.probe_menu_adjust_010 = "__probe_helper_adjust_01mm"
         self.probe_menu_adjust_001 = "__probe_helper_adjust_001mm"
         self.probe_menu_moving = "__probe_helper_moving"
         # check menuitem
         self.menu.lookup_menuitem(self.probe_menu_done)
-        self.menu.lookup_menuitem(self.probe_menu_adjust_1)
-        self.menu.lookup_menuitem(self.probe_menu_adjust_01)
+        self.menu.lookup_menuitem(self.probe_menu_adjust_100)
+        self.menu.lookup_menuitem(self.probe_menu_adjust_010)
         self.menu.lookup_menuitem(self.probe_menu_adjust_001)
         self.menu.lookup_menuitem(self.probe_menu_moving)
         # Probing context
-        self._adjust_card = self.probe_menu_adjust_1
+        self._adjust_card = self.probe_menu_adjust_100
         self._wizard_running = False
         self._end_status = 0
         self._points_current = 0
@@ -57,11 +57,11 @@ class ProbeHelperMenu:
         }
 
     def handle_menu_commands(self, cmd):
-        if str(cmd) == 'card1':
-            self._adjust_card = self.probe_menu_adjust_1
+        if str(cmd) == 'card100':
+            self._adjust_card = self.probe_menu_adjust_100
             self.menu.restart_root(self._adjust_card)
-        elif str(cmd) == 'card01':
-            self._adjust_card = self.probe_menu_adjust_01
+        elif str(cmd) == 'card010':
+            self._adjust_card = self.probe_menu_adjust_010
             self.menu.restart_root(self._adjust_card)
         elif str(cmd) == 'card001':
             self._adjust_card = self.probe_menu_adjust_001
@@ -73,14 +73,14 @@ class ProbeHelperMenu:
         self.menu.restart_root(self.probe_menu_done)
 
     def display_adjust(self, eventtime):
-        self._adjust_card = self.probe_menu_adjust_1
+        self._adjust_card = self.probe_menu_adjust_100
         self.menu.restart_root(self._adjust_card)
 
     def display_moving(self, eventtime):
         self.menu.restart_root(self.probe_menu_moving)
 
     def close_probe_wizard(self, eventtime):
-        self._adjust_card = self.probe_menu_adjust_1
+        self._adjust_card = self.probe_menu_adjust_100
         self._wizard_running = False
         self._end_status = 0
         self._points_current = 0
