@@ -34,7 +34,8 @@ class ProbeHelperMenu:
         self._points_count = 0
         # register itself for a printer_state callback
         self.printer.add_object('probe_menu', self)
-        # Register event handler
+        # Register event handlers
+        self.printer.register_event_handler("klippy:ready", self.handle_ready)
         self.printer.register_event_handler("probe:start_manual_probing",
                                             self.handle_probing_start)
         self.printer.register_event_handler("probe:end_manual_probing",
@@ -44,9 +45,8 @@ class ProbeHelperMenu:
         self.printer.register_event_handler("menu:action:probe_helper",
                                             self.handle_menu_commands)
 
-    def printer_state(self, state):
-        if state == 'ready':
-            self.toolhead = self.printer.lookup_object('toolhead')
+    def handle_ready(self):
+        self.toolhead = self.printer.lookup_object('toolhead')
 
     def get_status(self, eventtime):
         return {
