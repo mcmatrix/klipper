@@ -1596,8 +1596,10 @@ class MenuManager:
                                 action_response, '@input-skip-gcode'):
                             self.queue_gcode(current.get_gcode())
                         self.queue_gcode(current.get_stop_gcode())
-                    current.stop_editing()
-                    if response_contains(action_response, '@input-restart'):
+                    if not response_contains(action_response, '@input-resume'):
+                        current.stop_editing()
+                    if (response_contains(action_response, '@input-restart')
+                            and not current.is_editing()):
                         current.start_editing()
                         self.queue_gcode(current.get_start_gcode())
                 else:
