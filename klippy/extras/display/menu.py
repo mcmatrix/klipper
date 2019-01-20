@@ -991,6 +991,12 @@ class MenuCard(MenuGroup):
         super(MenuCard, self).populate_items()
         self._lookup_sticky()
 
+    def select(self):
+        super(MenuCard, self).select()
+        if self._sticky is not None:
+            self.selected = None
+            self._leaving_dir = None
+
     def render_content(self, eventtime, constrained=False):
         if self.selected is not None:
             self.selected = (
@@ -1500,7 +1506,8 @@ class MenuManager:
                 if isinstance(container[self.selected], MenuElement):
                     container[self.selected].select()
                 # wind up group last item or init item
-                if isinstance(container[self.selected], MenuGroup):
+                if (isinstance(container[self.selected], MenuGroup)
+                        and type(container[self.selected]) is not MenuCard):
                     container[self.selected].find_prev_item()
 
     def down(self, fast_rate=False):
@@ -1526,7 +1533,8 @@ class MenuManager:
                 if isinstance(container[self.selected], MenuElement):
                     container[self.selected].select()
                 # wind up group first item
-                if isinstance(container[self.selected], MenuGroup):
+                if (isinstance(container[self.selected], MenuGroup)
+                        and type(container[self.selected]) is not MenuCard):
                     container[self.selected].find_next_item()
 
     def back(self):
@@ -1550,8 +1558,9 @@ class MenuManager:
                 # init element
                 if isinstance(parent[self.selected], MenuElement):
                     parent[self.selected].select()
-                # wind up group first item or init item
-                if isinstance(parent[self.selected], MenuGroup):
+                # wind up group first item
+                if (isinstance(parent[self.selected], MenuGroup)
+                        and type(parent[self.selected]) is not MenuCard):
                     parent[self.selected].find_next_item()
             else:
                 self.stack_pop()
@@ -1620,8 +1629,8 @@ class MenuManager:
             if action == 'nop':
                 pass
             elif action == '@' and len(args) > 0:
-                return "@{}".format('@'.join(
-                    map(lambda param: str.strip(str(param).lower()), args)))
+                return "{}".format(';'.join(map(lambda param: "@{}".format(
+                    str.strip(str(param).lower())), args)))
             elif action == 'back':
                 self.back()
             elif action == 'exit':
