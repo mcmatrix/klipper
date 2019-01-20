@@ -68,7 +68,11 @@ class MenuElement(object):
         return self.eval_enable()
 
     # override
-    def reset_editing(self):
+    def start_editing(self):
+        pass
+
+    # override
+    def stop_editing(self):
         pass
 
     def eval_enable(self):
@@ -264,18 +268,22 @@ class MenuContainer(MenuElement):
     def is_editing(self):
         return any([item.is_editing() for item in self._items])
 
-    def reset_editing(self):
+    def stop_editing(self):
         for item in self._items:
             if item.is_editing():
-                item.reset_editing()
+                item.stop_editing()
 
-    def _lookup_item(self, item):
+    def lookup_item(self, item):
         if isinstance(item, str):
             s = item.strip()
             if s.startswith('.'):
                 s = ' '.join([self.namespace, s[1:]])
             item = self._manager.lookup_menuitem(s)
         return item
+
+    # overload
+    def _lookup_item(self, item):
+        return self.lookup_item(item)
 
     def find_item(self, item):
         index = None
@@ -488,8 +496,8 @@ class MenuCommand(MenuItem):
     def __init__(self, manager, config, namespace=''):
         super(MenuCommand, self).__init__(manager, config, namespace)
         self._gcode = config.get('gcode', '')
-        self._action = config.get('action', None)
-        if self._action is None and not self._gcode:
+        self._action = config.get('action', '')
+        if not self._action and not self._gcode:
             raise error("Missing or empty 'gcode' option")
 
     def is_readonly(self):
@@ -498,20 +506,20 @@ class MenuCommand(MenuItem):
     def get_gcode(self):
         return self._get_formatted(self._gcode)
 
-    def _call_action(self, action, val=None):
-        if action is not None:
+    def get_action(self):
+        return self._get_formatted(self._action)
+
+    def _call_action(self, action):
+        if isinstance(action, str) and len(action) > 0:
             try:
-                fmt = self._get_formatted(action, val)
-                args = fmt.split()
-                self._manager.run_action(args[0], *args[1:])
+                args = action.split()
+                return self._manager.run_action(args[0], *args[1:])
             except Exception:
                 logging.exception("Action formatting failed")
+        return None
 
     def call_action(self):
-        self._call_action(self, self._action)
-
-    def __call__(self):
-        self.call_action()
+        return self._call_action(self.get_action())
 
 
 class MenuInput(MenuCommand):
@@ -521,14 +529,14 @@ class MenuInput(MenuCommand):
         self._realtime = self._asbool(config.get('realtime', 'false'))
         self._readonly = self._aslist(
             config.get('readonly', 'false'), flatten=False)
-        self._trap_selection = self._asbool(
-            config.get('trap_selection', 'false'))
         self._input_min = config.getfloat('input_min', sys.float_info.min)
         self._input_max = config.getfloat('input_max', sys.float_info.max)
         self._input_step = config.getfloat('input_step', above=0.)
         self._input_step2 = config.getfloat('input_step2', 0, minval=0.)
         self._longpress_gcode = config.get('longpress_gcode', '')
-        self._longpress_action = config.get('longpress_action', None)
+        self._longpress_action = config.get('longpress_action', '')
+        self._start_gcode = config.get('start_gcode', '')
+        self._stop_gcode = config.get('stop_gcode', '')
 
     def init(self):
         super(MenuInput, self).init()
@@ -543,9 +551,6 @@ class MenuInput(MenuCommand):
     def is_readonly(self):
         return self._parse_bool(self._readonly)
 
-    def is_trap(self):
-        return self._trap_selection
-
     def _render(self):
         return self._get_formatted(self._name, self._input_value)
 
@@ -555,15 +560,31 @@ class MenuInput(MenuCommand):
     def get_longpress_gcode(self):
         return self._get_formatted(self._longpress_gcode, self._input_value)
 
+    def get_start_gcode(self):
+        return self._get_formatted(self._start_gcode, self._input_value)
+
+    def get_stop_gcode(self):
+        return self._get_formatted(self._stop_gcode, self._input_value)
+
+    def get_action(self):
+        return self._get_formatted(self._action, self._input_value)
+
+    def get_longpress_action(self):
+        return self._get_formatted(self._longpress_action, self._input_value)
+
     def is_editing(self):
         return self._input_value is not None
 
-    def reset_editing(self):
-        self.reset_value()
+    def stop_editing(self):
+        self._reset_value()
+
+    def start_editing(self):
+        self._init_value()
 
     def heartbeat(self, eventtime):
         super(MenuInput, self).heartbeat(eventtime)
         if (self._realtime
+                and not self.is_readonly()
                 and self._is_dirty is True
                 and self.__last_change is not None
                 and self._input_value is not None
@@ -575,19 +596,20 @@ class MenuInput(MenuCommand):
         self.__last_change = self._last_heartbeat
         self._is_dirty = True
 
-    def init_value(self):
+    def _init_value(self):
         self._input_value = None
         self.__last_value = None
         if not self.is_readonly():
             args = self._prepare_values()
             if len(args) > 0 and self._isfloat(args[0]):
-                self._input_value = float(args[0])
+                self._input_value = min(self._input_max, max(
+                    self._input_min, float(args[0])))
                 if self._realtime:
                     self._value_changed()
             else:
                 logging.error("Cannot init input value")
 
-    def reset_value(self):
+    def _reset_value(self):
         self._input_value = None
 
     def inc_value(self, fast_rate=False):
@@ -624,11 +646,8 @@ class MenuInput(MenuCommand):
         if self._realtime and last_value != self._input_value:
             self._value_changed()
 
-    def call_action(self):
-        self._call_action(self, self._action, self._input_value)
-
     def call_longpress_action(self):
-        self._call_action(self, self._longpress_action, self._input_value)
+        return self._call_action(self.get_longpress_action())
 
 
 class MenuGroup(MenuContainer):
@@ -706,8 +725,11 @@ class MenuGroup(MenuContainer):
                 logging.exception("Call selected error")
         return res
 
-    def reset_editing(self):
-        return self._call_selected('reset_editing')
+    def stop_editing(self):
+        return self._call_selected('stop_editing')
+
+    def start_editing(self):
+        return self._call_selected('start_editing')
 
     def is_editing(self):
         return self._call_selected('is_editing')
@@ -905,6 +927,8 @@ class MenuCard(MenuGroup):
     def __init__(self, manager, config, namespace=''):
         super(MenuCard, self).__init__(manager, config, namespace)
         self.content = config.get('content')
+        self.sticky = config.get('sticky', None)
+        self._sticky = None
         if not self.items:
             self.content = self._parse_content_items(self.content)
 
@@ -954,28 +978,37 @@ class MenuCard(MenuGroup):
             }, self.namespace, ',')
         return super(MenuCard, self)._lookup_item(item)
 
-    def _select_trapped(self):
-        for item in self._items:
-            if (isinstance(item, MenuInput)
-                    and item.is_trap()
-                    and self.select_item(item) is not None):
-                if not item.is_editing():
-                    if self.is_editing():
-                        self.reset_editing()
-                    item.init_value()
-                break
+    def _lookup_sticky(self):
+        self._sticky = None
+        if self.sticky is not None:
+            item = self.lookup_item(self.sticky)
+            if isinstance(item, MenuElement) and not item.is_readonly():
+                self._sticky = item
+            else:
+                logging.error("Cannot stick to read-only item")
 
-    def render_content(self, eventtime, init_selection=False):
-        self._select_trapped()
+    def populate_items(self):
+        super(MenuCard, self).populate_items()
+        self._lookup_sticky()
+
+    def render_content(self, eventtime, constrained=False):
         if self.selected is not None:
             self.selected = (
                 (self.selected % len(self)) if len(self) > 0 else None)
         else:
-            if self._leaving_dir == 0 and len(self) > 0:
+            if (self._leaving_dir is None
+                    and self._sticky is not None
+                    and self.select_item(self._sticky) is not None):
+                if (isinstance(self._sticky, MenuInput)
+                        and not self._sticky.is_editing()):
+                    if self.is_editing():
+                        self.stop_editing()
+                    self._sticky.start_editing()
+            elif self._leaving_dir == 0 and len(self) > 0:
                 self.find_next_item()
             elif self._leaving_dir == 1 and len(self) > 0:
                 self.find_prev_item()
-            elif init_selection is True:
+            elif constrained is True:
                 self.find_next_item()
             else:
                 self.selected = None
@@ -1002,10 +1035,10 @@ class MenuCard(MenuGroup):
 class MenuDeck(MenuList):
     def __init__(self, manager, config, namespace=''):
         super(MenuDeck, self).__init__(manager, config, namespace)
-        self._menu = config.get('longpress_menu', None)
-        self.init_selection = self._asbool(
-            config.get('init_selection', 'false'))
-        self.menu = None
+        self.menu = config.get('longpress_menu', None)
+        self.constrained = self._asbool(
+            config.get('constrained', 'false'))
+        self._menu = None
         self._show_back = False
         self._show_title = False
         if not self.items:
@@ -1015,17 +1048,20 @@ class MenuDeck(MenuList):
             self._manager.add_menuitem(name, card)
             self.items = name
 
-    def is_init_selection(self):
-        return self.init_selection
+    def is_constrained(self):
+        return self.constrained
+
+    def get_longpress_menu(self):
+        return self._menu
 
     def _populate_menu(self):
-        self.menu = None
-        if self._menu is not None:
-            menu = self._manager.lookup_menuitem(self._menu)
+        self._menu = None
+        if self.menu is not None:
+            menu = self._manager.lookup_menuitem(self.menu)
             if isinstance(menu, MenuContainer):
                 menu.assert_recursive_relation(self._parents)
                 menu.populate_items()
-                self.menu = menu
+                self._menu = menu
 
     def populate_items(self):
         super(MenuDeck, self).populate_items()
@@ -1193,7 +1229,7 @@ class MenuManager:
             current = container[0] if len(container) > 0 else None
             if (isinstance(container, MenuDeck)
                     and isinstance(current, MenuCard)
-                    and container.is_init_selection() is False
+                    and container.is_constrained() is False
                     and current.selected_item() is not None):
                 return True
             return False
@@ -1398,7 +1434,7 @@ class MenuManager:
             if isinstance(container, MenuDeck):
                 container[self.selected].heartbeat(eventtime)
                 lines = container[self.selected].render_content(
-                    eventtime, container.is_init_selection())
+                    eventtime, container.is_constrained())
             else:
                 for row in range(self.top_row, self.top_row + self.rows):
                     s = ""
@@ -1522,9 +1558,14 @@ class MenuManager:
                 self.running = False
 
     def enter(self, long_press=False):
+        def response_contains(haystack, needle):
+            if haystack is not None:
+                return needle in str(haystack).split(';')
+            return False
         container = self.stack_peek()
         if self.running and isinstance(container, MenuContainer):
             self.timer = 0
+            action_response = None
             current = container[self.selected]
             if isinstance(current, MenuGroup):
                 current = current.selected_item()
@@ -1535,16 +1576,33 @@ class MenuManager:
             elif isinstance(current, MenuInput):
                 if current.is_editing():
                     if long_press is True:
-                        self.queue_gcode(current.get_gcode())
+                        action_response = current.call_longpress_action()
+                        if not response_contains(
+                                action_response, '@input-skip-gcode'):
+                            self.queue_gcode(current.get_gcode())
                         self.queue_gcode(current.get_longpress_gcode())
                     else:
-                        self.queue_gcode(current.get_gcode())
-                        current.reset_value()
+                        action_response = current.call_action()
+                        if not response_contains(
+                                action_response, '@input-skip-gcode'):
+                            self.queue_gcode(current.get_gcode())
+                        self.queue_gcode(current.get_stop_gcode())
+                    current.stop_editing()
+                    if response_contains(action_response, '@input-restart'):
+                        current.start_editing()
+                        self.queue_gcode(current.get_start_gcode())
                 else:
-                    current.init_value()
+                    current.start_editing()
+                    self.queue_gcode(current.get_start_gcode())
             elif isinstance(current, MenuCommand):
-                current()
+                action_response = current.call_action()
                 self.queue_gcode(current.get_gcode())
+            if response_contains(action_response, '@deck-menu'):
+                self.push_deck_menu()
+            if response_contains(action_response, '@menu-back'):
+                self.back()
+            if response_contains(action_response, '@menu-exit'):
+                self.exit()
 
     def exit(self, force=False):
         container = self.stack_peek()
@@ -1559,13 +1617,23 @@ class MenuManager:
     def run_action(self, action, *args):
         try:
             action = str(action).strip().lower()
-            if action == 'back':
+            if action == 'nop':
+                pass
+            elif action == '@' and len(args) > 0:
+                return "@{}".format('@'.join(
+                    map(lambda param: str.strip(str(param).lower()), args)))
+            elif action == 'back':
                 self.back()
             elif action == 'exit':
                 self.exit()
-            elif action == 'respond':
+            elif action == 'respond' or action == '//':
                 self.gcode.respond_info("{}".format(' '.join(map(str, args))))
-            elif action == 'event' and len(args) > 0:
+            elif action == '!!':
+                self.gcode.respond_error("{}".format(' '.join(map(str, args))))
+            elif action == 'echo':
+                self.gcode.respond("{} {}".format(
+                    'echo:', ' '.join(map(str, args))))
+            elif (action == 'event' or action == 'emit') and len(args) > 0:
                 if len(str(args[0])) > 0:
                     self.printer.send_event(
                         "menu:action:" + str(args[0]), *args[1:])
@@ -1679,18 +1747,21 @@ class MenuManager:
             # lets start and populate the menu items
             self.begin(eventtime)
         else:
-            container = self.stack_peek()
-            if isinstance(container, MenuDeck):
-                menu = container.menu
-                if (isinstance(menu, MenuList)
-                        and not container.is_editing()
-                        and menu is not container):
-                    self.stack_push(menu)
-                    self.top_row = 0
-                    self.selected = 0
-                    return
-            if container.is_editing():
+            if not self.push_deck_menu():
                 self.enter(True)
+
+    def push_deck_menu(self):
+        container = self.stack_peek()
+        if isinstance(container, MenuDeck):
+            menu = container.get_longpress_menu()
+            if (isinstance(menu, MenuList)
+                    and not container.is_editing()
+                    and menu is not container):
+                self.stack_push(menu)
+                self.top_row = 0
+                self.selected = 0
+                return True
+        return False
 
     def back_callback(self, eventtime):
         if self.back_pin:
