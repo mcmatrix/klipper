@@ -512,12 +512,12 @@ class MenuCommand(MenuItem):
     def _parse_action(self, action):
         if isinstance(action, str) and len(action) > 0:
             try:
-                actions = {}
+                actions = []
                 lines = self._lines_aslist(action)
                 for line in lines:
                     args = map(str.lower, self._words_aslist(line, sep=' '))
                     if len(args) > 0:
-                        actions[args[0]] = args[1:]
+                        actions.push(tuple(args))
                 return actions
             except Exception:
                 logging.exception("Action parsing failed")
@@ -1568,16 +1568,80 @@ class MenuManager:
                 self.running = False
 
     def enter(self, long_press=False):
-        def action_search(actions, name):
+        def process(actions, names, target):
+            matches = None
             if (actions and isinstance(actions, list)
-                    and name and isinstance(name, str)):
-                # will return first match
-                if name in actions:
-                    args = [name]
-                    args.extend(list(actions[name]))
-                    actions.pop(name)
-                    return args
-            return None
+                    and names and isinstance(names, list)):
+                # Init function attributes
+                process.input_run_gcode = True
+                process.input_stop = True
+                process.input_restart = False
+                # Process matching actions
+                matches = [t for i, t in enumerate(actions) if t[0] in names]
+                for match in matches:
+                    malformed = False
+                    # remove found actions from global action list
+                    actions.pop(match)
+                    # process found actions callback
+                    if match[0] == 'nop':
+                        pass
+                    elif match[0] == 'back':
+                        self.back()
+                    elif match[0] == 'exit':
+                        self.exit()
+                    elif match[0] == 'input':
+                        if len(match[1:]) > 0:
+                            if match[1] == 'skip-gcode':
+                                process.input_run_gcode = False
+                            elif match[1] == 'continue':
+                                process.input_stop = False
+                            elif match[1] == 'restart':
+                                process.input_restart = True
+                        else:
+                            malformed = True
+                    elif match[0] == 'deck':
+                        if len(match[1:]) > 0:
+                            if match[1] == 'menu':
+                                self.push_deck_menu()
+                        else:
+                            malformed = True
+                    elif match[0] == 'respond' or match[0] == '//':
+                        if len(match[1:]) > 0:
+                            self.gcode.respond_info("{}".format(
+                                ' '.join(map(str, match[1:]))))
+                        else:
+                            malformed = True
+                    elif match[0] == '!!':
+                        if len(match[1:]) > 0:
+                            self.gcode.respond_error("{}".format(
+                                ' '.join(map(str, match[1:]))))
+                        else:
+                            malformed = True
+                    elif match[0] == 'echo':
+                        if len(match[1:]) > 0:
+                            self.gcode.respond("{} {}".format(
+                                'echo:', ' '.join(map(str, match[1:]))))
+                        else:
+                            malformed = True
+                    elif match[0] == 'emit':
+                        if len(match[1:]) > 0 and len(str(match[1])) > 0:
+                            self.printer.send_event(
+                                "menu:action:" + str(match[1]), *match[2:])
+                        else:
+                            malformed = True
+                    elif match[0] == 'log':
+                        if len(match[1:]) > 0:
+                            logging.info("menu:{} {}".format(
+                                repr(target), ' '.join(map(str, match[1:]))))
+                        else:
+                            malformed = True
+                    else:
+                        logging.error("Unknown action: {} {}".format(
+                            match[0], ' '.join(map(str, match[1:]))))
+                    if malformed is True:
+                        logging.error("Malformed action: {} {}".format(
+                            match[0], ' '.join(map(str, match[1:]))))
+            return matches
         container = self.stack_peek()
         if self.running and isinstance(container, MenuContainer):
             self.timer = 0
@@ -1593,21 +1657,20 @@ class MenuManager:
                 if current.is_editing():
                     if long_press is True:
                         actions = current.get_longpress_action()
-                        match = action_search(actions, 'input-skip-gcode')
-                        if not match:
+                        process(actions, ['input'], current)
+                        if getattr(process.input_run_gcode, True) is True:
                             self.queue_gcode(current.get_gcode())
                         self.queue_gcode(current.get_longpress_gcode())
                     else:
                         actions = current.get_action()
-                        match = action_search(actions, 'input-skip-gcode')
-                        if not match:
+                        process(actions, ['input'], current)
+                        if getattr(process.input_run_gcode, True) is True:
                             self.queue_gcode(current.get_gcode())
                         self.queue_gcode(current.get_stop_gcode())
-                    match = action_search(actions, 'input-continue')
-                    if not match:
+                    if getattr(process.input_stop, True) is True:
                         current.stop_editing()
-                    match = action_search(actions, 'input-restart')
-                    if match and not current.is_editing():
+                    if (getattr(process.input_restart, False) is True
+                            and not current.is_editing()):
                         current.start_editing()
                         self.queue_gcode(current.get_start_gcode())
                 else:
@@ -1616,47 +1679,9 @@ class MenuManager:
             elif isinstance(current, MenuCommand):
                 actions = current.get_action()
                 self.queue_gcode(current.get_gcode())
-            # check actions
-            match = action_search(actions, 'nop')
-            if match:
-                pass
-            match = action_search(actions, 'back')
-            if match:
-                self.back()
-            match = action_search(actions, 'exit')
-            if match:
-                self.exit()
-            match = action_search(actions, 'deck-menu')
-            if match:
-                self.push_deck_menu()
-            match = action_search(actions, 'respond')
-            if match and len(match[1:]) > 0:
-                self.gcode.respond_info("{}".format(
-                    ' '.join(map(str, match[1:]))))
-            match = action_search(actions, '//')
-            if match and len(match[1:]) > 0:
-                self.gcode.respond_info("{}".format(
-                    ' '.join(map(str, match[1:]))))
-            match = action_search(actions, '!!')
-            if match and len(match[1:]) > 0:
-                self.gcode.respond_error("{}".format(
-                    ' '.join(map(str, match[1:]))))
-            match = action_search(actions, 'echo')
-            if match and len(match[1:]) > 0:
-                self.gcode.respond("{} {}".format(
-                    'echo:', ' '.join(map(str, match[1:]))))
-            match = action_search(actions, 'emit')
-            if match and len(match[1:]) > 0:
-                if len(str(match[1])) > 0:
-                    self.printer.send_event(
-                        "menu:action:" + str(match[1]), *match[2:])
-                else:
-                    logging.error("Malformed event call: {} {}".format(
-                        match[0], ' '.join(map(str, match[1:]))))
-            match = action_search(actions, 'log')
-            if match and len(match[1:]) > 0:
-                logging.info("{} {}".format(
-                    'menu:', ' '.join(map(str, match[1:]))))
+            # process common actions
+            process(actions, ['nop', 'back', 'exit', 'deck', 'respond', '//',
+                    '!!', 'echo', 'emit', 'log'], current)
 
     def exit(self, force=False):
         container = self.stack_peek()
