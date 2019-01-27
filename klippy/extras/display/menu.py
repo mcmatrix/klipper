@@ -531,7 +531,7 @@ class MenuInput(MenuCommand):
         self._realtime = self._asbool(config.get('realtime', 'false'))
         self._readonly = self._aslist(
             config.get('readonly', 'false'), flatten=False)
-        self._auto_stop = self._asbool(config.get('auto_stop', 'true'))
+        self._autostop = self._asbool(config.get('autostop', 'true'))
         self._input_min = config.getfloat('input_min', sys.float_info.min)
         self._input_max = config.getfloat('input_max', sys.float_info.max)
         self._input_step = config.getfloat('input_step', above=0.)
@@ -554,8 +554,8 @@ class MenuInput(MenuCommand):
     def is_readonly(self):
         return self._parse_bool(self._readonly)
 
-    def is_auto_stop(self):
-        return self._auto_stop
+    def is_autostop(self):
+        return self._autostop
 
     def _render(self):
         return self._get_formatted(self._name, self._input_value)
@@ -1667,10 +1667,10 @@ class MenuManager:
                     else:
                         actions = current.get_action()
                         self.queue_gcode(current.get_gcode())
-                        if current.is_auto_stop() is True:
+                        if current.is_autostop() is True:
                             self.queue_gcode(current.get_stop_gcode())
                             current.stop_editing()
-                    process(actions, ['input'], current)
+                    process(actions, ['editing'], current)
                 else:
                     current.start_editing()
                     self.queue_gcode(current.get_start_gcode())
