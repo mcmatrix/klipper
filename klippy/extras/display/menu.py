@@ -554,6 +554,9 @@ class MenuInput(MenuCommand):
     def is_readonly(self):
         return self._parse_bool(self._readonly)
 
+    def is_realtime(self):
+        return self._realtime
+
     def is_autostop(self):
         return self._autostop
 
@@ -1596,17 +1599,26 @@ class MenuManager:
                         else:
                             malformed = True
                     elif match[0] == 'editing':
+                        run_script = True
                         if len(match[1:]) > 0:
+                            if len(match[2:]) > 0:
+                                run_script = self._asbool(match[2])
                             if match[1] == 'stop':
                                 if (isinstance(current, MenuInput)
                                         and current.is_editing()):
-                                    self.queue_gcode(current.get_stop_gcode())
+                                    if run_script is True:
+                                        self.queue_gcode(
+                                            current.get_stop_gcode())
                                     current.stop_editing()
                             elif match[1] == 'start':
                                 if (isinstance(current, MenuInput)
                                         and not current.is_editing()):
                                     current.start_editing()
-                                    self.queue_gcode(current.get_start_gcode())
+                                    if run_script is True:
+                                        self.queue_gcode(
+                                            current.get_start_gcode())
+                            elif match[1] == 'gcode':
+                                self.queue_gcode(current.get_gcode())
                             else:
                                 malformed = True
                         else:
@@ -1666,7 +1678,8 @@ class MenuManager:
                         self.queue_gcode(current.get_longpress_gcode())
                     else:
                         actions = current.get_action()
-                        self.queue_gcode(current.get_gcode())
+                        if not current.is_realtime():
+                            self.queue_gcode(current.get_gcode())
                         if current.is_autostop() is True:
                             self.queue_gcode(current.get_stop_gcode())
                             current.stop_editing()
