@@ -517,7 +517,7 @@ class MenuCommand(MenuItem):
                 for line in lines:
                     args = map(str.lower, self._words_aslist(line, sep=' '))
                     if len(args) > 0:
-                        actions.push(tuple(args))
+                        actions.append(tuple(args))
                 return actions
             except Exception:
                 logging.exception("Action parsing failed")
