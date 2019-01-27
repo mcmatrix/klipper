@@ -531,6 +531,7 @@ class MenuInput(MenuCommand):
         self._realtime = self._asbool(config.get('realtime', 'false'))
         self._readonly = self._aslist(
             config.get('readonly', 'false'), flatten=False)
+        self._auto_stop = self._asbool(config.get('auto_stop', 'true'))
         self._input_min = config.getfloat('input_min', sys.float_info.min)
         self._input_max = config.getfloat('input_max', sys.float_info.max)
         self._input_step = config.getfloat('input_step', above=0.)
@@ -552,6 +553,9 @@ class MenuInput(MenuCommand):
 
     def is_readonly(self):
         return self._parse_bool(self._readonly)
+
+    def is_auto_stop(self):
+        return self._auto_stop
 
     def _render(self):
         return self._get_formatted(self._name, self._input_value)
@@ -1585,20 +1589,26 @@ class MenuManager:
                         self.back()
                     elif match[0] == 'exit':
                         self.exit()
-                    elif match[0] == 'set':
-                        if (len(match[1:]) > 0 and match[1] in [
-                                'skip-gcode', 'continue', 'restart']):
-                            value = False
-                            attr = '_'.join(['flag', match[1]])
-                            if len(match[2:]) > 0:
-                                value = self._asbool(match[2])
-                            setattr(process, attr, not not value)
-                        else:
-                            malformed = True
                     elif match[0] == 'deck':
                         if len(match[1:]) > 0:
                             if match[1] == 'open-menu':
                                 self.push_deck_menu()
+                        else:
+                            malformed = True
+                    elif match[0] == 'editing':
+                        if len(match[1:]) > 0:
+                            if match[1] == 'stop':
+                                if (isinstance(current, MenuInput)
+                                        and current.is_editing()):
+                                    self.queue_gcode(current.get_stop_gcode())
+                                    current.stop_editing()
+                            elif match[1] == 'start':
+                                if (isinstance(current, MenuInput)
+                                        and not current.is_editing()):
+                                    current.start_editing()
+                                    self.queue_gcode(current.get_start_gcode())
+                            else:
+                                malformed = True
                         else:
                             malformed = True
                     elif match[0] == 'respond' or match[0] == '//':
@@ -1653,33 +1663,21 @@ class MenuManager:
                 if current.is_editing():
                     if long_press is True:
                         actions = current.get_longpress_action()
-                        process(actions, ['set'], current)
-                        if (not getattr(process,
-                                        'flag_skip-gcode', False) is True):
-                            self.queue_gcode(current.get_gcode())
                         self.queue_gcode(current.get_longpress_gcode())
                     else:
                         actions = current.get_action()
-                        process(actions, ['set'], current)
-                        if (not getattr(process,
-                                        'flag_skip-gcode', False) is True):
-                            self.queue_gcode(current.get_gcode())
-                        self.queue_gcode(current.get_stop_gcode())
-                    if (not getattr(process, 'flag_continue', False) is True):
-                        current.stop_editing()
-                    if (getattr(process, 'flag_restart', False) is True
-                            and not current.is_editing()):
-                        current.start_editing()
-                        self.queue_gcode(current.get_start_gcode())
+                        self.queue_gcode(current.get_gcode())
+                        if current.is_auto_stop() is True:
+                            self.queue_gcode(current.get_stop_gcode())
+                            current.stop_editing()
+                    process(actions, ['input'], current)
                 else:
                     current.start_editing()
                     self.queue_gcode(current.get_start_gcode())
             elif isinstance(current, MenuCommand):
                 actions = current.get_action()
-                process(actions, ['set'], current)
-                if (not getattr(process, 'flag_skip-gcode', False) is True):
-                    self.queue_gcode(current.get_gcode())
-            # process common actions
+                self.queue_gcode(current.get_gcode())
+            # process actions
             process(actions, ['nop', 'back', 'exit', 'deck', 'respond', '//',
                     '!!', 'echo', 'emit', 'log'], current)
 
