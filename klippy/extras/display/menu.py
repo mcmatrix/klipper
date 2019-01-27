@@ -517,7 +517,7 @@ class MenuCommand(MenuItem):
                 for i, line in enumerate(lines):
                     args = map(str.lower, self._words_aslist(line, sep=' '))
                     if len(args) > 0:
-                        actions.append((i, args, ))
+                        actions.append((i, args[0], args[1:]))
                 return actions
             except Exception:
                 logging.exception("Action parsing failed")
@@ -1580,86 +1580,86 @@ class MenuManager:
             if (actions and isinstance(actions, list)
                     and names and isinstance(names, list)):
                 # Process matching actions
-                matches = [t for t in actions if t[0] in names]
+                matches = [t for t in actions if t[1] in names]
                 for match in matches:
-                    i, args = match
+                    i, name, args = match
                     malformed = False
                     # remove found actions from global action list
                     actions.remove(match)
                     # process found actions callback
-                    if args[0] == 'nop':
+                    if name == 'nop':
                         pass
-                    elif args[0] == 'back':
+                    elif name == 'back':
                         self.back()
-                    elif args[0] == 'exit':
+                    elif name == 'exit':
                         self.exit()
-                    elif args[0] == 'deck':
-                        if len(args[1:]) > 0:
-                            if args[1] == 'open-menu':
+                    elif name == 'deck':
+                        if len(args[0:]) > 0:
+                            if args[0] == 'open-menu':
                                 self.push_deck_menu()
                         else:
                             malformed = True
-                    elif args[0] == 'editing':
+                    elif name == 'editing':
                         run_script = True
-                        if len(args[1:]) > 0:
-                            if len(args[2:]) > 0:
-                                run_script = self._asbool(args[2])
-                            if args[1] == 'stop':
+                        if len(args[0:]) > 0:
+                            if len(args[1:]) > 0:
+                                run_script = self._asbool(args[1])
+                            if args[0] == 'stop':
                                 if (isinstance(current, MenuInput)
                                         and current.is_editing()):
                                     if run_script is True:
                                         self.queue_gcode(
                                             current.get_stop_gcode())
                                     current.stop_editing()
-                            elif args[1] == 'start':
+                            elif args[0] == 'start':
                                 if (isinstance(current, MenuInput)
                                         and not current.is_editing()):
                                     current.start_editing()
                                     if run_script is True:
                                         self.queue_gcode(
                                             current.get_start_gcode())
-                            elif args[1] == 'gcode':
+                            elif args[0] == 'gcode':
                                 self.queue_gcode(current.get_gcode())
                             else:
                                 malformed = True
                         else:
                             malformed = True
-                    elif args[0] == 'respond' or args[0] == '//':
-                        if len(args[1:]) > 0:
+                    elif name == 'respond' or name == '//':
+                        if len(args[0:]) > 0:
                             self.gcode.respond_info("{}".format(
-                                ' '.join(map(str, args[1:]))))
+                                ' '.join(map(str, args[0:]))))
                         else:
                             malformed = True
-                    elif args[0] == '!!':
-                        if len(args[1:]) > 0:
+                    elif name == '!!':
+                        if len(args[0:]) > 0:
                             self.gcode.respond_error("{}".format(
-                                ' '.join(map(str, args[1:]))))
+                                ' '.join(map(str, args[0:]))))
                         else:
                             malformed = True
-                    elif args[0] == 'echo':
-                        if len(args[1:]) > 0:
+                    elif name == 'echo':
+                        if len(args[0:]) > 0:
                             self.gcode.respond("{} {}".format(
-                                'echo:', ' '.join(map(str, args[1:]))))
+                                'echo:', ' '.join(map(str, args[0:]))))
                         else:
                             malformed = True
-                    elif args[0] == 'emit':
-                        if len(args[1:]) > 0 and len(str(args[1])) > 0:
+                    elif name == 'emit':
+                        if len(args[0:]) > 0 and len(str(args[0])) > 0:
                             self.printer.send_event(
-                                "menu:action:" + str(args[1]), *args[2:])
+                                "menu:action:" + str(args[0]), *args[1:])
                         else:
                             malformed = True
-                    elif args[0] == 'log':
-                        if len(args[1:]) > 0:
+                    elif name == 'log':
+                        if len(args[0:]) > 0:
                             logging.info("menu:{} {}".format(
-                                repr(target), ' '.join(map(str, args[1:]))))
+                                repr(target), ' '.join(map(str, args[0:]))))
                         else:
                             malformed = True
                     else:
                         logging.error("Unknown action: {} {}".format(
-                            args[0], ' '.join(map(str, args[1:]))))
+                            name, ' '.join(map(str, args[0:]))))
                     if malformed is True:
                         logging.error("Malformed action: {} {}".format(
-                            args[0], ' '.join(map(str, args[1:]))))
+                            name, ' '.join(map(str, args[0:]))))
             return matches
         container = self.stack_peek()
         if self.running and isinstance(container, MenuContainer):
