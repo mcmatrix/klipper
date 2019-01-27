@@ -1572,10 +1572,6 @@ class MenuManager:
             matches = None
             if (actions and isinstance(actions, list)
                     and names and isinstance(names, list)):
-                # Init function attributes
-                process.input_run_gcode = True
-                process.input_stop = True
-                process.input_restart = False
                 # Process matching actions
                 matches = [t for i, t in enumerate(actions) if t[0] in names]
                 for match in matches:
@@ -1589,19 +1585,19 @@ class MenuManager:
                         self.back()
                     elif match[0] == 'exit':
                         self.exit()
-                    elif match[0] == 'input':
-                        if len(match[1:]) > 0:
-                            if match[1] == 'skip-gcode':
-                                process.input_run_gcode = False
-                            elif match[1] == 'continue':
-                                process.input_stop = False
-                            elif match[1] == 'restart':
-                                process.input_restart = True
+                    elif match[0] == 'set':
+                        if (len(match[1:]) > 0 and match[1] in [
+                                'skip-gcode', 'continue', 'restart']):
+                            value = False
+                            attr = '_'.join(['flag', match[1]])
+                            if len(match[2:]) > 0:
+                                value = self._asbool(match[2])
+                            setattr(process, attr, not not value)
                         else:
                             malformed = True
                     elif match[0] == 'deck':
                         if len(match[1:]) > 0:
-                            if match[1] == 'menu':
+                            if match[1] == 'open-menu':
                                 self.push_deck_menu()
                         else:
                             malformed = True
@@ -1657,19 +1653,21 @@ class MenuManager:
                 if current.is_editing():
                     if long_press is True:
                         actions = current.get_longpress_action()
-                        process(actions, ['input'], current)
-                        if getattr(process.input_run_gcode, True) is True:
+                        process(actions, ['set'], current)
+                        if (not getattr(process,
+                                        'flag_skip-gcode', False) is True):
                             self.queue_gcode(current.get_gcode())
                         self.queue_gcode(current.get_longpress_gcode())
                     else:
                         actions = current.get_action()
-                        process(actions, ['input'], current)
-                        if getattr(process.input_run_gcode, True) is True:
+                        process(actions, ['set'], current)
+                        if (not getattr(process,
+                                        'flag_skip-gcode', False) is True):
                             self.queue_gcode(current.get_gcode())
                         self.queue_gcode(current.get_stop_gcode())
-                    if getattr(process.input_stop, True) is True:
+                    if (not getattr(process, 'flag_continue', False) is True):
                         current.stop_editing()
-                    if (getattr(process.input_restart, False) is True
+                    if (getattr(process, 'flag_restart', False) is True
                             and not current.is_editing()):
                         current.start_editing()
                         self.queue_gcode(current.get_start_gcode())
@@ -1678,7 +1676,9 @@ class MenuManager:
                     self.queue_gcode(current.get_start_gcode())
             elif isinstance(current, MenuCommand):
                 actions = current.get_action()
-                self.queue_gcode(current.get_gcode())
+                process(actions, ['set'], current)
+                if (not getattr(process, 'flag_skip-gcode', False) is True):
+                    self.queue_gcode(current.get_gcode())
             # process common actions
             process(actions, ['nop', 'back', 'exit', 'deck', 'respond', '//',
                     '!!', 'echo', 'emit', 'log'], current)
