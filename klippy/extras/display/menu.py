@@ -19,17 +19,95 @@ class MenuCursor:
     EDIT = '*'
 
 
+# static class for type cast
+class MenuCast:
+    @staticmethod
+    def asliteral(s):
+        s = str(s).strip()
+        if s.startswith(('"', "'")):
+            s = s[1:]
+        if s.endswith(('"', "'")):
+            s = s[:-1]
+        return s
+
+    @staticmethod
+    def asbool(s, default=False):
+        if s is None:
+            return default
+        if isinstance(s, bool):
+            return s
+        s = str(s).strip()
+        return s.lower() in ('y', 'yes', 't', 'true', 'on', '1')
+
+    @staticmethod
+    def asint(s, default=0):
+        if s is None:
+            return default
+        if isinstance(s, (int, float)):
+            return int(s)
+        s = str(s).strip()
+        return int(float(s)) if MenuCast.isfloat(s) else int(default)
+
+    @staticmethod
+    def asfloat(s, default=0.0):
+        if s is None:
+            return default
+        if isinstance(s, (int, float)):
+            return float(s)
+        s = str(s).strip()
+        return float(s) if MenuCast.isfloat(s) else float(default)
+
+    @staticmethod
+    def isfloat(value):
+        try:
+            float(value)
+            return True
+        except ValueError:
+            return False
+
+    @staticmethod
+    def lines_aslist(value, default=[]):
+        if isinstance(value, str):
+            value = filter(None, [x.strip() for x in value.splitlines()])
+        try:
+            return list(value)
+        except Exception:
+            logging.exception("Lines as list parsing error")
+            return list(default)
+
+    @staticmethod
+    def words_aslist(value, sep=',', default=[]):
+        if isinstance(value, str):
+            value = filter(None, [x.strip() for x in value.split(sep)])
+        try:
+            return list(value)
+        except Exception:
+            logging.exception("Words as list parsing error")
+            return list(default)
+
+    @staticmethod
+    def aslist(value, flatten=True, default=[]):
+        values = MenuCast.lines_aslist(value)
+        if not flatten:
+            return values
+        result = []
+        for value in values:
+            subvalues = MenuCast.words_aslist(value, sep=',')
+            result.extend(subvalues)
+        return result
+
+
 # Menu element baseclass
 class MenuElement(object):
     def __init__(self, manager, config, namespace=''):
         self.cursor = config.get('cursor', MenuCursor.SELECT)
         self._namespace = namespace
         self._manager = manager
-        self._width = self._asint(config.get('width', '0'))
-        self._scroll = self._asbool(config.get('scroll', 'false'))
-        self._enable = self._aslist(config.get('enable', 'true'),
-                                    flatten=False)
-        self._name = self._asliteral(config.get('name'))
+        self._width = MenuCast.asint(config.get('width', '0'))
+        self._scroll = MenuCast.asbool(config.get('scroll', 'false'))
+        self._enable = MenuCast.aslist(
+            config.get('enable', 'true'), flatten=False)
+        self._name = MenuCast.asliteral(config.get('name'))
         self._last_heartbeat = None
         self.__scroll_offs = 0
         self.__scroll_diff = 0
@@ -135,7 +213,7 @@ class MenuElement(object):
         try:
             return any([
                 all([
-                    self._lookup_bool(l2) for l2 in self._words_aslist(l1)
+                    self._lookup_bool(l2) for l2 in MenuCast.words_aslist(l1)
                 ]) for l1 in lst
             ])
         except Exception:
@@ -143,7 +221,7 @@ class MenuElement(object):
             return False
 
     def _lookup_bool(self, b):
-        if not self._asbool(b):
+        if not MenuCast.asbool(b):
             if b[0] == '!':  # logical negation:
                 return not (not not self._lookup_parameter(b[1:]))
             else:
@@ -151,7 +229,7 @@ class MenuElement(object):
         return True
 
     def _lookup_parameter(self, literal):
-        if self._isfloat(literal):
+        if MenuCast.isfloat(literal):
             return float(literal)
         else:
             # only 2 level dot notation
@@ -163,73 +241,6 @@ class MenuElement(object):
             else:
                 logging.error("Parameter storage is not dictionary")
         return None
-
-    def _asliteral(self, s):
-        s = str(s).strip()
-        if s.startswith(('"', "'")):
-            s = s[1:]
-        if s.endswith(('"', "'")):
-            s = s[:-1]
-        return s
-
-    def _asbool(self, s, default=False):
-        if s is None:
-            return default
-        if isinstance(s, bool):
-            return s
-        s = str(s).strip()
-        return s.lower() in ('y', 'yes', 't', 'true', 'on', '1')
-
-    def _asint(self, s, default=0):
-        if s is None:
-            return default
-        if isinstance(s, (int, float)):
-            return int(s)
-        s = str(s).strip()
-        return int(float(s)) if self._isfloat(s) else int(default)
-
-    def _asfloat(self, s, default=0.0):
-        if s is None:
-            return default
-        if isinstance(s, (int, float)):
-            return float(s)
-        s = str(s).strip()
-        return float(s) if self._isfloat(s) else float(default)
-
-    def _lines_aslist(self, value, default=[]):
-        if isinstance(value, str):
-            value = filter(None, [x.strip() for x in value.splitlines()])
-        try:
-            return list(value)
-        except Exception:
-            logging.exception("Lines as list parsing error")
-            return list(default)
-
-    def _words_aslist(self, value, sep=',', default=[]):
-        if isinstance(value, str):
-            value = filter(None, [x.strip() for x in value.split(sep)])
-        try:
-            return list(value)
-        except Exception:
-            logging.exception("Words as list parsing error")
-            return list(default)
-
-    def _aslist(self, value, flatten=True, default=[]):
-        values = self._lines_aslist(value)
-        if not flatten:
-            return values
-        result = []
-        for value in values:
-            subvalues = self._words_aslist(value, sep=',')
-            result.extend(subvalues)
-        return result
-
-    def _isfloat(self, value):
-        try:
-            float(value)
-            return True
-        except ValueError:
-            return False
 
     @property
     def namespace(self):
@@ -244,8 +255,8 @@ class MenuElement(object):
 class MenuContainer(MenuElement):
     def __init__(self, manager, config, namespace=''):
         super(MenuContainer, self).__init__(manager, config, namespace)
-        self._show_back = self._asbool(config.get('show_back', 'true'))
-        self._show_title = self._asbool(config.get('show_title', 'true'))
+        self._show_back = MenuCast.asbool(config.get('show_back', 'true'))
+        self._show_title = MenuCast.asbool(config.get('show_title', 'true'))
         self._allitems = []
         self._items = []
 
@@ -456,13 +467,13 @@ class MenuItem(MenuElement):
 
     def _transform_aslist(self):
         return list(filter(None, (
-            self._parse_transform(t) for t in self._aslist(
+            self._parse_transform(t) for t in MenuCast.aslist(
                 self.transform, flatten=False)
         )))
 
     def _parameter_aslist(self):
         lst = []
-        for p in self._words_aslist(self.parameter):
+        for p in MenuCast.words_aslist(self.parameter):
             lst.append(self._lookup_parameter(p))
             if lst[-1] is None:
                 logging.error("Parameter '%s' not found" % str(p))
@@ -513,9 +524,9 @@ class MenuCommand(MenuItem):
         if isinstance(action, str) and len(action) > 0:
             try:
                 actions = []
-                lines = self._lines_aslist(action)
+                lines = MenuCast.lines_aslist(action)
                 for i, line in enumerate(lines):
-                    args = map(str.lower, self._words_aslist(line, sep=' '))
+                    args = map(str.lower, MenuCast.words_aslist(line, sep=' '))
                     if len(args) > 0:
                         actions.append((i, args[0], args[1:]))
                 return actions
@@ -527,11 +538,11 @@ class MenuCommand(MenuItem):
 class MenuInput(MenuCommand):
     def __init__(self, manager, config, namespace=''):
         super(MenuInput, self).__init__(manager, config, namespace)
-        self._reverse = self._asbool(config.get('reverse', 'false'))
-        self._realtime = self._asbool(config.get('realtime', 'false'))
-        self._readonly = self._aslist(
+        self._reverse = MenuCast.asbool(config.get('reverse', 'false'))
+        self._realtime = MenuCast.asbool(config.get('realtime', 'false'))
+        self._readonly = MenuCast.aslist(
             config.get('readonly', 'false'), flatten=False)
-        self._autostop = self._asbool(config.get('autostop', 'true'))
+        self._autostop = MenuCast.asbool(config.get('autostop', 'true'))
         self._input_min = config.getfloat('input_min', sys.float_info.min)
         self._input_max = config.getfloat('input_max', sys.float_info.max)
         self._input_step = config.getfloat('input_step', above=0.)
@@ -612,7 +623,7 @@ class MenuInput(MenuCommand):
         self.__last_value = None
         if not self.is_readonly():
             args = self._prepare_values()
-            if len(args) > 0 and self._isfloat(args[0]):
+            if len(args) > 0 and MenuCast.isfloat(args[0]):
                 self._input_value = min(self._input_max, max(
                     self._input_min, float(args[0])))
                 if self._realtime:
@@ -663,7 +674,7 @@ class MenuGroup(MenuContainer):
         super(MenuGroup, self).__init__(manager, config, namespace)
         self._sep = sep
         self._show_back = False
-        self.use_cursor = self._asbool(config.get('use_cursor', 'false'))
+        self.use_cursor = MenuCast.asbool(config.get('use_cursor', 'false'))
         self.items = config.get('items', '')
 
     def init(self):
@@ -685,7 +696,7 @@ class MenuGroup(MenuContainer):
         return all([item.is_readonly() for item in self._items])
 
     def _names_aslist(self):
-        return self._words_aslist(self.items, sep=self._sep)
+        return MenuCast.words_aslist(self.items, sep=self._sep)
 
     def select(self):
         super(MenuGroup, self).select()
@@ -882,7 +893,7 @@ class MenuList(MenuContainer):
                 and type(item) is not MenuCard)
 
     def _names_aslist(self):
-        return self._lines_aslist(self.items)
+        return MenuCast.lines_aslist(self.items)
 
     def _lookup_item(self, item):
         if isinstance(item, str) and ',' in item:
@@ -965,11 +976,11 @@ class MenuCard(MenuGroup):
         return out
 
     def _names_aslist(self):
-        return self._lines_aslist(self.items)
+        return MenuCast.lines_aslist(self.items)
 
     def _content_aslist(self):
         return filter(None, [
-            self._asliteral(s) for s in self._lines_aslist(self.content)
+            MenuCast.asliteral(s) for s in MenuCast.lines_aslist(self.content)
         ])
 
     def update_items(self):
@@ -1050,7 +1061,7 @@ class MenuDeck(MenuList):
     def __init__(self, manager, config, namespace=''):
         super(MenuDeck, self).__init__(manager, config, namespace)
         self.menu = config.get('longpress_menu', None)
-        self.constrained = self._asbool(
+        self.constrained = MenuCast.asbool(
             config.get('constrained', 'false'))
         self._menu = None
         self._show_back = False
@@ -1082,7 +1093,7 @@ class MenuDeck(MenuList):
         self._populate_menu()
 
     def _names_aslist(self):
-        return self._aslist(self.items)
+        return MenuCast.aslist(self.items)
 
     def is_accepted(self, item):
         return type(item) is MenuCard
@@ -1603,7 +1614,7 @@ class MenuManager:
                         run_script = True
                         if len(args[0:]) > 0:
                             if len(args[1:]) > 0:
-                                run_script = self._asbool(args[1])
+                                run_script = MenuCast.asbool(args[1])
                             if args[0] == 'stop':
                                 if (isinstance(current, MenuInput)
                                         and current.is_editing()):
