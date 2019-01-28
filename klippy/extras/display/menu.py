@@ -146,11 +146,11 @@ class MenuElement(object):
         return self.eval_enable()
 
     # override
-    def start_editing(self):
+    def start_editing(self, run_script=True):
         pass
 
     # override
-    def stop_editing(self):
+    def stop_editing(self, run_script=True):
         pass
 
     def eval_enable(self):
@@ -279,10 +279,10 @@ class MenuContainer(MenuElement):
     def is_editing(self):
         return any([item.is_editing() for item in self._items])
 
-    def stop_editing(self):
+    def stop_editing(self, run_script=True):
         for item in self._items:
             if item.is_editing():
-                item.stop_editing()
+                item.stop_editing(run_script)
 
     def lookup_item(self, item):
         if isinstance(item, str):
@@ -597,11 +597,15 @@ class MenuInput(MenuCommand):
     def is_editing(self):
         return self._input_value is not None
 
-    def stop_editing(self):
+    def stop_editing(self, run_script=True):
+        if run_script is True:
+            self._manager.queue_gcode(self.get_stop_gcode())
         self._reset_value()
 
-    def start_editing(self):
+    def start_editing(self, run_script=True):
         self._init_value()
+        if run_script is True:
+            self._manager.queue_gcode(self.get_start_gcode())
 
     def heartbeat(self, eventtime):
         super(MenuInput, self).heartbeat(eventtime)
@@ -744,11 +748,11 @@ class MenuGroup(MenuContainer):
                 logging.exception("Call selected error")
         return res
 
-    def stop_editing(self):
-        return self._call_selected('stop_editing')
+    def stop_editing(self, run_script=True):
+        return self._call_selected('stop_editing', run_script)
 
-    def start_editing(self):
-        return self._call_selected('start_editing')
+    def start_editing(self, run_script=True):
+        return self._call_selected('start_editing', run_script)
 
     def is_editing(self):
         return self._call_selected('is_editing')
@@ -1618,17 +1622,11 @@ class MenuManager:
                             if args[0] == 'stop':
                                 if (isinstance(current, MenuInput)
                                         and current.is_editing()):
-                                    if run_script is True:
-                                        self.queue_gcode(
-                                            current.get_stop_gcode())
-                                    current.stop_editing()
+                                    current.stop_editing(run_script)
                             elif args[0] == 'start':
                                 if (isinstance(current, MenuInput)
                                         and not current.is_editing()):
-                                    current.start_editing()
-                                    if run_script is True:
-                                        self.queue_gcode(
-                                            current.get_start_gcode())
+                                    current.start_editing(run_script)
                             elif args[0] == 'gcode':
                                 self.queue_gcode(current.get_gcode())
                             else:
@@ -1693,12 +1691,10 @@ class MenuManager:
                         if not current.is_realtime():
                             self.queue_gcode(current.get_gcode())
                         if current.is_autostop() is True:
-                            self.queue_gcode(current.get_stop_gcode())
                             current.stop_editing()
                     process(actions, ['editing'], current)
                 else:
                     current.start_editing()
-                    self.queue_gcode(current.get_start_gcode())
             elif isinstance(current, MenuCommand):
                 actions = current.get_action()
                 self.queue_gcode(current.get_gcode())
