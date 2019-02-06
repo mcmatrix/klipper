@@ -1316,6 +1316,12 @@ class MenuManager:
             starttime = reactor.monotonic() + starttime
         reactor.register_callback(callit, starttime)
 
+    def emit_event(self, event, *args):
+        ret = []
+        if len(str(event)) > 0:
+            ret = self.printer.send_event("menu:" + str(event), self, *args)
+        return ret
+
     def is_running(self):
         return self.running
 
@@ -1667,8 +1673,8 @@ class MenuManager:
                         malformed = True
                 elif name == 'emit':
                     if len(args[0:]) > 0 and len(str(args[0])) > 0:
-                        self.printer.send_event(
-                            "menu:action:" + str(args[0]), source, *args[1:])
+                        self.emit_event(
+                            "action:" + str(args[0]), source, *args[1:])
                     else:
                         malformed = True
                 elif name == 'log':
