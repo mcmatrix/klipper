@@ -466,7 +466,7 @@ class MenuItem(MenuElement):
                     fn = chooser(o, type(o.keys()[0]), index)
                 elif (fname in ('sum', 'sub', 'dec', 'mul', 'scale')
                         and isinstance(o, (float, int))):
-                    # math, cast type depends from x factor type
+                    # mathematizer, cast type depends from x factor type
                     fn = mathematizer(fname, o, type(o), index)
                 elif fname in ('days', 'hours', 'minutes', 'seconds'):
                     fn = timerizer(fname, index)
