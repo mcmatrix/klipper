@@ -423,16 +423,29 @@ class MenuItem(MenuElement):
             op = {}
 
             def math_fn(values):
+                if isinstance(x, str):
+                    factor = self._lookup_parameter(x)
+                    if factor is None:
+                        logging.error(
+                            "Math factor parameter '%s' not found" % str(x))
+                        factor = 0
+                else:
+                    factor = x
+                try:
+                    factor = float(factor)
+                except Exception:
+                    logging.exception("Math factor parsing error")
+                    factor = 0
                 try:
                     value = float(values[index])
                 except Exception:
                     logging.exception("Math value parsing error")
                     value = 0
-                op['sum'] = value + x
-                op['sub'] = value - x
-                op['dec'] = x - value
-                op['mul'] = x * value
-                op['scale'] = x * value
+                op['sum'] = value + factor
+                op['sub'] = value - factor
+                op['dec'] = factor - value
+                op['mul'] = factor * value
+                op['scale'] = factor * value
                 if key in op:
                     return cast_fn(op[key])
                 else:
@@ -465,7 +478,7 @@ class MenuItem(MenuElement):
                     # chooser, cast type by first key type
                     fn = chooser(o, type(o.keys()[0]), index)
                 elif (fname in ('sum', 'sub', 'dec', 'mul', 'scale')
-                        and isinstance(o, (float, int))):
+                        and isinstance(o, (float, int, str))):
                     # mathematizer, cast type depends from x factor type
                     fn = mathematizer(fname, o, type(o), index)
                 elif fname in ('days', 'hours', 'minutes', 'seconds'):
