@@ -385,11 +385,6 @@ class MenuItem(MenuElement):
                 )
             return map_fn
 
-        def scaler(scale_factor, cast_fn, index=0):
-            def scale_fn(values):
-                return cast_fn(values[index] * scale_factor)
-            return scale_fn
-
         def chooser(choices, cast_fn, index=0):
             def choose_fn(values):
                 return choices[cast_fn(values[index])]
@@ -424,6 +419,27 @@ class MenuItem(MenuElement):
                     return values[index]
             return func_fn
 
+        def mathematizer(key, x, cast_fn, index=0):
+            op = {}
+
+            def math_fn(values):
+                try:
+                    value = float(values[index])
+                except Exception:
+                    logging.exception("Math value parsing error")
+                    value = 0
+                op['sum'] = value + x
+                op['sub'] = value - x
+                op['dec'] = x - value
+                op['mul'] = x * value
+                op['scale'] = x * value
+                if key in op:
+                    return cast_fn(op[key])
+                else:
+                    logging.error("Unknown math operand: '%s'" % str(key))
+                    return value
+            return math_fn
+
         fn = None
         t = str(t).strip()
         # transform: idx.func(a,b,...)
@@ -448,9 +464,10 @@ class MenuItem(MenuElement):
                         and isinstance(o.keys()[0], (int, float, str))):
                     # chooser, cast type by first key type
                     fn = chooser(o, type(o.keys()[0]), index)
-                elif fname == 'scale' and isinstance(o, (float, int)):
-                    # scaler, cast type depends from scale factor type
-                    fn = scaler(o, type(o), index)
+                elif (fname in ('sum', 'sub', 'dec', 'mul', 'scale')
+                        and isinstance(o, (float, int))):
+                    # math, cast type depends from x factor type
+                    fn = mathematizer(fname, o, type(o), index)
                 elif fname in ('days', 'hours', 'minutes', 'seconds'):
                     fn = timerizer(fname, index)
                 elif fname in flist:
