@@ -78,7 +78,7 @@ class ExpressionWrapper(EnvironmentWrapper):
             logging.exception(msg)
             raise printer.config_error(msg)
 
-    def run(self, context=None):
+    def evaluate(self, context=None):
         if context is None:
             context = {'status': self.create_status_wrapper()}
         try:
@@ -99,9 +99,9 @@ class PrinterGCodeMacro:
         name = "%s:%s" % (config.get_name(), option)
         script = config.get(option, '')
         return TemplateWrapper(self.printer, self.env, name, script)
-    def load_expression(self, config, option):
+    def load_expression(self, config, option, default=None):
         name = "%s:%s" % (config.get_name(), option)
-        script = config.get(option, '')
+        script = config.get(option, default)
         return ExpressionWrapper(self.printer, self.env, name, script)
 
 def load_config(config):
