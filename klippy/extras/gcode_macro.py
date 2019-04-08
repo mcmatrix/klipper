@@ -29,17 +29,27 @@ class StatusWrapper:
         self.cache[sval] = res = dict(po.get_status(self.eventtime))
         return res
 
-# Wrapper around a Jinja2 template
-class TemplateWrapper:
-    def __init__(self, printer, env, name, script):
+
+# Wrapper around a Jinja2 environment
+class EnvironmentWrapper(object):
+    def __init__(self, printer, env, name):
         self.printer = printer
         self.name = name
         self.gcode = self.printer.lookup_object('gcode')
+
+    def create_status_wrapper(self, eventtime=None):
+        return StatusWrapper(self.printer, eventtime)
+
+
+# Wrapper around a Jinja2 template
+class TemplateWrapper(EnvironmentWrapper):
+    def __init__(self, printer, env, name, script):
+        super(TemplateWrapper, self).__init__(printer, env, name)
         try:
             self.template = env.from_string(script)
         except Exception as e:
             msg = "Error loading template '%s': %s" % (
-                 name, traceback.format_exception_only(type(e), e)[-1])
+                name, traceback.format_exception_only(type(e), e)[-1])
             logging.exception(msg)
             raise printer.config_error(msg)
     def create_status_wrapper(self, eventtime=None):
@@ -57,6 +67,31 @@ class TemplateWrapper:
     def run_gcode_from_command(self, context=None):
         self.gcode.run_script_from_command(self.render(context))
 
+
+# Wrapper around a Jinja2 expression
+class ExpressionWrapper(EnvironmentWrapper):
+    def __init__(self, printer, env, name, script):
+        super(ExpressionWrapper, self).__init__(printer, env, name)
+        try:
+            self.expression = env.compile_expression(script)
+        except Exception as e:
+            msg = "Error loading expression '%s': %s" % (
+                name, traceback.format_exception_only(type(e), e)[-1])
+            logging.exception(msg)
+            raise printer.config_error(msg)
+
+    def run(self, context=None):
+        if context is None:
+            context = {'status': self.create_status_wrapper()}
+        try:
+            return self.expression(context)
+        except Exception as e:
+            msg = "Error evaluating '%s': %s" % (
+                self.name, traceback.format_exception_only(type(e), e)[-1])
+            logging.exception(msg)
+            raise self.gcode.error(msg)
+
+
 # Main gcode macro template tracking
 class PrinterGCodeMacro:
     def __init__(self, config):
@@ -66,6 +101,10 @@ class PrinterGCodeMacro:
         name = "%s:%s" % (config.get_name(), option)
         script = config.get(option, '')
         return TemplateWrapper(self.printer, self.env, name, script)
+    def load_expression(self, config, option):
+        name = "%s:%s" % (config.get_name(), option)
+        script = config.get(option, '')
+        return ExpressionWrapper(self.printer, self.env, name, script)
 
 def load_config(config):
     return PrinterGCodeMacro(config)
