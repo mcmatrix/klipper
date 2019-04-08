@@ -142,6 +142,10 @@ class PrinterGCodeMacro:
         script = config.get(option, '')
         return TemplateWrapper(self.printer, self.env, name, script)
 
+    def load_template_from_string(self, config, name, script):
+        name = "%s:%s" % (config.get_name(), name)
+        return TemplateWrapper(self.printer, self.env, name, script)
+
     def load_expression(self, config, option, default=None):
         name = "%s:%s" % (config.get_name(), option)
         script = config.get(option, default)
