@@ -5,7 +5,7 @@
 # Copyright (C) 2018  Janar Sööt <janar.soot@gmail.com>
 #
 # This file may be distributed under the terms of the GNU GPLv3 license.
-import os, logging, sys, ast, re, string
+import os, logging, sys, re, string
 
 
 class error(Exception):
@@ -27,8 +27,8 @@ class MenuElement(object):
         self._manager = manager
         self._width = self._asint(config.get('width', '0'))
         self._scroll = self._asbool(config.get('scroll', 'false'))
-        self._enable = self._aslist(config.get('enable', 'true'),
-                                    flatten=False)
+        self._enable = manager.gcode_macro.load_expression(
+            config, 'enable', 'true')
         self._name = self._asliteral(config.get('name'))
         self.__scroll_offs = 0
         self.__scroll_diff = 0
@@ -66,7 +66,7 @@ class MenuElement(object):
         pass
 
     def eval_enable(self):
-        return self._parse_bool(self._enable)
+        return not not self._enable.evaluate()
 
     def init(self):
         self.__clear_scroll()
@@ -118,25 +118,6 @@ class MenuElement(object):
         else:
             self.__clear_scroll()
         return s
-
-    def _parse_bool(self, lst):
-        try:
-            return any([
-                all([
-                    self._lookup_bool(l2) for l2 in self._words_aslist(l1)
-                ]) for l1 in lst
-            ])
-        except Exception:
-            logging.exception("Boolean parsing error")
-            return False
-
-    def _lookup_bool(self, b):
-        if not self._asbool(b):
-            if b[0] == '!':  # logical negation:
-                return not (not not self._lookup_parameter(b[1:]))
-            else:
-                return not not self._lookup_parameter(b)
-        return True
 
     def _lookup_parameter(self, literal):
         if self._isfloat(literal):
@@ -326,173 +307,33 @@ class MenuContainer(MenuElement):
 class MenuItem(MenuElement):
     def __init__(self, manager, config, namespace=''):
         super(MenuItem, self).__init__(manager, config, namespace)
-        self.parameter = config.get('parameter', '')
-        self.transform = config.get('transform', '')
-
-    def _parse_transform(self, t):
-        flist = {
-            'int': int,
-            'float': float,
-            'bool': bool,
-            'str': str,
-            'abs': abs,
-            'bin': bin,
-            'hex': hex,
-            'oct': oct
-        }
-
-        def mapper(left_min, left_max, right_min, right_max, cast_fn, index=0):
-            # interpolate
-            left_span = left_max - left_min
-            right_span = right_max - right_min
-            scale_factor = float(right_span) / float(left_span)
-
-            def map_fn(values):
-                return cast_fn(
-                    right_min + (values[index] - left_min) * scale_factor
-                )
-            return map_fn
-
-        def scaler(scale_factor, cast_fn, index=0):
-            def scale_fn(values):
-                return cast_fn(values[index] * scale_factor)
-            return scale_fn
-
-        def chooser(choices, cast_fn, index=0):
-            def choose_fn(values):
-                return choices[cast_fn(values[index])]
-            return choose_fn
-
-        def timerizer(key, index=0):
-            time = {}
-
-            def time_fn(values):
-                try:
-                    seconds = int(values[index])
-                except Exception:
-                    logging.exception("Seconds parsing error")
-                    seconds = 0
-
-                time['days'], time['seconds'] = divmod(seconds, 86400)
-                time['hours'], time['seconds'] = divmod(time['seconds'], 3600)
-                time['minutes'], time['seconds'] = divmod(time['seconds'], 60)
-
-                if key in time:
-                    return time[key]
-                else:
-                    return 0
-            return time_fn
-
-        def functionizer(key, index=0):
-            def func_fn(values):
-                if key in flist and callable(flist[key]):
-                    return flist[key](values[index])
-                else:
-                    logging.error("Unknown function: '%s'" % str(key))
-                    return values[index]
-            return func_fn
-
-        fn = None
-        t = str(t).strip()
-        # transform: idx.func(a,b,...)
-        m = re.search(r"^(\d*)(?:\.?)([\S]+)(\(.*\))$", t)
-        if m is not None:
-            index = int(m.group(1) or 0)
-            fname = str(m.group(2)).lower()
-            try:
-                o = ast.literal_eval(m.group(3))
-                if (fname == 'map' and isinstance(o, tuple) and len(o) == 4
-                        and isinstance(o[3], (float, int))):
-                    # mapper (interpolate), cast type by last parameter type
-                    fn = mapper(o[0], o[1], o[2], o[3], type(o[3]), index)
-                elif (fname == 'choose' and isinstance(o, tuple)
-                        and len(o) == 2):
-                    # boolean chooser for 2 size tuple
-                    fn = chooser(o, bool, index)
-                elif fname == 'choose' and isinstance(o, tuple) and len(o) > 2:
-                    # int chooser for list
-                    fn = chooser(o, int, index)
-                elif (fname == 'choose' and isinstance(o, dict) and o.keys()
-                        and isinstance(o.keys()[0], (int, float, str))):
-                    # chooser, cast type by first key type
-                    fn = chooser(o, type(o.keys()[0]), index)
-                elif fname == 'scale' and isinstance(o, (float, int)):
-                    # scaler, cast type depends from scale factor type
-                    fn = scaler(o, type(o), index)
-                elif fname in ('days', 'hours', 'minutes', 'seconds'):
-                    fn = timerizer(fname, index)
-                elif fname in flist:
-                    fn = functionizer(fname, index)
-                else:
-                    logging.error(
-                        "Unknown transform function: '%s'" % str(m.group(0)))
-            except Exception:
-                logging.exception("Transform parsing error")
-        else:
-            logging.error(
-                "Invalid transform parameter: '%s'" % str(t))
-        return fn
-
-    def _transform_aslist(self):
-        return list(filter(None, (
-            self._parse_transform(t) for t in self._aslist(
-                self.transform, flatten=False)
-        )))
-
-    def _parameter_aslist(self):
-        lst = []
-        for p in self._words_aslist(self.parameter):
-            lst.append(self._lookup_parameter(p))
-            if lst[-1] is None:
-                logging.error("Parameter '%s' not found" % str(p))
-        return list(lst)
-
-    def _prepare_values(self, value=None):
-        values = []
-        for i, v in enumerate(self._parameter_aslist()):
-            values += [value if i == 0 and value is not None else v]
-        if values:
-            try:
-                values += [t(list(values)) for t in self._transform_aslist()]
-            except Exception:
-                logging.exception("Transformation execution failed")
-        return tuple(values)
-
-    def _get_formatted(self, literal, val=None):
-        values = self._prepare_values(val)
-        if isinstance(literal, str) and len(values) > 0:
-            try:
-                literal = literal.format(*values)
-            except Exception:
-                logging.exception("Literal formatting failed")
-        return literal
+        self._name_tpl = manager.gcode_macro.load_template_from_string(
+            config, 'name', self._name)
 
     def _render(self):
-        return self._get_formatted(self._name)
+        return self._name_tpl.render()
 
 
 class MenuCommand(MenuItem):
     def __init__(self, manager, config, namespace=''):
         super(MenuCommand, self).__init__(manager, config, namespace)
-        self._gcode = config.get('gcode', '')
-        self._action = config.get('action', None)
-        if self._action is None and not self._gcode:
-            raise error("Missing or empty 'gcode' option")
+        self._gcode_tpl = manager.gcode_macro.load_template(config, 'gcode')
+        self._action_tpl = manager.gcode_macro.load_template(config, 'action')
 
     def is_readonly(self):
         return False
 
     def get_gcode(self):
-        return self._get_formatted(self._gcode)
+        return self._gcode_tpl.render()
 
     def __call__(self):
-        if self._action is not None:
-            try:
-                fmt = self._get_formatted(self._action)
-                args = fmt.split()
+        try:
+            action = self._action_tpl.render()
+            if action:
+                args = action.split()
                 self._manager.run_action(args[0], *args[1:])
-            except Exception:
-                logging.exception("Action formatting failed")
+        except Exception:
+            logging.exception("Action formatting failed")
 
 
 class MenuInput(MenuCommand):
@@ -500,30 +341,32 @@ class MenuInput(MenuCommand):
         super(MenuInput, self).__init__(manager, config, namespace)
         self._reverse = self._asbool(config.get('reverse', 'false'))
         self._realtime = self._asbool(config.get('realtime', 'false'))
-        self._readonly = self._aslist(
-            config.get('readonly', 'false'), flatten=False)
+        self._readonly = manager.gcode_macro.load_expression(
+            config, 'readonly', 'false')
+        self._input = manager.gcode_macro.load_expression(config, 'input', 0)
         self._input_value = None
         self.__last_value = None
         self._input_min = config.getfloat('input_min', sys.float_info.min)
         self._input_max = config.getfloat('input_max', sys.float_info.max)
         self._input_step = config.getfloat('input_step', above=0.)
         self._input_step2 = config.getfloat('input_step2', 0, minval=0.)
-        self._longpress_gcode = config.get('longpress_gcode', '')
+        self._longpress_gcode = manager.gcode_macro.load_template(
+            config, 'longpress_gcode')
 
     def is_scrollable(self):
         return False
 
     def is_readonly(self):
-        return self._parse_bool(self._readonly)
+        return not not self._readonly.evaluate()
 
     def _render(self):
-        return self._get_formatted(self._name, self._input_value)
+        return self._name_tpl.render({'input': self._input_value})
 
     def get_gcode(self):
-        return self._get_formatted(self._gcode, self._input_value)
+        return self._gcode_tpl.render({'input': self._input_value})
 
     def get_longpress_gcode(self):
-        return self._get_formatted(self._longpress_gcode, self._input_value)
+        return self._longpress_gcode_tpl.render({'input': self._input_value})
 
     def is_editing(self):
         return self._input_value is not None
@@ -538,9 +381,9 @@ class MenuInput(MenuCommand):
         self._input_value = None
         self.__last_value = None
         if not self.is_readonly():
-            args = self._prepare_values()
-            if len(args) > 0 and self._isfloat(args[0]):
-                self._input_value = float(args[0])
+            value = self._input.evaluate()
+            if self._isfloat(value):
+                self._input_value = float(value)
                 if self._realtime:
                     self._onchange()
             else:
@@ -1021,6 +864,7 @@ class MenuManager:
         self._last_encoder_ccw_eventtime = 0
         # printer objects
         self.buttons = self.printer.try_load_module(config, "buttons")
+        self.mgcode_macro = self.printer.try_load_module(config, 'gcode_macro')
         # register itself for printer callbacks
         self.printer.add_object('menu', self)
         self.printer.register_event_handler("klippy:ready", self.handle_ready)
