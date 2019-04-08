@@ -52,9 +52,10 @@ class TemplateWrapper(EnvironmentWrapper):
                 name, traceback.format_exception_only(type(e), e)[-1])
             logging.exception(msg)
             raise printer.config_error(msg)
-    def render(self, context=None):
-        if context is None:
-            context = {'status': self.create_status_wrapper()}
+    def render(self, ctx=None):
+        context = {'status': self.create_status_wrapper()}
+        if isinstance(ctx, (dict, tuple)):
+            context.update(ctx)
         try:
             return str(self.template.render(context))
         except Exception as e:
@@ -78,9 +79,10 @@ class ExpressionWrapper(EnvironmentWrapper):
             logging.exception(msg)
             raise printer.config_error(msg)
 
-    def evaluate(self, context=None):
-        if context is None:
-            context = {'status': self.create_status_wrapper()}
+    def evaluate(self, ctx=None):
+        context = {'status': self.create_status_wrapper()}
+        if isinstance(ctx, (dict, tuple)):
+            context.update(ctx)
         try:
             return self.expression(context)
         except Exception as e:
