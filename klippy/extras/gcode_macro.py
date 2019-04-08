@@ -40,6 +40,19 @@ class EnvironmentWrapper(object):
     def create_status_wrapper(self, eventtime=None):
         return StatusWrapper(self.printer, eventtime)
 
+    def create_default_context(self, eventtime=None):
+        # Add custom functions
+        def interpolate(value, from_min, from_max, to_min, to_max):
+            """Linear Interpolation"""
+            from_span = from_max - from_min
+            to_span = to_max - to_min
+            scale_factor = float(to_span) / float(from_span)
+            return to_min + (value - from_min) * scale_factor
+        return {
+            'status': self.create_status_wrapper(eventtime),
+            'fit': interpolate
+        }
+
 
 # Wrapper around a Jinja2 template
 class TemplateWrapper(EnvironmentWrapper):
@@ -53,7 +66,7 @@ class TemplateWrapper(EnvironmentWrapper):
             logging.exception(msg)
             raise printer.config_error(msg)
     def render(self, ctx=None):
-        context = {'status': self.create_status_wrapper()}
+        context = self.create_default_context()
         if isinstance(ctx, (dict, tuple)):
             context.update(ctx)
         try:
@@ -80,7 +93,7 @@ class ExpressionWrapper(EnvironmentWrapper):
             raise printer.config_error(msg)
 
     def evaluate(self, ctx=None):
-        context = {'status': self.create_status_wrapper()}
+        context = self.create_default_context()
         if isinstance(ctx, (dict, tuple)):
             context.update(ctx)
         try:
@@ -97,14 +110,43 @@ class PrinterGCodeMacro:
     def __init__(self, config):
         self.printer = config.get_printer()
         self.env = jinja2.Environment('{%', '%}', '{', '}')
+
+        # Add custom filters
+        def timerizer(key):
+            """Convert seconds to minutes, hours, days"""
+            time = {}
+
+            def time_fn(value):
+                try:
+                    seconds = int(abs(value))
+                except Exception:
+                    logging.exception("Seconds parsing error")
+                    seconds = 0
+                time['days'], time['seconds'] = divmod(seconds, 86400)
+                time['hours'], time['seconds'] = divmod(time['seconds'], 3600)
+                time['minutes'], time['seconds'] = divmod(time['seconds'], 60)
+                if key in time:
+                    return time[key]
+                else:
+                    return 0
+            return time_fn
+
+        self.env.filters['bool'] = bool
+        self.env.filters['days'] = timerizer('days')
+        self.env.filters['hrs'] = timerizer('hours')
+        self.env.filters['mins'] = timerizer('minutes')
+        self.env.filters['secs'] = timerizer('seconds')
+
     def load_template(self, config, option):
         name = "%s:%s" % (config.get_name(), option)
         script = config.get(option, '')
         return TemplateWrapper(self.printer, self.env, name, script)
+
     def load_expression(self, config, option, default=None):
         name = "%s:%s" % (config.get_name(), option)
         script = config.get(option, default)
         return ExpressionWrapper(self.printer, self.env, name, script)
+
 
 def load_config(config):
     return PrinterGCodeMacro(config)
@@ -134,7 +176,6 @@ class GCodeMacro:
                 "Macro %s called recursively" % (self.alias,))
         kwparams = dict(self.kwparams)
         kwparams.update(params)
-        kwparams['status'] = self.template.create_status_wrapper()
         kwparams['params'] = params
         self.in_script = True
         try:
