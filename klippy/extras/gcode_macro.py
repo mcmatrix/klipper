@@ -40,18 +40,50 @@ class EnvironmentWrapper(object):
     def create_status_wrapper(self, eventtime=None):
         return StatusWrapper(self.printer, eventtime)
 
-    def create_default_context(self, eventtime=None):
+    def create_context(self, ctx=None, eventtime=None):
         # Add custom functions
+        # re-maps a number from one range to another.
         def interpolate(value, from_min, from_max, to_min, to_max):
             """Linear Interpolation"""
             from_span = from_max - from_min
             to_span = to_max - to_min
             scale_factor = float(to_span) / float(from_span)
             return to_min + (value - from_min) * scale_factor
-        return {
+
+        # convert seconds to minutes, hours, days
+        def seconds2(key):
+            """Convert seconds to minutes, hours, days"""
+            time = {}
+
+            def time_fn(value):
+                try:
+                    seconds = int(abs(value))
+                except Exception:
+                    logging.exception("Seconds parsing error")
+                    seconds = 0
+                time['days'], time['seconds'] = divmod(seconds, 86400)
+                time['hours'], time['seconds'] = divmod(time['seconds'], 3600)
+                time['minutes'], time['seconds'] = divmod(time['seconds'], 60)
+                if key in time:
+                    return time[key]
+                else:
+                    return 0
+            return time_fn
+
+        # default context
+        context = {
             'status': self.create_status_wrapper(eventtime),
-            'fit': interpolate
+            'fit': interpolate,
+            'days': seconds2('days'),
+            'hours': seconds2('hours'),
+            'mins': seconds2('minutes'),
+            'secs': seconds2('seconds')
         }
+
+        if isinstance(ctx, dict):
+            context.update(ctx)
+
+        return context
 
 
 # Wrapper around a Jinja2 template
@@ -66,9 +98,7 @@ class TemplateWrapper(EnvironmentWrapper):
             logging.exception(msg)
             raise printer.config_error(msg)
     def render(self, ctx=None):
-        context = self.create_default_context()
-        if isinstance(ctx, (dict, tuple)):
-            context.update(ctx)
+        context = self.create_context(ctx)
         try:
             return str(self.template.render(context))
         except Exception as e:
@@ -93,9 +123,7 @@ class ExpressionWrapper(EnvironmentWrapper):
             raise printer.config_error(msg)
 
     def evaluate(self, ctx=None):
-        context = self.create_default_context()
-        if isinstance(ctx, (dict, tuple)):
-            context.update(ctx)
+        context = self.create_context(ctx)
         try:
             return self.expression(context)
         except Exception as e:
@@ -111,39 +139,18 @@ class PrinterGCodeMacro:
         self.printer = config.get_printer()
         self.env = jinja2.Environment('{%', '%}', '{', '}')
 
-        # Add custom filters
-        def timerizer(key):
-            """Convert seconds to minutes, hours, days"""
-            time = {}
+    def _strip_enclosed_quotes(self, value):
+        if isinstance(value, str):
+            value = value.strip()
+            if value.startswith(('"', "'")) and value.endswith(('"', "'")):
+                value = value[1:-1]
+        return value
 
-            def time_fn(value):
-                try:
-                    seconds = int(abs(value))
-                except Exception:
-                    logging.exception("Seconds parsing error")
-                    seconds = 0
-                time['days'], time['seconds'] = divmod(seconds, 86400)
-                time['hours'], time['seconds'] = divmod(time['seconds'], 3600)
-                time['minutes'], time['seconds'] = divmod(time['seconds'], 60)
-                if key in time:
-                    return time[key]
-                else:
-                    return 0
-            return time_fn
-
-        self.env.filters['bool'] = bool
-        self.env.filters['days'] = timerizer('days')
-        self.env.filters['hrs'] = timerizer('hours')
-        self.env.filters['mins'] = timerizer('minutes')
-        self.env.filters['secs'] = timerizer('seconds')
-
-    def load_template(self, config, option):
+    def load_template(self, config, option, default='', enclosed_quotes=False):
         name = "%s:%s" % (config.get_name(), option)
-        script = config.get(option, '')
-        return TemplateWrapper(self.printer, self.env, name, script)
-
-    def load_template_from_string(self, config, name, script):
-        name = "%s:%s" % (config.get_name(), name)
+        script = config.get(option, default)
+        if enclosed_quotes:
+            script = self._strip_enclosed_quotes(script)
         return TemplateWrapper(self.printer, self.env, name, script)
 
     def load_expression(self, config, option, default=None):
