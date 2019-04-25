@@ -19,23 +19,96 @@ class MenuCursor:
     EDIT = '*'
 
 
+# static class for type cast
+class MenuCast:
+    @staticmethod
+    def asbool(s, default=False):
+        if s is None:
+            return default
+        if isinstance(s, bool):
+            return s
+        s = str(s).strip()
+        return s.lower() in ('y', 'yes', 't', 'true', 'on', '1')
+
+    @staticmethod
+    def asint(s, default=0):
+        if s is None:
+            return default
+        if isinstance(s, (int, float)):
+            return int(s)
+        s = str(s).strip()
+        return int(float(s)) if MenuCast.isfloat(s) else int(default)
+
+    @staticmethod
+    def asfloat(s, default=0.0):
+        if s is None:
+            return default
+        if isinstance(s, (int, float)):
+            return float(s)
+        s = str(s).strip()
+        return float(s) if MenuCast.isfloat(s) else float(default)
+
+    @staticmethod
+    def isfloat(value):
+        try:
+            float(value)
+            return True
+        except ValueError:
+            return False
+
+    @staticmethod
+    def lines_aslist(value, default=[]):
+        if isinstance(value, str):
+            value = filter(None, [x.strip() for x in value.splitlines()])
+        try:
+            return list(value)
+        except Exception:
+            logging.exception("Lines as list parsing error")
+            return list(default)
+
+    @staticmethod
+    def words_aslist(value, sep=',', default=[]):
+        if isinstance(value, str):
+            value = filter(None, [x.strip() for x in value.split(sep)])
+        try:
+            return list(value)
+        except Exception:
+            logging.exception("Words as list parsing error")
+            return list(default)
+
+    @staticmethod
+    def aslist(value, flatten=True, default=[]):
+        values = MenuCast.lines_aslist(value)
+        if not flatten:
+            return values
+        result = []
+        for value in values:
+            subvalues = MenuCast.words_aslist(value, sep=',')
+            result.extend(subvalues)
+        return result
+
+
 # Menu element baseclass
 class MenuElement(object):
     def __init__(self, manager, config, namespace=''):
         self.cursor = config.get('cursor', MenuCursor.SELECT)
         self._namespace = namespace
         self._manager = manager
-        self._width = self._asint(config.get('width', '0'))
-        self._scroll = self._asbool(config.get('scroll', 'false'))
-        self._enable = manager.gcode_macro.load_expression(
+        self._width = MenuCast.asint(config.get('width', '0'))
+        self._scroll = MenuCast.asbool(config.get('scroll', 'false'))
+        self._enable_expr = manager.gcode_macro.load_expression(
             config, 'enable', 'true')
-        self._name = self._asliteral(config.get('name'))
+        self._name_tpl = manager.gcode_macro.load_template(
+            config, 'name', "noname", True)
         self.__scroll_offs = 0
         self.__scroll_diff = 0
         self.__scroll_dir = None
         self.__last_state = True
         if len(self.cursor) < 1:
             raise error("Cursor with unexpected length, expecting 1.")
+
+    def _name(self):
+        return self._name_tpl.render()
 
     # override
     def _render(self):
@@ -119,87 +192,6 @@ class MenuElement(object):
             self.__clear_scroll()
         return s
 
-    def _lookup_parameter(self, literal):
-        if self._isfloat(literal):
-            return float(literal)
-        else:
-            # only 2 level dot notation
-            keys = literal.rsplit('.', 1)
-            name = keys[0] if keys[0:1] else None
-            attr = keys[1] if keys[1:2] else None
-            if isinstance(self._manager.parameters, dict):
-                return (self._manager.parameters.get(name) or {}).get(attr)
-            else:
-                logging.error("Parameter storage is not dictionary")
-        return None
-
-    def _asliteral(self, s):
-        s = str(s).strip()
-        if s.startswith(('"', "'")):
-            s = s[1:]
-        if s.endswith(('"', "'")):
-            s = s[:-1]
-        return s
-
-    def _asbool(self, s, default=False):
-        if s is None:
-            return default
-        if isinstance(s, bool):
-            return s
-        s = str(s).strip()
-        return s.lower() in ('y', 'yes', 't', 'true', 'on', '1')
-
-    def _asint(self, s, default=0):
-        if s is None:
-            return default
-        if isinstance(s, (int, float)):
-            return int(s)
-        s = str(s).strip()
-        return int(float(s)) if self._isfloat(s) else int(default)
-
-    def _asfloat(self, s, default=0.0):
-        if s is None:
-            return default
-        if isinstance(s, (int, float)):
-            return float(s)
-        s = str(s).strip()
-        return float(s) if self._isfloat(s) else float(default)
-
-    def _lines_aslist(self, value, default=[]):
-        if isinstance(value, str):
-            value = filter(None, [x.strip() for x in value.splitlines()])
-        try:
-            return list(value)
-        except Exception:
-            logging.exception("Lines as list parsing error")
-            return list(default)
-
-    def _words_aslist(self, value, sep=',', default=[]):
-        if isinstance(value, str):
-            value = filter(None, [x.strip() for x in value.split(sep)])
-        try:
-            return list(value)
-        except Exception:
-            logging.exception("Words as list parsing error")
-            return list(default)
-
-    def _aslist(self, value, flatten=True, default=[]):
-        values = self._lines_aslist(value)
-        if not flatten:
-            return values
-        result = []
-        for value in values:
-            subvalues = self._words_aslist(value, sep=',')
-            result.extend(subvalues)
-        return result
-
-    def _isfloat(self, value):
-        try:
-            float(value)
-            return True
-        except ValueError:
-            return False
-
     @property
     def namespace(self):
         return self._namespace
@@ -213,8 +205,8 @@ class MenuElement(object):
 class MenuContainer(MenuElement):
     def __init__(self, manager, config, namespace=''):
         super(MenuContainer, self).__init__(manager, config, namespace)
-        self._show_back = self._asbool(config.get('show_back', 'true'))
-        self._show_title = self._asbool(config.get('show_title', 'true'))
+        self._show_back = MenuCast.asbool(config.get('show_back', 'true'))
+        self._show_title = MenuCast.asbool(config.get('show_title', 'true'))
         self._allitems = []
         self._items = []
         # recursive guard
@@ -339,8 +331,8 @@ class MenuCommand(MenuItem):
 class MenuInput(MenuCommand):
     def __init__(self, manager, config, namespace=''):
         super(MenuInput, self).__init__(manager, config, namespace)
-        self._reverse = self._asbool(config.get('reverse', 'false'))
-        self._realtime = self._asbool(config.get('realtime', 'false'))
+        self._reverse = MenuCast.asbool(config.get('reverse', 'false'))
+        self._realtime = MenuCast.asbool(config.get('realtime', 'false'))
         self._readonly = manager.gcode_macro.load_expression(
             config, 'readonly', 'false')
         self._input = manager.gcode_macro.load_expression(config, 'input', 0)
@@ -433,7 +425,7 @@ class MenuGroup(MenuContainer):
         self._sep = sep
         self._show_back = False
         self.selected = None
-        self.use_cursor = self._asbool(config.get('use_cursor', 'false'))
+        self.use_cursor = MenuCast.asbool(config.get('use_cursor', 'false'))
         self.items = config.get('items', '')
 
     def is_accepted(self, item):
@@ -674,7 +666,7 @@ class MenuCard(MenuGroup):
     def __init__(self, manager, config, namespace=''):
         super(MenuCard, self).__init__(manager, config, namespace)
         self.content = config.get('content')
-        self._allow_without_selection = self._asbool(
+        self._allow_without_selection = MenuCast.asbool(
             config.get('allow_without_selection', 'true'))
         if not self.items:
             self.content = self._parse_content_items(self.content)
