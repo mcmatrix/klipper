@@ -100,6 +100,12 @@ class MenuItem(object):
             config, 'enable', 'true')
         self._name_tpl = manager.gcode_macro.load_template(
             config, 'name', "noname", True)
+        prefix = 'variable_'
+        self.variables_expr = {
+            var[len(prefix):]:
+            manager.gcode_macro.load_expression(config, var)
+            for var in config.get_prefix_options(prefix)
+        }
         self._last_heartbeat = None
         self.__scroll_offs = 0
         self.__scroll_diff = 0
@@ -114,7 +120,7 @@ class MenuItem(object):
         pass
 
     def _name(self, ctx=None):
-        context = self.manager.get_context(ctx)
+        context = self.get_context(ctx)
         return self._name_tpl.render(context)
 
     # override
@@ -149,8 +155,23 @@ class MenuItem(object):
     def stop_editing(self, run_script=True):
         pass
 
+    def get_context(self, *args):
+        context = {}
+        # add contexts
+        for arg in args:
+            if isinstance(arg, dict):
+                context.update(arg)
+        # add default menu context
+        context.update(self.manager.get_context())
+        # add local variables
+        context.update({'variable': {
+            var: expr.evaluate(context)
+            for var, expr in self.variables_expr.iteritems()
+        }})
+        return context
+
     def eval_enable(self):
-        context = self.manager.get_context()
+        context = self.get_context()
         return not not self._enable_expr.evaluate(context)
 
     # Called when a item is selected
@@ -332,7 +353,7 @@ class MenuCommand(MenuItem):
         return self._auto
 
     def get_gcode(self):
-        context = self.manager.get_context()
+        context = self.get_context()
         return self._gcode_tpl.render(context)
 
     def run_gcode(self):
@@ -370,7 +391,7 @@ class MenuInput(MenuCommand):
         return False
 
     def is_readonly(self):
-        context = self.manager.get_context()
+        context = self.get_context()
         return not not self._readonly_expr.evaluate(context)
 
     def is_realtime(self):
@@ -380,22 +401,26 @@ class MenuInput(MenuCommand):
         return self._name({'input': self._input_value})
 
     def get_gcode(self):
-        context = self.manager.get_context({'input': self._input_value})
+        input = {'input': self._input_value}
+        context = self.get_context(input)
         return self._gcode_tpl.render(context)
 
     def get_longpress_gcode(self):
-        context = self.manager.get_context({'input': self._input_value})
+        input = {'input': self._input_value}
+        context = self.get_context(input)
         return self._longpress_gcode_tpl.render(context)
 
     def run_longpress_gcode(self):
         self.manager.queue_gcode(self.get_longpress_gcode())
 
     def run_start_gcode(self):
-        context = self.manager.get_context({'input': self._input_value})
+        input = {'input': self._input_value}
+        context = self.get_context(input)
         self.manager.queue_gcode(self._start_gcode_tpl.render(context))
 
     def run_stop_gcode(self):
-        context = self.manager.get_context({'input': self._input_value})
+        input = {'input': self._input_value}
+        context = self.get_context(input)
         self.manager.queue_gcode(self._stop_gcode_tpl.render(context))
 
     def is_editing(self):
@@ -433,7 +458,7 @@ class MenuInput(MenuCommand):
         self._input_value = None
         self.__last_value = None
         if not self.is_readonly():
-            context = self.manager.get_context()
+            context = self.get_context()
             value = self._input_expr.evaluate(context)
             if MenuCast.isfloat(value):
                 self._input_value = min(self._input_max, max(
@@ -855,8 +880,7 @@ class MenuCard(MenuGroup):
                 item.heartbeat(eventtime)
                 name = self._render_item(item, (i == self.selected), True)
             rendered_items.append(name)
-
-        context = self.manager.get_context({'item': rendered_item})
+        context = self.get_context({'item': rendered_item})
         return filter(None, [s for s in MenuCast.lines_aslist(
             self._content_tpl.render(context))])
 
@@ -1215,14 +1239,15 @@ class MenuManager:
             'is16xx': (self.cols == 16)
         }
 
-    def get_context(self, ctx=None, eventtime=None):
+    def get_context(self):
         def queue_action(name, *args1):
             def queue_fn(*args2):
                 self.action_queue.append(
                     (len(self.action_queue), name, list(args1+args2)))
+                return ''
             return queue_fn
         # menu default jinja2 context
-        context = {
+        return {
             'status': self.parameters,
             'menu': {
                 'nop': queue_action('nop'),
@@ -1237,20 +1262,15 @@ class MenuManager:
             'deck': {
                 'menu': queue_action('deck', 'menu')
             },
-            'input': {
-                'start': queue_action('input', 'start'),
-                'stop': queue_action('input', 'stop'),
-                'run_longpress_gcode': queue_action('run-longpress-gcode'),
-                'run_gcode': queue_action('run-gcode')
+            'editing': {
+                'start': queue_action('editing', 'start'),
+                'stop': queue_action('editing', 'stop')
             },
-            'command': {
-                'run_gcode': queue_action('run-gcode')
+            'run': {
+                'gcode': queue_action('run-gcode'),
+                'longpress_gcode': queue_action('run-longpress-gcode')
             }
         }
-
-        if isinstance(ctx, dict):
-            context.update(ctx)
-        return context
 
     def update_parameters(self, eventtime):
         self.parameters = self.gcode_macro.StatusWrapper(
@@ -1493,7 +1513,7 @@ class MenuManager:
                             self.push_deck_menu()
                     else:
                         malformed = True
-                elif name == 'input':
+                elif name == 'editing':
                     run_script = True
                     if len(args[0:]) > 0:
                         if len(args[1:]) > 0:
