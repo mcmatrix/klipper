@@ -11,12 +11,44 @@ import jinja2
 # Template handling
 ######################################################################
 
+# static class for helper functions
+class Jinja2Helper:
+    @staticmethod
+    def interpolate(value, from_min, from_max, to_min, to_max):
+        """Linear Interpolation, re-maps a number from one range to another"""
+        from_span = from_max - from_min
+        to_span = to_max - to_min
+        scale_factor = float(to_span) / float(from_span)
+        return to_min + (value - from_min) * scale_factor
+
+    @staticmethod
+    def seconds2(key):
+        """Convert seconds to minutes, hours, days"""
+        time = {}
+
+        def time_fn(value):
+            try:
+                seconds = int(abs(value))
+            except Exception:
+                logging.exception("Seconds parsing error")
+                seconds = 0
+            time['days'], time['seconds'] = divmod(seconds, 86400)
+            time['hours'], time['seconds'] = divmod(time['seconds'], 3600)
+            time['minutes'], time['seconds'] = divmod(time['seconds'], 60)
+            if key in time:
+                return time[key]
+            else:
+                return 0
+        return time_fn
+
+
 # Wrapper for "status" access to printer object get_status() methods
 class StatusWrapper:
     def __init__(self, printer, eventtime=None):
         self.printer = printer
         self.eventtime = eventtime
         self.cache = {}
+
     def __getitem__(self, val):
         sval = str(val).strip()
         if sval in self.cache:
@@ -32,64 +64,64 @@ class StatusWrapper:
 
 # Wrapper around a Jinja2 environment
 class EnvironmentWrapper(object):
-    def __init__(self, printer, env, name):
+    def __init__(self, printer, env, name, script):
         self.printer = printer
         self.name = name
+        self.script = script
+        self.env = env
         self.gcode = self.printer.lookup_object('gcode')
 
     def create_status_wrapper(self, eventtime=None):
         return StatusWrapper(self.printer, eventtime)
 
-    def create_context(self, ctx=None, eventtime=None):
-        # Add custom functions
-        # re-maps a number from one range to another.
-        def interpolate(value, from_min, from_max, to_min, to_max):
-            """Linear Interpolation"""
-            from_span = from_max - from_min
-            to_span = to_max - to_min
-            scale_factor = float(to_span) / float(from_span)
-            return to_min + (value - from_min) * scale_factor
-
-        # convert seconds to minutes, hours, days
-        def seconds2(key):
-            """Convert seconds to minutes, hours, days"""
-            time = {}
-
-            def time_fn(value):
-                try:
-                    seconds = int(abs(value))
-                except Exception:
-                    logging.exception("Seconds parsing error")
-                    seconds = 0
-                time['days'], time['seconds'] = divmod(seconds, 86400)
-                time['hours'], time['seconds'] = divmod(time['seconds'], 3600)
-                time['minutes'], time['seconds'] = divmod(time['seconds'], 60)
-                if key in time:
-                    return time[key]
-                else:
-                    return 0
-            return time_fn
-
-        # default context
+    def create_default_context(self, ctx=None, eventtime=None):
         context = {
-            'status': self.create_status_wrapper(eventtime),
-            'fit': interpolate,
-            'days': seconds2('days'),
-            'hours': seconds2('hours'),
-            'mins': seconds2('minutes'),
-            'secs': seconds2('seconds')
+            'status': self.create_status_wrapper(),
+            'lerp': Jinja2Helper.interpolate,
+            's2days': Jinja2Helper.seconds2('days'),
+            's2hours': Jinja2Helper.seconds2('hours'),
+            's2mins': Jinja2Helper.seconds2('minutes'),
+            's2secs': Jinja2Helper.seconds2('seconds'),
+            'info': logging.info
         }
-
         if isinstance(ctx, dict):
             context.update(ctx)
-
         return context
+
+    def extract_functions(self):
+        """Extract function names and its arguments (only constants)
+           from the given template."""
+        try:
+            ast = self.env.parse(self.script)
+        except Exception as e:
+            msg = "Error parsing template '%s': %s" % (
+                self.name, traceback.format_exception_only(type(e), e)[-1])
+            logging.exception(msg)
+            raise self.gcode.error(msg)
+
+        for node in ast.find_all(jinja2.nodes.Call):
+            if not isinstance(node.node, jinja2.nodes.Name):
+                continue
+            args = []
+            for arg in node.args:
+                if isinstance(arg, jinja2.nodes.Const):
+                    args.append(arg.value)
+                else:
+                    args.append(None)
+            for arg in node.kwargs:
+                args.append(None)
+            if node.dyn_args is not None:
+                args.append(None)
+            if node.dyn_kwargs is not None:
+                args.append(None)
+            args = tuple(x for x in args if x is not None)
+            yield node.node.name, args
 
 
 # Wrapper around a Jinja2 template
 class TemplateWrapper(EnvironmentWrapper):
     def __init__(self, printer, env, name, script):
-        super(TemplateWrapper, self).__init__(printer, env, name)
+        super(TemplateWrapper, self).__init__(printer, env, name, script)
         try:
             self.template = env.from_string(script)
         except Exception as e:
@@ -97,8 +129,9 @@ class TemplateWrapper(EnvironmentWrapper):
                 name, traceback.format_exception_only(type(e), e)[-1])
             logging.exception(msg)
             raise printer.config_error(msg)
-    def render(self, ctx=None):
-        context = self.create_context(ctx)
+
+    def render(self, context=None):
+        context = self.create_default_context(context)
         try:
             return str(self.template.render(context))
         except Exception as e:
@@ -106,6 +139,7 @@ class TemplateWrapper(EnvironmentWrapper):
                 self.name, traceback.format_exception_only(type(e), e)[-1])
             logging.exception(msg)
             raise self.gcode.error(msg)
+
     def run_gcode_from_command(self, context=None):
         self.gcode.run_script_from_command(self.render(context))
 
@@ -113,7 +147,7 @@ class TemplateWrapper(EnvironmentWrapper):
 # Wrapper around a Jinja2 expression
 class ExpressionWrapper(EnvironmentWrapper):
     def __init__(self, printer, env, name, script):
-        super(ExpressionWrapper, self).__init__(printer, env, name)
+        super(ExpressionWrapper, self).__init__(printer, env, name, script)
         try:
             self.expression = env.compile_expression(script)
         except Exception as e:
@@ -122,8 +156,8 @@ class ExpressionWrapper(EnvironmentWrapper):
             logging.exception(msg)
             raise printer.config_error(msg)
 
-    def evaluate(self, ctx=None):
-        context = self.create_context(ctx)
+    def evaluate(self, context=None):
+        context = self.create_default_context(context)
         try:
             return self.expression(context)
         except Exception as e:
@@ -137,12 +171,14 @@ class ExpressionWrapper(EnvironmentWrapper):
 class PrinterGCodeMacro:
     def __init__(self, config):
         self.printer = config.get_printer()
-        self.env = jinja2.Environment('{%', '%}', '{', '}')
+        self.env = jinja2.Environment(
+            '{%', '%}', '{', '}', line_statement_prefix='%%')
 
     def _strip_enclosed_quotes(self, value):
         if isinstance(value, str):
             value = value.strip()
-            if value.startswith(('"', "'")) and value.endswith(('"', "'")):
+            if ((value.startswith('"') and value.endswith('"')) or
+                    (value.startswith("'") and value.endswith("'"))):
                 value = value[1:-1]
         return value
 
@@ -193,6 +229,7 @@ class GCodeMacro:
             self.template.run_gcode_from_command(kwparams)
         finally:
             self.in_script = False
+
 
 def load_config_prefix(config):
     return GCodeMacro(config)
