@@ -191,14 +191,20 @@ class PrinterGCodeMacro:
         return value
 
     def load_template(self, config, option, default='', enclosed_quotes=False):
-        name = "%s:%s" % (config.get_name(), option)
+        if isinstance(config, dict):
+            name = "%s:%s" % (str(config), option)
+        else:
+            name = "%s:%s" % (config.get_name(), option)
         script = config.get(option, default)
         if enclosed_quotes:
             script = self._strip_enclosed_quotes(script)
         return TemplateWrapper(self.printer, self.env, name, script)
 
     def load_expression(self, config, option, default=None):
-        name = "%s:%s" % (config.get_name(), option)
+        if isinstance(config, dict):
+            name = "%s:%s" % (str(config), option)
+        else:
+            name = "%s:%s" % (config.get_name(), option)
         script = config.get(option, default)
         return ExpressionWrapper(self.printer, self.env, name, script)
 
