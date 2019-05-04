@@ -61,9 +61,12 @@ class StatusWrapper:
         self.cache[sval] = res = dict(po.get_status(self.eventtime))
         return res
 
+    def __getattr__(self, attr):
+        return self.get(attr)
+
     def __contains__(self, item):
         try:
-            self[item]
+            self.get(item)
         except Exception:
             return False
         return True
