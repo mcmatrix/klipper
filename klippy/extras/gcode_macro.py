@@ -202,6 +202,8 @@ class PrinterGCodeMacro:
         script = config.get(option, default)
         return ExpressionWrapper(self.printer, self.env, name, script)
 
+    def create_status_wrapper(self, eventtime=None):
+        return StatusWrapper(self.printer, eventtime)
 
 def load_config(config):
     return PrinterGCodeMacro(config)
