@@ -100,16 +100,6 @@ class MenuItem(object):
             config, 'enable', 'true')
         self._name_tpl = manager.gcode_macro.load_template(
             config, 'name', "noname", True)
-        prefix = 'variable_'
-        if isinstance(config, dict):
-            config_keys = [k for k in config.keys() if k.startswith(prefix)]
-        else:
-            config_keys = config.get_prefix_options(prefix)
-        self.variables_expr = {
-            var[len(prefix):]:
-            manager.gcode_macro.load_expression(config, var)
-            for var in config_keys
-        }
         self._last_heartbeat = None
         self.__scroll_offs = 0
         self.__scroll_diff = 0
@@ -161,17 +151,12 @@ class MenuItem(object):
 
     def get_context(self, *args):
         context = {}
+        # add default menu context
+        context.update(self.manager.get_context())
         # add contexts
         for arg in args:
             if isinstance(arg, dict):
                 context.update(arg)
-        # add default menu context
-        context.update(self.manager.get_context())
-        # add local variables
-        context.update({'variable': {
-            var: expr.evaluate(context)
-            for var, expr in self.variables_expr.iteritems()
-        }})
         return context
 
     def eval_enable(self):
