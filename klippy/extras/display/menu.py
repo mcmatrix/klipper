@@ -1273,8 +1273,7 @@ class MenuManager:
         }
 
     def update_parameters(self, eventtime):
-        self.parameters = self.gcode_macro.StatusWrapper(
-            self.printer, eventtime)
+        self.parameters = self.gcode_macro.create_status_wrapper(eventtime)
         objs = dict(self.objs)
         for name in objs.keys():
             try:
