@@ -386,30 +386,23 @@ class MenuInput(MenuCommand):
     def is_realtime(self):
         return self._realtime
 
-    def _render(self):
-        return self._name({'input': self._input_value})
-
     def get_gcode(self):
-        input = {'input': self._input_value}
-        context = self.get_context(input)
+        context = self.get_context()
         return self._gcode_tpl.render(context)
 
     def get_longpress_gcode(self):
-        input = {'input': self._input_value}
-        context = self.get_context(input)
+        context = self.get_context()
         return self._longpress_gcode_tpl.render(context)
 
     def run_longpress_gcode(self):
         self.manager.queue_gcode(self.get_longpress_gcode())
 
     def run_start_gcode(self):
-        input = {'input': self._input_value}
-        context = self.get_context(input)
+        context = self.get_context()
         self.manager.queue_gcode(self._start_gcode_tpl.render(context))
 
     def run_stop_gcode(self):
-        input = {'input': self._input_value}
-        context = self.get_context(input)
+        context = self.get_context()
         self.manager.queue_gcode(self._stop_gcode_tpl.render(context))
 
     def is_editing(self):
@@ -439,6 +432,15 @@ class MenuInput(MenuCommand):
             self.run_gcode()
             self._is_dirty = False
 
+    def get_context(self, *args):
+        context = super(MenuInput, self).get_context()
+        if self._input_value is not None:
+            input = {'input': self._input_value}
+        else:
+            input = {'input': self._input_expr.evaluate(context)}
+        context.update(input)
+        return context
+
     def _value_changed(self):
         self.__last_change = self._last_heartbeat
         self._is_dirty = True
@@ -447,7 +449,7 @@ class MenuInput(MenuCommand):
         self._input_value = None
         self.__last_value = None
         if not self.is_readonly():
-            context = self.get_context()
+            context = super(MenuInput, self).get_context()
             value = self._input_expr.evaluate(context)
             if MenuCast.isfloat(value):
                 self._input_value = min(self._input_max, max(
