@@ -101,10 +101,14 @@ class MenuItem(object):
         self._name_tpl = manager.gcode_macro.load_template(
             config, 'name', "noname", True)
         prefix = 'variable_'
+        if isinstance(config, dict):
+            config_keys = [k for k in config.keys() if k.startswith(prefix)]
+        else:
+            config_keys = config.get_prefix_options(prefix)
         self.variables_expr = {
             var[len(prefix):]:
             manager.gcode_macro.load_expression(config, var)
-            for var in config.get_prefix_options(prefix)
+            for var in config_keys
         }
         self._last_heartbeat = None
         self.__scroll_offs = 0
