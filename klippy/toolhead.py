@@ -407,6 +407,7 @@ class ToolHead:
         lookahead_empty = not self.move_queue.queue
         return self.print_time, est_print_time, lookahead_empty
     def get_status(self, eventtime):
+        pos = self.get_position()
         print_time = self.print_time
         estimated_print_time = self.mcu.estimated_print_time(eventtime)
         last_print_start_time = self.last_print_start_time
@@ -417,7 +418,9 @@ class ToolHead:
             status = "Ready"
         return { 'status': status, 'print_time': print_time,
                  'estimated_print_time': estimated_print_time,
-                 'printing_time': print_time - last_print_start_time }
+                 'printing_time': print_time - last_print_start_time,
+                 'xpos': pos[0], 'ypos': pos[1],
+                 'zpos': pos[2], 'epos': pos[3]}
     def _handle_request_restart(self, print_time):
         self.motor_off()
     def _handle_shutdown(self):
