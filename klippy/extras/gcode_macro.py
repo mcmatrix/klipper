@@ -192,7 +192,7 @@ class PrinterGCodeMacro:
 
     def load_template(self, config, option, default='', enclosed_quotes=False):
         if isinstance(config, dict):
-            name = "%s:%s" % (str(config), option)
+            name = "<dict>:%s" % (option,)
         else:
             name = "%s:%s" % (config.get_name(), option)
         script = config.get(option, default)
@@ -202,7 +202,7 @@ class PrinterGCodeMacro:
 
     def load_expression(self, config, option, default=None):
         if isinstance(config, dict):
-            name = "%s:%s" % (str(config), option)
+            name = "<dict>:%s" % (option,)
         else:
             name = "%s:%s" % (config.get_name(), option)
         script = config.get(option, default)
