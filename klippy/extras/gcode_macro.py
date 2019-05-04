@@ -61,6 +61,13 @@ class StatusWrapper:
         self.cache[sval] = res = dict(po.get_status(self.eventtime))
         return res
 
+    def __contains__(self, item):
+        try:
+            self[item]
+        except Exception:
+            return False
+        return True
+
 
 # Wrapper around a Jinja2 environment
 class EnvironmentWrapper(object):
@@ -82,6 +89,7 @@ class EnvironmentWrapper(object):
             's2hours': Jinja2Helper.seconds2('hours'),
             's2mins': Jinja2Helper.seconds2('minutes'),
             's2secs': Jinja2Helper.seconds2('seconds'),
+            'bool': bool,
             'info': logging.info
         }
         if isinstance(ctx, dict):
