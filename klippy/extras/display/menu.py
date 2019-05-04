@@ -309,7 +309,7 @@ class MenuContainer(MenuItem):
         if self._show_back is True:
             name = '[..]'
             if self._show_title:
-                name += ' %s' % str(self._name)
+                name += ' %s' % str(self._name())
             self.append_item(MenuCommand(self.manager, {
                 'name': name, 'gcode': '{menu.back()}'}, self.namespace))
         for name in self._names_aslist():
@@ -671,7 +671,7 @@ class MenuCycler(MenuGroup):
     def _lookup_item(self, item):
         if isinstance(item, str) and '|' in item:
             item = MenuItemGroup(self.manager, {
-                'name': ' '.join([self._name, 'ItemGroup']),
+                'name': ' '.join([self._name(), 'ItemGroup']),
                 'items': item
             }, self.namespace, '|')
         elif isinstance(item, str) and item.isdigit():
@@ -724,7 +724,7 @@ class MenuList(MenuContainer):
     def _lookup_item(self, item):
         if isinstance(item, str) and ',' in item:
             item = MenuGroup(self.manager, {
-                'name': ' '.join([self._name, 'Group']),
+                'name': ' '.join([self._name(), 'Group']),
                 'items': item
             }, self.namespace, ',')
         return super(MenuList, self)._lookup_item(item)
@@ -798,7 +798,7 @@ class MenuCard(MenuGroup):
     def _lookup_item(self, item):
         if isinstance(item, str) and ',' in item:
             item = MenuCycler(self.manager, {
-                'name': ' '.join([self._name, 'Cycler']),
+                'name': ' '.join([self._name(), 'Cycler']),
                 'items': item
             }, self.namespace, ',')
         return super(MenuCard, self)._lookup_item(item)
@@ -874,7 +874,7 @@ class MenuCard(MenuGroup):
             self._content_tpl.render(context))])
 
     def _render(self):
-        return self._name
+        return self._name()
 
 
 class MenuDeck(MenuList):
@@ -919,7 +919,7 @@ class MenuDeck(MenuList):
         return type(item) is MenuCard
 
     def _render(self):
-        return self._name
+        return self._name()
 
 
 menu_items = {
