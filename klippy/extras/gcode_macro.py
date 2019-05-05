@@ -61,6 +61,10 @@ class StatusWrapper:
         self.cache[sval] = res = dict(po.get_status(self.eventtime))
         return res
 
+    def __setitem__(self, key, val):
+        skey = str(key).strip()
+        self.cache[skey] = val
+
     def __contains__(self, val):
         sval = str(val).strip()
         if sval not in self.cache:
