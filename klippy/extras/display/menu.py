@@ -1675,11 +1675,8 @@ class MenuManager:
         msg = ''
         status = {}
         for obj in self.parameters:
-            try:
-                logging.info("{} {}".format(obj, self.parameters[obj]))
-                status.update(self.parameters[obj])
-            except Exception:
-                continue
+            logging.info("{} {}".format(obj, self.parameters[obj]))
+            status.update(self.parameters[obj])
         try:
             msg = json.dumps({'status': status}, indent=1)
         except Exception:
