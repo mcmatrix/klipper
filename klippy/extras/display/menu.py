@@ -434,12 +434,17 @@ class MenuInput(MenuCommand):
 
     def get_context(self, *args):
         context = super(MenuInput, self).get_context()
-        if self._input_value is not None:
-            input = {'input': self._input_value}
-        else:
-            input = {'input': self._input_expr.evaluate(context)}
+        input = {
+            'input': (self._eval_value(context) if self._input_value is None
+                      else self._input_value)
+        }
         context.update(input)
         return context
+
+    def _eval_value(self, context=None):
+        if context is None:
+            context = super(MenuInput, self).get_context()
+        return self._input_expr.evaluate(context)
 
     def _value_changed(self):
         self.__last_change = self._last_heartbeat
@@ -449,8 +454,7 @@ class MenuInput(MenuCommand):
         self._input_value = None
         self.__last_value = None
         if not self.is_readonly():
-            context = super(MenuInput, self).get_context()
-            value = self._input_expr.evaluate(context)
+            value = self._eval_value()
             if MenuCast.isfloat(value):
                 self._input_value = min(self._input_max, max(
                     self._input_min, float(value)))
