@@ -61,13 +61,10 @@ class StatusWrapper:
         self.cache[sval] = res = dict(po.get_status(self.eventtime))
         return res
 
-    def __getattr__(self, attr):
-        return self.get(attr)
-
-    def __contains__(self, item):
-        try:
-            self.get(item)
-        except Exception:
+    def __contains__(self, val):
+        sval = str(val).strip()
+        po = self.printer.lookup_object(sval, None)
+        if po is None or not hasattr(po, 'get_status'):
             return False
         return True
 
