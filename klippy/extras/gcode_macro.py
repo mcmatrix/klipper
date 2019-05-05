@@ -63,9 +63,10 @@ class StatusWrapper:
 
     def __contains__(self, val):
         sval = str(val).strip()
-        po = self.printer.lookup_object(sval, None)
-        if po is None or not hasattr(po, 'get_status'):
-            return False
+        if sval not in self.cache:
+            po = self.printer.lookup_object(sval, None)
+            if po is None or not hasattr(po, 'get_status'):
+                return False
         return True
 
 
