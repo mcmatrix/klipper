@@ -1674,8 +1674,11 @@ class MenuManager:
     def cmd_DO_DUMP(self, params):
         msg = ''
         status = {}
+        # get all objects from printer
         for (name, obj) in self.parameters:
+            # check that object has get_status method
             if name in self.parameters:
+                # update values to status dict
                 status.update({name: self.parameters[name]})
         try:
             msg = json.dumps({'status': status}, indent=1)
