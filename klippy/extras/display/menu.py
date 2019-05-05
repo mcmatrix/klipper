@@ -1674,6 +1674,8 @@ class MenuManager:
     def cmd_DO_DUMP(self, params):
         msg = ''
         status = {}
+        test = self.printer.lookup_objects('output_pin')
+        logging.info(repr(test))
         # get all objects from printer
         for (name, obj) in self.parameters:
             # check that object has get_status method
