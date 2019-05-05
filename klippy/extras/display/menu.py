@@ -1676,7 +1676,7 @@ class MenuManager:
         status = {}
         for (name, obj) in self.parameters:
             if name in self.parameters:
-                status.update(self.parameters[name])
+                status.update({name: self.parameters[name]})
         try:
             msg = json.dumps({'status': status}, indent=1)
         except Exception:
