@@ -69,6 +69,10 @@ class StatusWrapper:
                 return False
         return True
 
+    def __iter__(self):
+        return iter(self.printer.lookup_objects())
+
+
 
 # Wrapper around a Jinja2 environment
 class EnvironmentWrapper(object):
