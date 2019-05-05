@@ -1676,6 +1676,7 @@ class MenuManager:
         status = {}
         for obj in self.parameters:
             try:
+                logging.info("{} {}".format(obj, self.parameters[obj]))
                 status.update(self.parameters[obj])
             except Exception:
                 continue
