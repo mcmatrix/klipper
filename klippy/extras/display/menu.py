@@ -1674,9 +1674,9 @@ class MenuManager:
     def cmd_DO_DUMP(self, params):
         msg = ''
         status = {}
-        for obj in self.parameters:
-            logging.info("{} {}".format(obj, self.parameters[obj]))
-            status.update(self.parameters[obj])
+        for (name, obj) in self.parameters:
+            if name in self.parameters:
+                status.update(self.parameters[name])
         try:
             msg = json.dumps({'status': status}, indent=1)
         except Exception:
