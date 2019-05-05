@@ -1673,8 +1673,14 @@ class MenuManager:
 
     def cmd_DO_DUMP(self, params):
         msg = ''
+        status = {}
+        for obj in self.parameters:
+            try:
+                status.update(self.parameters[obj])
+            except Exception:
+                continue
         try:
-            msg = json.dumps({'status': self.parameters}, indent=1)
+            msg = json.dumps({'status': status}, indent=1)
         except Exception:
             logging.exception("Status parameter is not JSON serializable")
         self.gcode.respond_info(msg)
