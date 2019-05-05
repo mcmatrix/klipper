@@ -72,6 +72,8 @@ class StatusWrapper:
     def __iter__(self):
         return iter(self.printer.lookup_objects())
 
+    def __len__(self):
+        return len(self.printer.lookup_objects())
 
 
 # Wrapper around a Jinja2 environment
