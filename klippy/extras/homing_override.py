@@ -12,7 +12,7 @@ class HomingOverride:
         self.axes = config.get('axes', 'XYZ').upper()
         config.get('gcode')
         gcode_macro = self.printer.try_load_module(config, 'gcode_macro')
-        self.template = gcode_macro.load_template(config, 'gcode')
+        self.template = gcode_macro.load_template(config, 'gcode', '')
         self.in_script = False
         self.gcode = self.printer.lookup_object('gcode')
         self.gcode.register_command("G28", None)
