@@ -7,6 +7,10 @@ import traceback, logging
 import jinja2
 
 
+class sentinel:
+    pass
+
+
 ######################################################################
 # Template handling
 ######################################################################
@@ -49,28 +53,33 @@ class StatusWrapper:
         self.eventtime = eventtime
         self.cache = {}
 
+    def __specialreplace(self, s):
+        """Replace double underscores with spaces inside string.
+        First and last characters are excluded."""
+        return "".join((s[0], s[1:-1].replace('__', ' '), s[-1]))
+
     def __getitem__(self, val):
-        sval = str(val).strip()
+        sval = self.__specialreplace(str(val).strip())
         if sval in self.cache:
             return self.cache[sval]
         po = self.printer.lookup_object(sval, None)
-        if po is None or not hasattr(po, 'get_status'):
+        if po is None:
             raise KeyError(val)
         if self.eventtime is None:
             self.eventtime = self.printer.get_reactor().monotonic()
-        self.cache[sval] = res = dict(po.get_status(self.eventtime))
+        self.cache[sval] = res = (dict() if not hasattr(po, 'get_status')
+                                  else dict(po.get_status(self.eventtime)))
         return res
 
     def __setitem__(self, key, val):
-        skey = str(key).strip()
+        skey = self.__specialreplace(str(key).strip())
         self.cache[skey] = val
 
     def __contains__(self, val):
-        sval = str(val).strip()
-        if sval not in self.cache:
-            po = self.printer.lookup_object(sval, None)
-            if po is None or not hasattr(po, 'get_status'):
-                return False
+        sval = self.__specialreplace(str(val).strip())
+        if sval not in self.cache and \
+                self.printer.lookup_object(sval, None) is None:
+            return False
         return True
 
     def __iter__(self):
@@ -193,34 +202,23 @@ class PrinterGCodeMacro:
         self.env = jinja2.Environment(
             '{%', '%}', '{', '}', line_statement_prefix='%%')
 
-    def _strip_enclosed_quotes(self, value):
-        if isinstance(value, str):
-            value = value.strip()
-            if ((value.startswith('"') and value.endswith('"')) or
-                    (value.startswith("'") and value.endswith("'"))):
-                value = value[1:-1]
-        return value
-
-    def load_template(self, config, option, default='', enclosed_quotes=False):
-        if isinstance(config, dict):
-            name = "<dict>:%s" % (option,)
-        else:
-            name = "%s:%s" % (config.get_name(), option)
-        script = config.get(option, default)
-        if enclosed_quotes:
-            script = self._strip_enclosed_quotes(script)
+    def load_template(self, config, option, default=sentinel):
+        name = "%s:%s" % ('<dict>' if isinstance(config, dict)
+                          else config.get_name(), option)
+        script = (config.get(option) if default is sentinel
+                  else config.get(option, default))
         return TemplateWrapper(self.printer, self.env, name, script)
 
-    def load_expression(self, config, option, default=None):
-        if isinstance(config, dict):
-            name = "<dict>:%s" % (option,)
-        else:
-            name = "%s:%s" % (config.get_name(), option)
-        script = config.get(option, default)
+    def load_expression(self, config, option, default=sentinel):
+        name = "%s:%s" % ('<dict>' if isinstance(config, dict)
+                          else config.get_name(), option)
+        script = (config.get(option) if default is sentinel
+                  else config.get(option, default))
         return ExpressionWrapper(self.printer, self.env, name, script)
 
     def create_status_wrapper(self, eventtime=None):
         return StatusWrapper(self.printer, eventtime)
+
 
 def load_config(config):
     return PrinterGCodeMacro(config)
@@ -236,7 +234,7 @@ class GCodeMacro:
         printer = config.get_printer()
         config.get('gcode')
         gcode_macro = printer.try_load_module(config, 'gcode_macro')
-        self.template = gcode_macro.load_template(config, 'gcode')
+        self.template = gcode_macro.load_template(config, 'gcode', '')
         self.gcode = printer.lookup_object('gcode')
         self.gcode.register_command(self.alias, self.cmd, desc=self.cmd_desc)
         self.in_script = False
