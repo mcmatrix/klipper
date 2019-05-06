@@ -126,7 +126,7 @@ class MenuItem(object):
         self._scroll = MenuHelper.asbool(config.get('scroll', 'false'))
         self._enable_expr = manager.gcode_macro.load_expression(
             config, 'enable', 'True')
-        self._name_tpl = manager.gcode_macro.load_template(
+        self._name_expr = manager.gcode_macro.load_expression(
             config, 'name')
         self._last_heartbeat = None
         self.__scroll_offs = 0
@@ -143,7 +143,7 @@ class MenuItem(object):
 
     def _name(self, ctx=None):
         context = self.get_context(ctx)
-        return "".join(MenuHelper.lines_aslist(self._name_tpl.render(context)))
+        return str(self._name_expr.evaluate(context))
 
     # override
     def _render(self):
