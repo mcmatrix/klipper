@@ -34,9 +34,9 @@ class StatusWrapper:
         self.cache = {}
 
     def __specialreplace(self, s):
-        """Replace double underscores with spaces inside string.
+        """Replace triple underscores with spaces inside string.
         First and last characters are excluded."""
-        return "".join((s[0], s[1:-1].replace('__', ' '), s[-1]))
+        return "".join((s[0], s[1:-1].replace('___', ' '), s[-1]))
 
     def __getitem__(self, val):
         sval = self.__specialreplace(str(val).strip())
