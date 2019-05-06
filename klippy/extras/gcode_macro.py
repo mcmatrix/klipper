@@ -25,26 +25,6 @@ class Jinja2Helper:
         scale_factor = float(to_span) / float(from_span)
         return to_min + (value - from_min) * scale_factor
 
-    @staticmethod
-    def seconds2(key):
-        """Convert seconds to minutes, hours, days"""
-        time = {}
-
-        def time_fn(value):
-            try:
-                seconds = int(abs(value))
-            except Exception:
-                logging.exception("Seconds parsing error")
-                seconds = 0
-            time['days'], time['seconds'] = divmod(seconds, 86400)
-            time['hours'], time['seconds'] = divmod(time['seconds'], 3600)
-            time['minutes'], time['seconds'] = divmod(time['seconds'], 60)
-            if key in time:
-                return time[key]
-            else:
-                return 0
-        return time_fn
-
 
 # Wrapper for "status" access to printer object get_status() methods
 class StatusWrapper:
@@ -104,13 +84,7 @@ class EnvironmentWrapper(object):
     def create_default_context(self, ctx=None, eventtime=None):
         context = {
             'status': self.create_status_wrapper(),
-            'lerp': Jinja2Helper.interpolate,
-            's2days': Jinja2Helper.seconds2('days'),
-            's2hours': Jinja2Helper.seconds2('hours'),
-            's2mins': Jinja2Helper.seconds2('minutes'),
-            's2secs': Jinja2Helper.seconds2('seconds'),
-            'bool': bool,
-            'info': logging.info
+            'lerp': Jinja2Helper.interpolate
         }
         if isinstance(ctx, dict):
             context.update(ctx)
