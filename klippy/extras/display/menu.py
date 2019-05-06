@@ -20,7 +20,7 @@ class MenuCursor:
 
 
 # static class for type cast
-class MenuCast:
+class MenuHelper:
     @staticmethod
     def asliteral(s):
         s = str(s).strip()
@@ -45,7 +45,7 @@ class MenuCast:
         if isinstance(s, (int, float)):
             return int(s)
         s = str(s).strip()
-        return int(float(s)) if MenuCast.isfloat(s) else int(default)
+        return int(float(s)) if MenuHelper.isfloat(s) else int(default)
 
     @staticmethod
     def asfloat(s, default=0.0):
@@ -54,7 +54,7 @@ class MenuCast:
         if isinstance(s, (int, float)):
             return float(s)
         s = str(s).strip()
-        return float(s) if MenuCast.isfloat(s) else float(default)
+        return float(s) if MenuHelper.isfloat(s) else float(default)
 
     @staticmethod
     def isfloat(value):
@@ -86,14 +86,34 @@ class MenuCast:
 
     @staticmethod
     def aslist(value, flatten=True, default=[]):
-        values = MenuCast.lines_aslist(value)
+        values = MenuHelper.lines_aslist(value)
         if not flatten:
             return values
         result = []
         for value in values:
-            subvalues = MenuCast.words_aslist(value, sep=',')
+            subvalues = MenuHelper.words_aslist(value, sep=',')
             result.extend(subvalues)
         return result
+
+    @staticmethod
+    def seconds2(key):
+        """Convert seconds to minutes, hours, days"""
+        time = {}
+
+        def time_fn(value):
+            try:
+                seconds = int(abs(value))
+            except Exception:
+                logging.exception("Seconds parsing error")
+                seconds = 0
+            time['days'], time['seconds'] = divmod(seconds, 86400)
+            time['hours'], time['seconds'] = divmod(time['seconds'], 3600)
+            time['minutes'], time['seconds'] = divmod(time['seconds'], 60)
+            if key in time:
+                return time[key]
+            else:
+                return 0
+        return time_fn
 
 
 # Menu item baseclass
@@ -102,8 +122,8 @@ class MenuItem(object):
         self.cursor = config.get('cursor', MenuCursor.SELECT)
         self._namespace = namespace
         self._manager = manager
-        self._width = MenuCast.asint(config.get('width', '0'))
-        self._scroll = MenuCast.asbool(config.get('scroll', 'false'))
+        self._width = MenuHelper.asint(config.get('width', '0'))
+        self._scroll = MenuHelper.asbool(config.get('scroll', 'false'))
         self._enable_expr = manager.gcode_macro.load_expression(
             config, 'enable', 'True')
         self._name_tpl = manager.gcode_macro.load_template(
@@ -123,7 +143,7 @@ class MenuItem(object):
 
     def _name(self, ctx=None):
         context = self.get_context(ctx)
-        return "".join(MenuCast.lines_aslist(self._name_tpl.render(context)))
+        return "".join(MenuHelper.lines_aslist(self._name_tpl.render(context)))
 
     # override
     def _render(self):
@@ -237,8 +257,8 @@ class MenuItem(object):
 class MenuContainer(MenuItem):
     def __init__(self, manager, config, namespace=''):
         super(MenuContainer, self).__init__(manager, config, namespace)
-        self._show_back = MenuCast.asbool(config.get('show_back', 'true'))
-        self._show_title = MenuCast.asbool(config.get('show_title', 'true'))
+        self._show_back = MenuHelper.asbool(config.get('show_back', 'true'))
+        self._show_title = MenuHelper.asbool(config.get('show_title', 'true'))
         self._allitems = []
         self._items = []
 
@@ -341,7 +361,7 @@ class MenuCommand(MenuItem):
     def __init__(self, manager, config, namespace=''):
         super(MenuCommand, self).__init__(manager, config, namespace)
         self._gcode_tpl = manager.gcode_macro.load_template(config, 'gcode')
-        self._auto = MenuCast.asbool(config.get('auto', 'true'))
+        self._auto = MenuHelper.asbool(config.get('auto', 'true'))
 
     def is_readonly(self):
         return False
@@ -360,8 +380,8 @@ class MenuCommand(MenuItem):
 class MenuInput(MenuCommand):
     def __init__(self, manager, config, namespace=''):
         super(MenuInput, self).__init__(manager, config, namespace)
-        self._reverse = MenuCast.asbool(config.get('reverse', 'false'))
-        self._realtime = MenuCast.asbool(config.get('realtime', 'false'))
+        self._reverse = MenuHelper.asbool(config.get('reverse', 'false'))
+        self._realtime = MenuHelper.asbool(config.get('realtime', 'false'))
         self._readonly_expr = manager.gcode_macro.load_expression(
             config, 'readonly', 'False')
         self._input_expr = manager.gcode_macro.load_expression(config, 'input')
@@ -462,7 +482,7 @@ class MenuInput(MenuCommand):
         self.__last_value = None
         if not self.is_readonly():
             value = self._eval_value()
-            if MenuCast.isfloat(value):
+            if MenuHelper.isfloat(value):
                 self._input_value = min(self._input_max, max(
                     self._input_min, float(value)))
                 if self._realtime:
@@ -513,7 +533,7 @@ class MenuGroup(MenuContainer):
         super(MenuGroup, self).__init__(manager, config, namespace)
         self._sep = sep
         self._show_back = False
-        self.use_cursor = MenuCast.asbool(config.get('use_cursor', 'false'))
+        self.use_cursor = MenuHelper.asbool(config.get('use_cursor', 'false'))
         self.items = config.get('items', '')
 
     def init(self):
@@ -535,7 +555,7 @@ class MenuGroup(MenuContainer):
         return all([item.is_readonly() for item in self._items])
 
     def _names_aslist(self):
-        return MenuCast.words_aslist(self.items, sep=self._sep)
+        return MenuHelper.words_aslist(self.items, sep=self._sep)
 
     def select(self):
         super(MenuGroup, self).select()
@@ -734,7 +754,7 @@ class MenuList(MenuContainer):
                 and type(item) is not MenuCard)
 
     def _names_aslist(self):
-        return MenuCast.lines_aslist(self.items)
+        return MenuHelper.lines_aslist(self.items)
 
     def _lookup_item(self, item):
         if isinstance(item, str) and ',' in item:
@@ -797,14 +817,14 @@ class MenuCard(MenuGroup):
     def _parse_content_items(self):
         items = self._names_aslist()
         for name, args in self._content_tpl.extract_functions():
-            if str(name).lower() == "item" and len(args):
+            if str(name).lower() == "asitem" and len(args):
                 for arg in args:
                     if isinstance(arg, str):
                         items.append(arg)
         self.items = "\n".join(items)
 
     def _names_aslist(self):
-        return MenuCast.lines_aslist(self.items)
+        return MenuHelper.lines_aslist(self.items)
 
     def update_items(self):
         self._items = self._allitems[:]
@@ -849,7 +869,7 @@ class MenuCard(MenuGroup):
                 if isinstance(arg, str):
                     idx = self.find_item(arg, True)
                 else:
-                    idx = MenuCast.asint(arg, None)
+                    idx = MenuHelper.asint(arg, None)
                 if idx is not None:
                     content.append(str(rendered_items[idx]))
                 else:
@@ -886,8 +906,8 @@ class MenuCard(MenuGroup):
                 item.heartbeat(eventtime)
                 name = self._render_item(item, (i == self.selected), True)
             rendered_items.append(name)
-        context = self.get_context({'item': rendered_item})
-        return filter(None, [s for s in MenuCast.lines_aslist(
+        context = self.get_context({'asitem': rendered_item})
+        return filter(None, [s for s in MenuHelper.lines_aslist(
             self._content_tpl.render(context))])
 
     def _render(self):
@@ -898,7 +918,7 @@ class MenuDeck(MenuList):
     def __init__(self, manager, config, namespace=''):
         super(MenuDeck, self).__init__(manager, config, namespace)
         self.menu = config.get('longpress_menu', None)
-        self.constrained = MenuCast.asbool(
+        self.constrained = MenuHelper.asbool(
             config.get('constrained', 'false'))
         self._menu = None
         self._show_back = False
@@ -930,7 +950,7 @@ class MenuDeck(MenuList):
         self._populate_menu()
 
     def _names_aslist(self):
-        return MenuCast.aslist(self.items)
+        return MenuHelper.aslist(self.items)
 
     def is_accepted(self, item):
         return type(item) is MenuCard
@@ -1255,6 +1275,14 @@ class MenuManager:
         # menu default jinja2 context
         return {
             'status': self.parameters,
+            's2days': MenuHelper.seconds2('days'),
+            's2hours': MenuHelper.seconds2('hours'),
+            's2mins': MenuHelper.seconds2('minutes'),
+            's2secs': MenuHelper.seconds2('seconds'),
+            'asbool': MenuHelper.asbool,
+            'asint': MenuHelper.asint,
+            'asfloat': MenuHelper.asfloat,
+            'isfloat': MenuHelper.isfloat,
             'menu': {
                 'nop': queue_action('nop'),
                 'back': queue_action('back'),
@@ -1522,7 +1550,7 @@ class MenuManager:
                     run_script = True
                     if len(args[0:]) > 0:
                         if len(args[1:]) > 0:
-                            run_script = MenuCast.asbool(args[1])
+                            run_script = MenuHelper.asbool(args[1])
                         if args[0] == 'stop':
                             if (isinstance(source, MenuInput)
                                     and source.is_editing()):
