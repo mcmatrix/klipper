@@ -22,6 +22,14 @@ class MenuCursor:
 # static class for type cast
 class MenuCast:
     @staticmethod
+    def asliteral(s):
+        s = str(s).strip()
+        if (s.startswith('"') and s.endswith('"')) or \
+                (s.startswith("'") and s.endswith("'")):
+            s = s[1:-1]
+        return s
+
+    @staticmethod
     def asbool(s, default=False):
         if s is None:
             return default
@@ -97,9 +105,9 @@ class MenuItem(object):
         self._width = MenuCast.asint(config.get('width', '0'))
         self._scroll = MenuCast.asbool(config.get('scroll', 'false'))
         self._enable_expr = manager.gcode_macro.load_expression(
-            config, 'enable', 'true')
+            config, 'enable', 'True')
         self._name_tpl = manager.gcode_macro.load_template(
-            config, 'name', "noname", True)
+            config, 'name')
         self._last_heartbeat = None
         self.__scroll_offs = 0
         self.__scroll_diff = 0
@@ -115,7 +123,7 @@ class MenuItem(object):
 
     def _name(self, ctx=None):
         context = self.get_context(ctx)
-        return self._name_tpl.render(context)
+        return "".join(MenuCast.lines_aslist(self._name_tpl.render(context)))
 
     # override
     def _render(self):
@@ -355,15 +363,14 @@ class MenuInput(MenuCommand):
         self._reverse = MenuCast.asbool(config.get('reverse', 'false'))
         self._realtime = MenuCast.asbool(config.get('realtime', 'false'))
         self._readonly_expr = manager.gcode_macro.load_expression(
-            config, 'readonly', 'false')
-        self._input_expr = manager.gcode_macro.load_expression(
-            config, 'input', 0)
+            config, 'readonly', 'False')
+        self._input_expr = manager.gcode_macro.load_expression(config, 'input')
         self._input_min = config.getfloat('input_min', -999999.0)
         self._input_max = config.getfloat('input_max', 999999.0)
         self._input_step = config.getfloat('input_step', above=0.)
         self._input_step2 = config.getfloat('input_step2', 0, minval=0.)
         self._longpress_gcode_tpl = manager.gcode_macro.load_template(
-            config, 'longpress_gcode')
+            config, 'longpress_gcode', '')
         self._start_gcode_tpl = manager.gcode_macro.load_template(
             config, 'start_gcode', '')
         self._stop_gcode_tpl = manager.gcode_macro.load_template(
@@ -716,8 +723,10 @@ class MenuCycler(MenuGroup):
 class MenuList(MenuContainer):
     def __init__(self, manager, config, namespace=''):
         super(MenuList, self).__init__(manager, config, namespace)
-        self._enter_gcode = config.get('enter_gcode', None)
-        self._leave_gcode = config.get('leave_gcode', None)
+        self._enter_gcode_tpl = manager.gcode_macro.load_template(
+            config, 'enter_gcode', '')
+        self._leave_gcode_tpl = manager.gcode_macro.load_template(
+            config, 'leave_gcode', '')
         self.items = config.get('items', '')
 
     def is_accepted(self, item):
@@ -741,11 +750,13 @@ class MenuList(MenuContainer):
             if isinstance(item, MenuGroup) and not item.is_editing():
                 item.update_items()
 
-    def get_enter_gcode(self):
-        return self._enter_gcode
+    def run_enter_gcode(self):
+        context = self.get_context()
+        self.manager.queue_gcode(self._enter_gcode_tpl.render(context))
 
-    def get_leave_gcode(self):
-        return self._leave_gcode
+    def run_leave_gcode(self):
+        context = self.get_context()
+        self.manager.queue_gcode(self._leave_gcode_tpl.render(context))
 
 
 class MenuVSDCard(MenuList):
@@ -778,14 +789,14 @@ class MenuCard(MenuGroup):
     def __init__(self, manager, config, namespace=''):
         super(MenuCard, self).__init__(manager, config, namespace)
         self._content_tpl = manager.gcode_macro.load_template(
-            config, 'content', '')
+            config, 'content')
         self.sticky = config.get('sticky', None)
         self._sticky = None
         self._parse_content_items()
 
     def _parse_content_items(self):
         items = self._names_aslist()
-        for (name, args) in self._content_tpl.extract_functions():
+        for name, args in self._content_tpl.extract_functions():
             if str(name).lower() == "item" and len(args):
                 for arg in args:
                     if isinstance(arg, str):
@@ -1286,8 +1297,8 @@ class MenuManager:
             raise error("Wrong type, expected MenuContainer")
         top = self.stack_peek()
         if top is not None:
-            self.queue_gcode(top.get_leave_gcode())
-        self.queue_gcode(container.get_enter_gcode())
+            top.run_leave_gcode()
+        container.run_enter_gcode()
         if not container.is_editing():
             container.update_items()
         self.menustack.append(container)
@@ -1304,10 +1315,10 @@ class MenuManager:
                     raise error("Wrong type, expected MenuContainer")
                 if not top.is_editing():
                     top.update_items()
-                self.queue_gcode(container.get_leave_gcode())
-                self.queue_gcode(top.get_enter_gcode())
+                container.run_leave_gcode()
+                top.run_enter_gcode()
             else:
-                self.queue_gcode(container.get_leave_gcode())
+                container.run_leave_gcode()
         return container
 
     def stack_size(self):
@@ -1480,7 +1491,7 @@ class MenuManager:
             if (not force and isinstance(current, (MenuInput, MenuGroup))
                     and current.is_editing()):
                 return
-            self.queue_gcode(container.get_leave_gcode())
+            container.run_leave_gcode()
             self.running = False
 
     def process_actions(self, actions, names, source):
