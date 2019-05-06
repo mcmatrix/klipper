@@ -420,7 +420,6 @@ class ToolHead:
                  'estimated_print_time': estimated_print_time,
                  'printing_time': print_time - last_print_start_time,
                  'is_printing': (status == "Printing"),
-                 'is_ready': (status == "Ready"),
                  'xpos': pos[0], 'ypos': pos[1],
                  'zpos': pos[2], 'epos': pos[3]}
     def _handle_request_restart(self, print_time):
