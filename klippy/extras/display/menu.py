@@ -1445,7 +1445,7 @@ class MenuManager:
         if self.is_running():
             self.lcd_chip.clear()
             for y, line in enumerate(self.render(eventtime)):
-                self.lcd_chip.write_text(0, y, self._unescape_cchars(line))
+                self.lcd_chip.write_text(0, y, line)
             self.lcd_chip.flush()
             return eventtime + MENU_UPDATE_DELAY
         elif not self.is_running() and self._autorun is True:
