@@ -818,7 +818,7 @@ class MenuCard(MenuGroup):
     def _find_content_items(self):
         items = self._names_aslist()
         for name, args in (expr.find_calls() for expr in self._content_exprs):
-            if str(name).lower() == "asitem" and len(args):
+            if str(name).lower() == "item" and len(args):
                 for arg in args:
                     if isinstance(arg, str):
                         items.append(arg)
@@ -907,7 +907,7 @@ class MenuCard(MenuGroup):
                 name = self._render_item(item, (i == self.selected), True)
             rendered_items.append(name)
 
-        context = self.get_context({'asitem': get_items})
+        context = self.get_context({'item': get_items})
         lines = []
         for expr in self._content_exprs:
             try:
