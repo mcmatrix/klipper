@@ -115,6 +115,14 @@ class MenuHelper:
                 return 0
         return time_fn
 
+    @staticmethod
+    def interpolate(value, from_min, from_max, to_min, to_max):
+        """Linear Interpolation, re-maps a number from one range to another"""
+        from_span = from_max - from_min
+        to_span = to_max - to_min
+        scale_factor = float(to_span) / float(from_span)
+        return to_min + (value - from_min) * scale_factor
+
 
 # Menu item baseclass
 class MenuItem(object):
@@ -141,8 +149,8 @@ class MenuItem(object):
     def init(self):
         pass
 
-    def _name(self, ctx=None):
-        context = self.get_context(ctx)
+    def _name(self, cxt=None):
+        context = self.get_context(cxt)
         return ''.join(str(self._name_expr.evaluate(context)).splitlines())
 
     # override
@@ -177,14 +185,11 @@ class MenuItem(object):
     def stop_editing(self, run_script=True):
         pass
 
-    def get_context(self, *args):
-        context = {}
-        # add default menu context
-        context.update(self.manager.get_context())
-        # add contexts
-        for arg in args:
-            if isinstance(arg, dict):
-                context.update(arg)
+    def get_context(self, cxt=None, action_cb=None):
+        # get default menu context
+        context = self.manager.get_context(action_cb)
+        if isinstance(cxt, dict):
+            context.update(cxt)
         return context
 
     def eval_enable(self):
@@ -369,8 +374,8 @@ class MenuCommand(MenuItem):
     def is_auto(self):
         return self._auto
 
-    def get_gcode(self):
-        context = self.get_context()
+    def get_gcode(self, action_cb=None):
+        context = self.get_context(action_cb=action_cb)
         return self._gcode_tpl.render(context)
 
     def run_gcode(self):
@@ -413,12 +418,8 @@ class MenuInput(MenuCommand):
     def is_realtime(self):
         return self._realtime
 
-    def get_gcode(self):
-        context = self.get_context()
-        return self._gcode_tpl.render(context)
-
-    def get_longpress_gcode(self):
-        context = self.get_context()
+    def get_longpress_gcode(self, action_cb=None):
+        context = self.get_context(action_cb=action_cb)
         return self._longpress_gcode_tpl.render(context)
 
     def run_longpress_gcode(self):
@@ -459,18 +460,17 @@ class MenuInput(MenuCommand):
             self.run_gcode()
             self._is_dirty = False
 
-    def get_context(self, *args):
-        context = super(MenuInput, self).get_context()
-        input = {
-            'input': (self._eval_value(context) if self._input_value is None
-                      else self._input_value)
-        }
-        context.update(input)
+    def get_context(self, cxt=None, action_cb=None):
+        context = super(MenuInput, self).get_context(cxt, action_cb=action_cb)
+        context.update({
+            'input': MenuHelper.asfloat(
+                self._eval_value() if self._input_value is None
+                else self._input_value)
+        })
         return context
 
-    def _eval_value(self, context=None):
-        if context is None:
-            context = super(MenuInput, self).get_context()
+    def _eval_value(self):
+        context = super(MenuInput, self).get_context()
         return self._input_expr.evaluate(context)
 
     def _value_changed(self):
@@ -484,7 +484,7 @@ class MenuInput(MenuCommand):
             value = self._eval_value()
             if MenuHelper.isfloat(value):
                 self._input_value = min(self._input_max, max(
-                    self._input_min, float(value)))
+                    self._input_min, MenuHelper.asfloat(value)))
                 if self._realtime:
                     self._value_changed()
             else:
@@ -1123,8 +1123,9 @@ class MenuManager:
                         self.kill_pin, self.kill_callback)
 
         # Add MENU commands
-        self.gcode.register_mux_command("MENU", "DO", 'dump', self.cmd_DO_DUMP,
-                                        desc=self.cmd_DO_help)
+        self.gcode.register_mux_command(
+            "MENU", "DUMP", 'status', self.cmd_DUMP_status,
+            desc=self.cmd_DUMP_help)
 
         # Load local config file in same directory as current module
         self.load_config(os.path.dirname(__file__), 'menu.cfg')
@@ -1271,13 +1272,13 @@ class MenuManager:
             'is16xx': (self.cols == 16)
         }
 
-    def get_context(self):
-        def queue_action(name, *args1):
-            def queue_fn(*args2):
-                self.action_queue.append(
-                    (len(self.action_queue), name, list(args1+args2)))
-                return ''
-            return queue_fn
+    def get_context(self, action_cb=None):
+        def action(name, *a):
+            if callable(action_cb):
+                return lambda *b: action_cb(name, *(a+b))
+            else:
+                return lambda *b: None
+
         # menu default jinja2 context
         return {
             'status': self.parameters,
@@ -1289,26 +1290,28 @@ class MenuManager:
             'asint': MenuHelper.asint,
             'asfloat': MenuHelper.asfloat,
             'isfloat': MenuHelper.isfloat,
+            'lerp': MenuHelper.interpolate,
             'menu': {
-                'nop': queue_action('nop'),
-                'back': queue_action('back'),
-                'exit': queue_action('exit'),
-                'respond': queue_action('respond'),
-                'error': queue_action('error'),
-                'echo': queue_action('echo'),
-                'emit': queue_action('emit'),
-                'log': queue_action('log')
+                'back': action('menu-back'),
+                'exit': action('menu-exit'),
+                'emit': action('menu-emit'),
+                'log': action('menu-log')
+            },
+            'host': {
+                'respond': action('host-respond'),
+                'error': action('host-error'),
+                'echo': action('host-echo')
             },
             'deck': {
-                'menu': queue_action('deck', 'menu')
+                'menu': action('deck', 'menu')
             },
             'editing': {
-                'start': queue_action('editing', 'start'),
-                'stop': queue_action('editing', 'stop')
+                'start': action('editing', 'start'),
+                'stop': action('editing', 'stop')
             },
             'run': {
-                'gcode': queue_action('run-gcode'),
-                'longpress_gcode': queue_action('run-longpress-gcode')
+                'gcode': action('run-gcode'),
+                'longpress_gcode': action('run-longpress-gcode')
             }
         }
 
@@ -1540,11 +1543,9 @@ class MenuManager:
                 # remove found actions from global action list
                 actions.remove(match)
                 # process found actions callback
-                if name == 'nop':
-                    pass
-                elif name == 'back':
+                if name == 'menu-back':
                     self.back()
-                elif name == 'exit':
+                elif name == 'menu-exit':
                     self.exit()
                 elif name == 'deck':
                     if len(args[0:]) > 0:
@@ -1577,31 +1578,31 @@ class MenuManager:
                 elif name == 'run-longpress-gcode':
                     if (isinstance(source, MenuInput) and source.is_editing()):
                         source.run_longpress_gcode()
-                elif name == 'respond':
+                elif name == 'host-respond':
                     if len(args[0:]) > 0:
                         self.gcode.respond_info("{}".format(
                             ' '.join(map(str, args[0:]))))
                     else:
                         malformed = True
-                elif name == 'error':
+                elif name == 'host-error':
                     if len(args[0:]) > 0:
                         self.gcode.respond_error("{}".format(
                             ' '.join(map(str, args[0:]))))
                     else:
                         malformed = True
-                elif name == 'echo':
+                elif name == 'host-echo':
                     if len(args[0:]) > 0:
                         self.gcode.respond("{} {}".format(
                             'echo:', ' '.join(map(str, args[0:]))))
                     else:
                         malformed = True
-                elif name == 'emit':
+                elif name == 'menu-emit':
                     if len(args[0:]) > 0 and len(str(args[0])) > 0:
                         self.emit_event(
                             "action:" + str(args[0]), source, *args[1:])
                     else:
                         malformed = True
-                elif name == 'log':
+                elif name == 'menu-log':
                     if len(args[0:]) > 0:
                         logging.info("menu:{} {}".format(
                             repr(source), ' '.join(map(str, args[0:]))))
@@ -1616,11 +1617,13 @@ class MenuManager:
         return matches
 
     def enter(self, long_press=False):
+        actions = []
+
+        def cb(name, *args):
+            actions.append(len(actions), name, list(args))
         container = self.stack_peek()
         if self.running and isinstance(container, MenuContainer):
             self.timer = 0
-            self.action_queue = []
-            actions = None
             current = container[self.selected]
             if isinstance(current, MenuGroup):
                 current = current.selected_item()
@@ -1631,16 +1634,14 @@ class MenuManager:
             elif isinstance(current, MenuInput):
                 if current.is_editing():
                     if long_press is True:
-                        gcode = current.get_longpress_gcode()
-                        actions = list(self.action_queue)
+                        gcode = current.get_longpress_gcode(action_cb=cb)
                         if current.is_auto() is True:
                             self.queue_gcode(gcode)
                         else:
                             self.process_actions(
                                 actions, ['run-longpress-gcode'], current)
                     else:
-                        gcode = current.get_gcode()
-                        actions = list(self.action_queue)
+                        gcode = current.get_gcode(action_cb=cb)
                         if current.is_auto() is True:
                             if not current.is_realtime():
                                 self.queue_gcode(gcode)
@@ -1648,20 +1649,19 @@ class MenuManager:
                         else:
                             self.process_actions(
                                 actions, ['run-gcode'], current)
-                    self.process_actions(actions, ['input'], current)
+                    self.process_actions(actions, ['editing'], current)
                 else:
                     current.start_editing()
             elif isinstance(current, MenuCommand):
-                gcode = current.get_gcode()
-                actions = list(self.action_queue)
+                gcode = current.get_gcode(action_cb=cb)
                 if current.is_auto() is True:
                     self.queue_gcode(gcode)
                 else:
                     self.process_actions(actions, ['run-gcode'], current)
             # process actions
             self.process_actions(actions, [
-                'nop', 'back', 'exit', 'deck', 'respond',
-                'error', 'echo', 'emit', 'log'
+                'menu-back', 'menu-exit', 'deck', 'host-respond',
+                'host-error', 'host-echo', 'menu-emit', 'menu-log'
             ], current)
 
     def queue_gcode(self, script):
@@ -1714,19 +1714,15 @@ class MenuManager:
             item = cfg.getchoice('type', menu_items)(self, cfg, name)
             self.add_menuitem(name, item)
 
-    cmd_DO_help = "Menu do things"
+    cmd_DUMP_help = "Menu dump various info (status)"
 
-    def cmd_DO_DUMP(self, params):
+    def cmd_DUMP_status(self, params):
         msg = ''
         status = {}
-        test = self.printer.lookup_objects('output_pin')
-        logging.info(repr(test))
         # get all objects from printer
         for (name, obj) in self.parameters:
-            # check that object has get_status method
-            if name in self.parameters:
-                # update values to status dict
-                status.update({name: self.parameters[name]})
+            # update values to status dict
+            status.update({name: self.parameters[name]})
         try:
             msg = json.dumps({'status': status}, indent=1)
         except Exception:
