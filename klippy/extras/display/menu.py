@@ -344,7 +344,8 @@ class MenuContainer(MenuItem):
             if self._show_title:
                 name += ' %s' % str(self._name())
             self.append_item(MenuCommand(self.manager, {
-                'name': name, 'gcode': '{menu.back()}'}, self.namespace))
+                'name': repr(name), 'gcode': '{% do menu.back() %}'},
+                self.namespace))
         for name in self._names_aslist():
             self.append_item(name)
         self.update_items()
@@ -704,7 +705,7 @@ class MenuCycler(MenuGroup):
     def _lookup_item(self, item):
         if isinstance(item, str) and '|' in item:
             item = MenuItemGroup(self.manager, {
-                'name': ' '.join([self._name(), 'ItemGroup']),
+                'name': repr(' '.join([self._name(), 'ItemGroup'])),
                 'items': item
             }, self.namespace, '|')
         elif isinstance(item, str) and item.isdigit():
@@ -759,7 +760,7 @@ class MenuList(MenuContainer):
     def _lookup_item(self, item):
         if isinstance(item, str) and ',' in item:
             item = MenuGroup(self.manager, {
-                'name': ' '.join([self._name(), 'Group']),
+                'name': repr(' '.join([self._name(), 'Group'])),
                 'items': item
             }, self.namespace, ',')
         return super(MenuList, self)._lookup_item(item)
@@ -792,7 +793,7 @@ class MenuVSDCard(MenuList):
                     'M23 /%s' % str(fname)
                 ]
                 self.append_item(MenuCommand(self.manager, {
-                    'name': '%s' % str(fname),
+                    'name': repr('%s' % str(fname)),
                     'cursor': '+',
                     'gcode': "\n".join(gcode),
                     'scroll': True,
@@ -837,7 +838,7 @@ class MenuCard(MenuGroup):
     def _lookup_item(self, item):
         if isinstance(item, str) and ',' in item:
             item = MenuCycler(self.manager, {
-                'name': ' '.join([self._name(), 'Cycler']),
+                'name': repr(' '.join([self._name(), 'Cycler'])),
                 'items': item
             }, self.namespace, ',')
         return super(MenuCard, self)._lookup_item(item)
