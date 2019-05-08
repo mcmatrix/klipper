@@ -30,8 +30,17 @@ class MenuHelper:
         return s
 
     @staticmethod
+    def asascii(s):
+        if isinstance(s, str):
+            return s
+        elif isinstance(s, unicode):
+            return unicode(s).encode('ascii', 'ignore')
+        else:
+            return str(s)
+
+    @staticmethod
     def asflatline(s):
-        return ''.join(unicode(s).splitlines())
+        return ''.join(MenuHelper.asascii(s).splitlines())
 
     @staticmethod
     def asbool(s, default=False):
