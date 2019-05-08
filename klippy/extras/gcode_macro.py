@@ -90,11 +90,13 @@ class EnvironmentWrapper(object):
             context.update(ctx)
         return context
 
-    def extract_functions(self):
-        """Extract function names and its arguments (only constants)
-           from the given template."""
+    def _parse_ast(self):
+        return self.env.parse(self.script)
+
+    def find_calls(self):
+        """Finds all call names and constant arguments from the template."""
         try:
-            ast = self.env.parse(self.script)
+            ast = self._parse_ast()
         except Exception as e:
             msg = "Error parsing template '%s': %s" % (
                 self.name, traceback.format_exception_only(type(e), e)[-1])
@@ -157,6 +159,13 @@ class ExpressionWrapper(EnvironmentWrapper):
                 name, traceback.format_exception_only(type(e), e)[-1])
             logging.exception(msg)
             raise printer.config_error(msg)
+
+    def _parse_ast(self):
+        return self.env.parse("".join([
+            self.env.variable_start_string,
+            self.script,
+            self.env.variable_end_string
+        ]))
 
     def evaluate(self, context=None):
         context = self.create_default_context(context)
