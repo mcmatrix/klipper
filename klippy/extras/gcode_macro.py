@@ -53,7 +53,8 @@ class StatusWrapper:
         return True
 
     def __iter__(self):
-        return iter(self.printer.lookup_objects())
+        names, objs = zip(*self.printer.lookup_objects())
+        return iter(names)
 
     def __len__(self):
         return len(self.printer.lookup_objects())
