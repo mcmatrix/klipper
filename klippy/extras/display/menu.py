@@ -5,7 +5,7 @@
 # Copyright (C) 2018  Janar Sööt <janar.soot@gmail.com>
 #
 # This file may be distributed under the terms of the GNU GPLv3 license.
-import os, logging, re, json
+import os, logging, json
 
 
 class error(Exception):
@@ -1393,18 +1393,6 @@ class MenuManager:
             container = self.menustack[self.stack_size() - lvl - 1]
         return container
 
-    def _unescape_cchars(self, text):
-        def fixup(m):
-            text = str(m.group(0))
-            if text[:2] == "\\x":
-                try:
-                    return "%c" % (int(text[2:], 16),)
-                except ValueError:
-                    logging.exception('Custom character unescape error')
-            else:
-                return text
-        return re.sub(r'\\x[0-9a-f]{2}', fixup, str(text), flags=re.IGNORECASE)
-
     def render(self, eventtime):
         lines = []
         self.update_parameters(eventtime)
@@ -1646,7 +1634,7 @@ class MenuManager:
         actions = []
 
         def cb(name, *args):
-            actions.append(len(actions), name, list(args))
+            actions.append((len(actions), name, list(args)))
         container = self.stack_peek()
         if self.running and isinstance(container, MenuContainer):
             self.timer = 0
