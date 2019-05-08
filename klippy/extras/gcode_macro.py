@@ -169,7 +169,9 @@ class PrinterGCodeMacro:
     def __init__(self, config):
         self.printer = config.get_printer()
         self.env = jinja2.Environment(
-            '{%', '%}', '{', '}', line_statement_prefix='%%')
+            '{%', '%}', '{', '}',
+            line_statement_prefix='%%',
+            extensions=['jinja2.ext.do'])
 
     def load_template(self, config, option, default=sentinel):
         name = "%s:%s" % ('<dict>' if isinstance(config, dict)
