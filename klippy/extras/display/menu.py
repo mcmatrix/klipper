@@ -143,7 +143,7 @@ class MenuItem(object):
 
     def _name(self, ctx=None):
         context = self.get_context(ctx)
-        return str(self._name_expr.evaluate(context))
+        return ''.join(str(self._name_expr.evaluate(context)).splitlines())
 
     # override
     def _render(self):
@@ -808,15 +808,16 @@ class MenuVSDCard(MenuList):
 class MenuCard(MenuGroup):
     def __init__(self, manager, config, namespace=''):
         super(MenuCard, self).__init__(manager, config, namespace)
-        self._content_tpl = manager.gcode_macro.load_template(
-            config, 'content')
+        prfx = 'content_'
+        self._content_exprs = [manager.gcode_macro.load_expression(
+            config, o) for o in config.get_prefix_options(prfx)]
         self.sticky = config.get('sticky', None)
         self._sticky = None
-        self._parse_content_items()
+        self._find_content_items()
 
-    def _parse_content_items(self):
+    def _find_content_items(self):
         items = self._names_aslist()
-        for name, args in self._content_tpl.extract_functions():
+        for name, args in (expr.find_calls() for expr in self._content_exprs):
             if str(name).lower() == "asitem" and len(args):
                 for arg in args:
                     if isinstance(arg, str):
@@ -862,22 +863,21 @@ class MenuCard(MenuGroup):
     def render_content(self, eventtime, constrained=False):
         rendered_items = []
 
-        def rendered_item(*args):
+        def get_items(*args):
             content = []
+            if not len(args):
+                return tuple(rendered_items)
             for arg in args:
-                idx = None
-                if isinstance(arg, str):
-                    idx = self.find_item(arg, True)
+                s = ''
+                idx = (self.find_item(arg, True) if isinstance(arg, str)
+                       else MenuHelper.asint(arg, None))
+                if (idx is not None) and (idx < len(rendered_items)):
+                    s = str(rendered_items[idx])
                 else:
-                    idx = MenuHelper.asint(arg, None)
-                if idx is not None:
-                    content.append(str(rendered_items[idx]))
-                else:
-                    content.append('')
                     logging.error(
                         "Rendered menu item '%s' not found!", str(arg))
-
-            return content[0] if len(content) == 1 else tuple(content)
+                content.append(s)
+            return (content[0] if len(content) == 1 else tuple(content))
 
         if self.selected is not None:
             self.selected = (
@@ -906,9 +906,15 @@ class MenuCard(MenuGroup):
                 item.heartbeat(eventtime)
                 name = self._render_item(item, (i == self.selected), True)
             rendered_items.append(name)
-        context = self.get_context({'asitem': rendered_item})
-        return filter(None, [s for s in MenuHelper.lines_aslist(
-            self._content_tpl.render(context))])
+
+        context = self.get_context({'asitem': get_items})
+        lines = []
+        for expr in self._content_exprs:
+            try:
+                lines.append(''.join(str(expr.evaluate(context)).splitlines()))
+            except Exception:
+                logging.exception('Card rendering error')
+        return lines
 
     def _render(self):
         return self._name()
