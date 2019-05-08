@@ -31,7 +31,7 @@ class MenuHelper:
 
     @staticmethod
     def asflatline(s):
-        return ''.join(str(s).splitlines())
+        return ''.join(unicode(s).splitlines())
 
     @staticmethod
     def asbool(s, default=False):
