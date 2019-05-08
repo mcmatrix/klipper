@@ -15,16 +15,6 @@ class sentinel:
 # Template handling
 ######################################################################
 
-# static class for helper functions
-class Jinja2Helper:
-    @staticmethod
-    def interpolate(value, from_min, from_max, to_min, to_max):
-        """Linear Interpolation, re-maps a number from one range to another"""
-        from_span = from_max - from_min
-        to_span = to_max - to_min
-        scale_factor = float(to_span) / float(from_span)
-        return to_min + (value - from_min) * scale_factor
-
 
 # Wrapper for "status" access to printer object get_status() methods
 class StatusWrapper:
@@ -69,7 +59,7 @@ class StatusWrapper:
         return len(self.printer.lookup_objects())
 
 
-# Wrapper around a Jinja2 environment
+# Abstract wrapper around a Jinja2 environment
 class EnvironmentWrapper(object):
     def __init__(self, printer, env, name, script):
         self.printer = printer
@@ -81,13 +71,9 @@ class EnvironmentWrapper(object):
     def create_status_wrapper(self, eventtime=None):
         return StatusWrapper(self.printer, eventtime)
 
-    def create_default_context(self, ctx=None, eventtime=None):
-        context = {
-            'status': self.create_status_wrapper(),
-            'lerp': Jinja2Helper.interpolate
-        }
-        if isinstance(ctx, dict):
-            context.update(ctx)
+    def create_default_context(self, context=None, eventtime=None):
+        if context is None:
+            context = {'status': self.create_status_wrapper(eventtime)}
         return context
 
     def _parse_ast(self):
