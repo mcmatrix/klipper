@@ -30,6 +30,10 @@ class MenuHelper:
         return s
 
     @staticmethod
+    def asflatline(s):
+        return ''.join(str(s).splitlines())
+
+    @staticmethod
     def asbool(s, default=False):
         if s is None:
             return default
@@ -149,9 +153,9 @@ class MenuItem(object):
     def init(self):
         pass
 
-    def _name(self, cxt=None):
-        context = self.get_context(cxt)
-        return ''.join(str(self._name_expr.evaluate(context)).splitlines())
+    def _name(self):
+        context = self.get_context()
+        return MenuHelper.asflatline(self._name_expr.evaluate(context))
 
     # override
     def _render(self):
@@ -402,6 +406,10 @@ class MenuInput(MenuCommand):
         self._stop_gcode_tpl = manager.gcode_macro.load_template(
             config, 'stop_gcode', '')
 
+    def _name(self):
+        context = self.get_input_context()
+        return MenuHelper.asflatline(self._name_expr.evaluate(context))
+
     def init(self):
         super(MenuInput, self).init()
         self._is_dirty = False
@@ -419,19 +427,23 @@ class MenuInput(MenuCommand):
     def is_realtime(self):
         return self._realtime
 
+    def get_gcode(self, action_cb=None):
+        context = self.get_input_context(action_cb=action_cb)
+        return self._gcode_tpl.render(context)
+
     def get_longpress_gcode(self, action_cb=None):
-        context = self.get_context(action_cb=action_cb)
+        context = self.get_input_context(action_cb=action_cb)
         return self._longpress_gcode_tpl.render(context)
 
     def run_longpress_gcode(self):
         self.manager.queue_gcode(self.get_longpress_gcode())
 
     def run_start_gcode(self):
-        context = self.get_context()
+        context = self.get_input_context()
         self.manager.queue_gcode(self._start_gcode_tpl.render(context))
 
     def run_stop_gcode(self):
-        context = self.get_context()
+        context = self.get_input_context()
         self.manager.queue_gcode(self._stop_gcode_tpl.render(context))
 
     def is_editing(self):
@@ -461,18 +473,18 @@ class MenuInput(MenuCommand):
             self.run_gcode()
             self._is_dirty = False
 
-    def get_context(self, cxt=None, action_cb=None):
-        context = super(MenuInput, self).get_context(cxt, action_cb=action_cb)
-        context.update({
+    def get_input_context(self, cxt=None, action_cb=None):
+        context = self.get_context({
             'input': MenuHelper.asfloat(
                 self._eval_value() if self._input_value is None
                 else self._input_value)
-        })
+        }, action_cb=action_cb)
+        if isinstance(cxt, dict):
+            context.update(cxt)
         return context
 
     def _eval_value(self):
-        context = super(MenuInput, self).get_context()
-        return self._input_expr.evaluate(context)
+        return self._input_expr.evaluate(self.get_context())
 
     def _value_changed(self):
         self.__last_change = self._last_heartbeat
@@ -705,7 +717,8 @@ class MenuCycler(MenuGroup):
     def _lookup_item(self, item):
         if isinstance(item, str) and '|' in item:
             item = MenuItemGroup(self.manager, {
-                'name': repr(' '.join([self._name(), 'ItemGroup'])),
+                'name': repr(' '.join([
+                    self.namespace, self.__class__.__name__, 'ItemGroup'])),
                 'items': item
             }, self.namespace, '|')
         elif isinstance(item, str) and item.isdigit():
@@ -760,7 +773,8 @@ class MenuList(MenuContainer):
     def _lookup_item(self, item):
         if isinstance(item, str) and ',' in item:
             item = MenuGroup(self.manager, {
-                'name': repr(' '.join([self._name(), 'Group'])),
+                'name': repr(' '.join([
+                    self.namespace, self.__class__.__name__, 'Group'])),
                 'items': item
             }, self.namespace, ',')
         return super(MenuList, self)._lookup_item(item)
@@ -838,7 +852,8 @@ class MenuCard(MenuGroup):
     def _lookup_item(self, item):
         if isinstance(item, str) and ',' in item:
             item = MenuCycler(self.manager, {
-                'name': repr(' '.join([self._name(), 'Cycler'])),
+                'name': repr(' '.join([
+                    self.namespace, self.__class__.__name__, 'Cycler'])),
                 'items': item
             }, self.namespace, ',')
         return super(MenuCard, self)._lookup_item(item)
@@ -913,7 +928,7 @@ class MenuCard(MenuGroup):
         lines = []
         for expr in self._content_exprs:
             try:
-                lines.append(''.join(str(expr.evaluate(context)).splitlines()))
+                lines.append(MenuHelper.asflatline(expr.evaluate(context)))
             except Exception:
                 logging.exception('Card rendering error')
         return lines
