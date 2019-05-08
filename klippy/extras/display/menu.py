@@ -817,11 +817,12 @@ class MenuCard(MenuGroup):
 
     def _find_content_items(self):
         items = self._names_aslist()
-        for name, args in (expr.find_calls() for expr in self._content_exprs):
-            if str(name).lower() == "items" and len(args):
-                for arg in args:
-                    if isinstance(arg, str):
-                        items.append(arg)
+        for expr in self._content_exprs:
+            for name, args in expr.find_calls():
+                if str(name).lower() == "items" and len(args):
+                    for arg in args:
+                        if isinstance(arg, str):
+                            items.append(arg)
         self.items = "\n".join(items)
 
     def _names_aslist(self):
