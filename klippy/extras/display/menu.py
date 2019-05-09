@@ -34,7 +34,7 @@ class MenuHelper:
         if isinstance(s, str):
             return s
         elif isinstance(s, unicode):
-            return unicode(s).encode('ascii', 'ignore')
+            return unicode(s).encode('latin-1', 'ignore')
         else:
             return str(s)
 
