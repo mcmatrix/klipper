@@ -1291,6 +1291,8 @@ class MenuManager:
             'timeout': self.timeout,
             'autorun': self._autorun,
             'running': self.running,
+            'blink_fast': self.blink_fast_state,
+            'blink_slow': self.blink_slow_state,
             'rows': self.rows,
             'cols': self.cols
         }
