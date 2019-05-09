@@ -1009,7 +1009,7 @@ BLINK_SLOW_SEQUENCE = (True, True, True, True, False, False, False)
 
 
 class MenuManager:
-    def __init__(self, config, lcd_chip):
+    def __init__(self, config, display):
         self.running = False
         self.menuitems = {}
         self.menustack = []
@@ -1021,7 +1021,8 @@ class MenuManager:
         self.blink_fast_idx = 0
         self.blink_slow_idx = 0
         self.timeout_idx = 0
-        self.lcd_chip = lcd_chip
+        self.display = display
+        self.lcd_chip = display.get_lcd_chip()
         self.printer = config.get_printer()
         self.pconfig = self.printer.lookup_object('configfile')
         self.gcode = self.printer.lookup_object('gcode')
@@ -1031,7 +1032,7 @@ class MenuManager:
         self.objs = {}
         self.root = None
         self._root = config.get('menu_root', '__main')
-        self.cols, self.rows = lcd_chip.get_dimensions()
+        self.cols, self.rows = self.lcd_chip.get_dimensions()
         self.timeout = config.getint('menu_timeout', 0)
         self.timer = 0
         # buttons
@@ -1289,13 +1290,9 @@ class MenuManager:
             'eventtime': eventtime,
             'timeout': self.timeout,
             'autorun': self._autorun,
-            'isRunning': self.running,
-            'is2004': (self.rows == 4 and self.cols == 20),
-            'is2002': (self.rows == 2 and self.cols == 20),
-            'is1604': (self.rows == 4 and self.cols == 16),
-            'is1602': (self.rows == 2 and self.cols == 16),
-            'is20xx': (self.cols == 20),
-            'is16xx': (self.cols == 16)
+            'is_running': self.running,
+            'rows': self.rows,
+            'cols': self.cols
         }
 
     def get_context(self, action_cb=None):
@@ -1442,7 +1439,7 @@ class MenuManager:
         if self.is_running():
             self.lcd_chip.clear()
             for y, line in enumerate(self.render(eventtime)):
-                self.lcd_chip.write_text(0, y, line)
+                self.display.draw_text(0, y, line)
             self.lcd_chip.flush()
             return eventtime + MENU_UPDATE_DELAY
         elif not self.is_running() and self._autorun is True:
