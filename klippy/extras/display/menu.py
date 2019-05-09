@@ -1027,7 +1027,6 @@ class MenuManager:
         self.pconfig = self.printer.lookup_object('configfile')
         self.gcode = self.printer.lookup_object('gcode')
         self.gcode_queue = []
-        self.action_queue = []
         self.parameters = {}
         self.objs = {}
         self.root = None
