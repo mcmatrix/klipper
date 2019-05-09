@@ -1731,7 +1731,7 @@ class MenuManager:
         msg = ''
         status = {}
         # get all objects from printer
-        for (name, obj) in self.parameters:
+        for name in self.parameters:
             # update values to status dict
             status.update({name: self.parameters[name]})
         try:
