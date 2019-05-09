@@ -32,8 +32,8 @@ class StatusWrapper:
         sval = self.__specialreplace(str(val).strip())
         if sval in self.cache:
             return self.cache[sval]
-        po = self.printer.lookup_object(sval, None)
-        if po is None:
+        po = self.printer.lookup_object(sval, sentinel)
+        if po is sentinel:
             raise KeyError(val)
         if self.eventtime is None:
             self.eventtime = self.printer.get_reactor().monotonic()
@@ -48,7 +48,7 @@ class StatusWrapper:
     def __contains__(self, val):
         sval = self.__specialreplace(str(val).strip())
         if sval not in self.cache and \
-                self.printer.lookup_object(sval, None) is None:
+                self.printer.lookup_object(sval, sentinel) is sentinel:
             return False
         return True
 
