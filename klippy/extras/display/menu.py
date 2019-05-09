@@ -1018,6 +1018,7 @@ class MenuManager:
         self.selected = 0
         self.blink_fast_state = True
         self.blink_slow_state = True
+        self.seconds = 0
         self.blink_fast_idx = 0
         self.blink_slow_idx = 0
         self.timeout_idx = 0
@@ -1181,6 +1182,7 @@ class MenuManager:
             not not BLINK_SLOW_SEQUENCE[self.blink_slow_idx]
         )
         if self.timeout_idx == 0:
+            self.seconds += 1
             self.timeout_check(eventtime)
         # check long press
         if (self._last_click_press > 0 and (
@@ -1292,6 +1294,7 @@ class MenuManager:
             'running': self.running,
             'blink_fast': self.blink_fast_state,
             'blink_slow': self.blink_slow_state,
+            'seconds': self.seconds,
             'rows': self.rows,
             'cols': self.cols
         }
