@@ -5,7 +5,7 @@
 # Copyright (C) 2018  Eric Callahan <arksine.code@gmail.com>
 #
 # This file may be distributed under the terms of the GNU GPLv3 license.
-import logging
+import logging, re
 import hd44780, st7920, uc1701
 import menu
 
@@ -206,7 +206,7 @@ class PrinterLCD:
     # Screen update helpers
     def draw_text(self, x, y, mixed_text):
         pos = x
-        for i, text in enumerate(mixed_text.split('~')):
+        for i, text in enumerate(re.split(r'\~(.*?)\~', mixed_text)):
             if i & 1 == 0:
                 # write text
                 self.lcd_chip.write_text(pos, y, text)
