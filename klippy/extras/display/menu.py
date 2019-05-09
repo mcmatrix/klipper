@@ -357,7 +357,7 @@ class MenuContainer(MenuItem):
             if self._show_title:
                 name += ' %s' % str(self._name())
             self.append_item(MenuCommand(self.manager, {
-                'name': repr(name), 'gcode': '{% do menu.back() %}'},
+                'name': repr(name), 'gcode': '%% do menu.back()'},
                 self.namespace))
         for name in self._names_aslist():
             self.append_item(name)
