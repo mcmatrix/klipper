@@ -1290,7 +1290,7 @@ class MenuManager:
             'eventtime': eventtime,
             'timeout': self.timeout,
             'autorun': self._autorun,
-            'is_running': self.running,
+            'running': self.running,
             'rows': self.rows,
             'cols': self.cols
         }
