@@ -1327,8 +1327,6 @@ class MenuManager:
             's2mins': MenuHelper.seconds2('minutes'),
             's2secs': MenuHelper.seconds2('seconds'),
             'asbool': MenuHelper.asbool,
-            'asint': MenuHelper.asint,
-            'asfloat': MenuHelper.asfloat,
             'isfloat': MenuHelper.isfloat,
             'lerp': MenuHelper.interpolate,
             'seq': MenuHelper.sequence(self.seconds),
