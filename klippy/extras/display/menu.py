@@ -46,8 +46,8 @@ class MenuHelper:
     def asbool(s, default=False):
         if s is None:
             return default
-        if isinstance(s, bool):
-            return s
+        if isinstance(s, (bool, int, float)):
+            return bool(s)
         s = str(s).strip()
         return s.lower() in ('y', 'yes', 't', 'true', 'on', '1')
 
@@ -1326,8 +1326,6 @@ class MenuManager:
             's2hours': MenuHelper.seconds2('hours'),
             's2mins': MenuHelper.seconds2('minutes'),
             's2secs': MenuHelper.seconds2('seconds'),
-            'asbool': MenuHelper.asbool,
-            'isfloat': MenuHelper.isfloat,
             'lerp': MenuHelper.interpolate,
             'seq': MenuHelper.sequence(self.seconds),
             'menu': {
