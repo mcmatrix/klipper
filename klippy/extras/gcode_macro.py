@@ -75,7 +75,10 @@ class EnvironmentWrapper(object):
     def create_default_context(self, context=None, eventtime=None):
         if context is None:
             context = {'status': self.create_status_wrapper(eventtime)}
-        return context
+        defaults = {
+            'bool': bool
+        }
+        return dict(context, **defaults)
 
     def _parse_ast(self):
         return self.env.parse(self.script)
