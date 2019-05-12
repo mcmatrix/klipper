@@ -136,6 +136,19 @@ class MenuHelper:
         scale_factor = float(to_span) / float(from_span)
         return to_min + (value - from_min) * scale_factor
 
+    @staticmethod
+    def sequence(seconds):
+        """Sequence animation"""
+        def sequence_fn(frames, animate=True, offset=0):
+            if isinstance(frames, (list, tuple)):
+                offset = min(len(frames)-1, max(0, offset))
+                frame = (offset+((int(seconds) % len(frames[offset:])))) \
+                    if animate else 0
+                return frames[frame]
+            else:
+                return str(frames)
+        return sequence_fn
+
 
 # Menu item baseclass
 class MenuItem(object):
@@ -1318,6 +1331,7 @@ class MenuManager:
             'asfloat': MenuHelper.asfloat,
             'isfloat': MenuHelper.isfloat,
             'lerp': MenuHelper.interpolate,
+            'seq': MenuHelper.sequence(self.seconds),
             'menu': {
                 'back': action('menu-back'),
                 'exit': action('menu-exit'),
