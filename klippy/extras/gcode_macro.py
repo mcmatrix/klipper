@@ -85,6 +85,18 @@ class TemplateWrapper():
             logging.exception(msg)
             raise self.gcode.error(msg)
 
+    def find_variables(self):
+        """Returns a set of all variables in the template that will be
+        looked up from the context at runtime."""
+        try:
+            ast = self.env.parse(self.script)
+        except Exception as e:
+            msg = "Error parsing template '%s': %s" % (
+                self.name, traceback.format_exception_only(type(e), e)[-1])
+            logging.exception(msg)
+            raise self.gcode.error(msg)
+        return jinja2.meta.find_undeclared_variables(ast)
+
     def run_gcode_from_command(self, context=None):
         self.gcode.run_script_from_command(self.render(context))
 
