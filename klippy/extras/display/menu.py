@@ -12,6 +12,10 @@ class error(Exception):
     pass
 
 
+class sentinel:
+    pass
+
+
 # static class for cursor
 class MenuCursor:
     NONE = ' '
@@ -45,9 +49,11 @@ class MenuHelper:
     @staticmethod
     def asbool(s, default=False):
         if s is None:
-            return default
-        if isinstance(s, (bool, int, float)):
+            return bool(default)
+        elif isinstance(s, (bool, int, float)):
             return bool(s)
+        elif MenuHelper.isfloat(s):
+            return bool(MenuHelper.asfloat(s))
         s = str(s).strip()
         return s.lower() in ('y', 'yes', 't', 'true', 'on', '1')
 
@@ -158,9 +164,9 @@ class MenuItem(object):
         self._manager = manager
         self._width = MenuHelper.asint(config.get('width', '0'))
         self._scroll = MenuHelper.asbool(config.get('scroll', 'false'))
-        self._enable_expr = manager.gcode_macro.load_expression(
+        self._enable_tpl = manager.gcode_macro.load_template(
             config, 'enable', 'True')
-        self._name_expr = manager.gcode_macro.load_expression(
+        self._name_tpl = manager.gcode_macro.load_template(
             config, 'name')
         self._last_heartbeat = None
         self.__scroll_offs = 0
@@ -177,7 +183,8 @@ class MenuItem(object):
 
     def _name(self):
         context = self.get_context()
-        return MenuHelper.asflatline(self._name_expr.evaluate(context))
+        return MenuHelper.asliteral(MenuHelper.asflatline(
+            self._name_tpl.render(context)))
 
     # override
     def _render(self):
@@ -220,7 +227,7 @@ class MenuItem(object):
 
     def eval_enable(self):
         context = self.get_context()
-        return not not self._enable_expr.evaluate(context)
+        return MenuHelper.asbool(self._enable_tpl.render(context))
 
     # Called when a item is selected
     def select(self):
@@ -414,9 +421,9 @@ class MenuInput(MenuCommand):
         super(MenuInput, self).__init__(manager, config, namespace)
         self._reverse = MenuHelper.asbool(config.get('reverse', 'false'))
         self._realtime = MenuHelper.asbool(config.get('realtime', 'false'))
-        self._readonly_expr = manager.gcode_macro.load_expression(
+        self._readonly_tpl = manager.gcode_macro.load_template(
             config, 'readonly', 'False')
-        self._input_expr = manager.gcode_macro.load_expression(config, 'input')
+        self._input_tpl = manager.gcode_macro.load_template(config, 'input')
         self._input_min = config.getfloat('input_min', -999999.0)
         self._input_max = config.getfloat('input_max', 999999.0)
         self._input_step = config.getfloat('input_step', above=0.)
@@ -430,7 +437,8 @@ class MenuInput(MenuCommand):
 
     def _name(self):
         context = self.get_input_context()
-        return MenuHelper.asflatline(self._name_expr.evaluate(context))
+        return MenuHelper.asliteral(MenuHelper.asflatline(
+            self._name_tpl.render(context)))
 
     def init(self):
         super(MenuInput, self).init()
@@ -444,7 +452,7 @@ class MenuInput(MenuCommand):
 
     def is_readonly(self):
         context = self.get_context()
-        return not not self._readonly_expr.evaluate(context)
+        return MenuHelper.asbool(self._readonly_tpl.render(context))
 
     def is_realtime(self):
         return self._realtime
@@ -506,7 +514,7 @@ class MenuInput(MenuCommand):
         return context
 
     def _eval_value(self):
-        return self._input_expr.evaluate(self.get_context())
+        return self._input_tpl.render(self.get_context())
 
     def _value_changed(self):
         self.__last_change = self._last_heartbeat
@@ -846,20 +854,32 @@ class MenuCard(MenuGroup):
     def __init__(self, manager, config, namespace=''):
         super(MenuCard, self).__init__(manager, config, namespace)
         prfx = 'content_'
-        self._content_exprs = [manager.gcode_macro.load_expression(
+        self._content_tpls = [manager.gcode_macro.load_template(
             config, o) for o in config.get_prefix_options(prfx)]
         self.sticky = config.get('sticky', None)
+        self.inline_parent_prefix = config.get(
+            'inline_parent_prefix', '__rel__')
         self._sticky = None
+        self._content_items = {}
         self._find_content_items()
 
+    def _parent_prefix(self, name, prefix=''):
+        n = str(name).strip()
+        p = str(prefix).strip()
+        if p and n.startswith(p):
+            n = ' '.join([self.namespace, n[len(p):]])
+        return n
+
     def _find_content_items(self):
+        all_items = [n for n, m in self.manager.lookup_menuitems()]
         items = self._names_aslist()
-        for expr in self._content_exprs:
-            for name, args in expr.find_calls():
-                if str(name).lower() == "items" and len(args):
-                    for arg in args:
-                        if isinstance(arg, str):
-                            items.append(arg)
+        for tpl in self._content_tpls:
+            for name in tpl.find_variables():
+                if self.inline_parent_prefix:
+                    name = self._parent_prefix(name, self.inline_parent_prefix)
+                if name in all_items:
+                    self._content_items[len(items)] = name
+                    items.append(name)
         self.items = "\n".join(items)
 
     def _names_aslist(self):
@@ -901,22 +921,7 @@ class MenuCard(MenuGroup):
 
     def render_content(self, eventtime, constrained=False):
         rendered_items = []
-
-        def get_items(*args):
-            content = []
-            if not len(args):
-                return tuple(rendered_items)
-            for arg in args:
-                s = ''
-                idx = (self.find_item(arg, True) if isinstance(arg, str)
-                       else MenuHelper.asint(arg, None))
-                if (idx is not None) and (idx < len(rendered_items)):
-                    s = str(rendered_items[idx])
-                else:
-                    logging.error(
-                        "Rendered menu item '%s' not found!", str(arg))
-                content.append(s)
-            return (content[0] if len(content) == 1 else tuple(content))
+        content_items = {}
 
         if self.selected is not None:
             self.selected = (
@@ -940,17 +945,21 @@ class MenuCard(MenuGroup):
                 self.selected = None
 
         for i, item in enumerate(self):
-            name = ''
+            s = ''
             if item.is_enabled():
                 item.heartbeat(eventtime)
-                name = self._render_item(item, (i == self.selected), True)
-            rendered_items.append(name)
+                s = self._render_item(item, (i == self.selected), True)
+            rendered_items.append(s)
+            if i in self._content_items:
+                content_items[self._content_items[i]] = s
 
-        context = self.get_context({'items': get_items})
+        context = self.get_context(
+            dict({'items': tuple(rendered_items)}, **content_items))
         lines = []
-        for expr in self._content_exprs:
+        for tpl in self._content_tpls:
             try:
-                lines.append(MenuHelper.asflatline(expr.evaluate(context)))
+                lines.append(MenuHelper.asliteral(MenuHelper.asflatline(
+                    tpl.render(context))))
             except Exception:
                 logging.exception('Card rendering error')
         return lines
@@ -1713,13 +1722,24 @@ class MenuManager:
                 "previous menuitem declaration" % (name,))
         self.menuitems[name] = menu
 
-    def lookup_menuitem(self, name):
+    def lookup_menuitem(self, name, default=sentinel):
         if name is None:
             return None
-        if name not in self.menuitems:
+        if name in self.menuitems:
+            return self.menuitems[name]
+        if default is sentinel:
             raise self.printer.config_error(
                 "Unknown menuitem '%s'" % (name,))
-        return self.menuitems[name]
+        return default
+
+    def lookup_menuitems(self, prefix=None):
+        if prefix is None:
+            return list(self.menuitems.items())
+        items = [(n, self.menuitems[n])
+                 for n in self.menuitems if n.startswith(prefix + ' ')]
+        if prefix in self.menuitems:
+            return [(prefix, self.menuitems[prefix])] + items
+        return items
 
     def load_config(self, *args):
         cfg = None
