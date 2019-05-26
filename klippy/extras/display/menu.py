@@ -377,7 +377,7 @@ class MenuContainer(MenuItem):
             if self._show_title:
                 name += ' %s' % str(self._name())
             self.append_item(MenuCommand(self.manager, {
-                'name': repr(name), 'gcode': '%% do menu.back()'},
+                'name': repr(name), 'gcode': '{% do menu.back() %}'},
                 self.namespace))
         for name in self._names_aslist():
             self.append_item(name)
@@ -860,27 +860,18 @@ class MenuCard(MenuGroup):
         self.inline_parent_prefix = config.get(
             'inline_parent_prefix', '__rel__')
         self._sticky = None
-        self._content_items = {}
-        self._find_content_items()
+        self._inline_names = []
+        # find all template variables (except variable 'items')
+        self._tpl_vars = [self._parent_prefix(n) for t in self._content_tpls
+                          for n in t.find_variables() if n != 'items']
 
-    def _parent_prefix(self, name, prefix=''):
-        n = str(name).strip()
-        p = str(prefix).strip()
-        if p and n.startswith(p):
-            n = ' '.join([self.namespace, n[len(p):]])
-        return n
-
-    def _find_content_items(self):
-        all_items = [n for n, m in self.manager.lookup_menuitems()]
-        items = self._names_aslist()
-        for tpl in self._content_tpls:
-            for name in tpl.find_variables():
-                if self.inline_parent_prefix:
-                    name = self._parent_prefix(name, self.inline_parent_prefix)
-                if name in all_items:
-                    self._content_items[len(items)] = name
-                    items.append(name)
-        self.items = "\n".join(items)
+    def _parent_prefix(self, name):
+        name = str(name).strip()
+        if self.inline_parent_prefix and \
+                name.startswith(self.inline_parent_prefix):
+            name = ' '.join([self.namespace, name[
+                len(self.inline_parent_prefix):]])
+        return name
 
     def _names_aslist(self):
         return MenuHelper.lines_aslist(self.items)
@@ -909,8 +900,18 @@ class MenuCard(MenuGroup):
             else:
                 logging.error("Cannot stick to read-only item")
 
+    def populate_inline_items(self):
+        self._inline_names = []
+        menuitems = [n for n, m in self.manager.lookup_menuitems()]
+        for name in self._tpl_vars:
+            if name in menuitems:
+                self.append_item(name)
+                self._inline_names.append(name)
+        self.update_items()
+
     def populate_items(self):
         super(MenuCard, self).populate_items()
+        self.populate_inline_items()
         self._lookup_sticky()
 
     def select(self):
@@ -921,7 +922,7 @@ class MenuCard(MenuGroup):
 
     def render_content(self, eventtime, constrained=False):
         rendered_items = []
-        content_items = {}
+        rendered_inlines = {}
 
         if self.selected is not None:
             self.selected = (
@@ -944,17 +945,18 @@ class MenuCard(MenuGroup):
             else:
                 self.selected = None
 
+        nitems = len(self._names_aslist())
         for i, item in enumerate(self):
             s = ''
             if item.is_enabled():
                 item.heartbeat(eventtime)
                 s = self._render_item(item, (i == self.selected), True)
             rendered_items.append(s)
-            if i in self._content_items:
-                content_items[self._content_items[i]] = s
+            if self._inline_names and i >= nitems:
+                rendered_inlines[self._inline_names[i-nitems]] = s
 
         context = self.get_context(
-            dict({'items': tuple(rendered_items)}, **content_items))
+            dict({'items': tuple(rendered_items)}, **rendered_inlines))
         lines = []
         for tpl in self._content_tpls:
             try:
