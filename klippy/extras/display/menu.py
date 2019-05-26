@@ -27,7 +27,7 @@ class MenuCursor:
 class MenuHelper:
     @staticmethod
     def asliteral(s):
-        s = str(s).strip()
+        s = str(s)
         if (s.startswith('"') and s.endswith('"')) or \
                 (s.startswith("'") and s.endswith("'")):
             s = s[1:-1]
@@ -857,20 +857,20 @@ class MenuCard(MenuGroup):
         self._content_tpls = [manager.gcode_macro.load_template(
             config, o) for o in config.get_prefix_options(prfx)]
         self.sticky = config.get('sticky', None)
-        self.inline_parent_prefix = config.get(
-            'inline_parent_prefix', '__rel__')
+        self.inline_namespace_prefix = config.get(
+            'inline_namespace_prefix', '__ns__')
         self._sticky = None
         self._inline_names = []
         # find all template variables (except variable 'items')
-        self._tpl_vars = [self._parent_prefix(n) for t in self._content_tpls
+        self._tpl_vars = [(n, self._ns_prefix(n)) for t in self._content_tpls
                           for n in t.find_variables() if n != 'items']
 
-    def _parent_prefix(self, name):
+    def _ns_prefix(self, name):
         name = str(name).strip()
-        if self.inline_parent_prefix and \
-                name.startswith(self.inline_parent_prefix):
+        if self.inline_namespace_prefix and \
+                name.startswith(self.inline_namespace_prefix):
             name = ' '.join([self.namespace, name[
-                len(self.inline_parent_prefix):]])
+                len(self.inline_namespace_prefix):]])
         return name
 
     def _names_aslist(self):
@@ -903,10 +903,10 @@ class MenuCard(MenuGroup):
     def populate_inline_items(self):
         self._inline_names = []
         menuitems = [n for n, m in self.manager.lookup_menuitems()]
-        for name in self._tpl_vars:
-            if name in menuitems:
-                self.append_item(name)
-                self._inline_names.append(name)
+        for var_name, cfg_name in self._tpl_vars:
+            if cfg_name in menuitems:
+                self.append_item(cfg_name)
+                self._inline_names.append(var_name)
         self.update_items()
 
     def populate_items(self):
@@ -922,7 +922,7 @@ class MenuCard(MenuGroup):
 
     def render_content(self, eventtime, constrained=False):
         rendered_items = []
-        rendered_inlines = {}
+        rendered_kwitems = {}
 
         if self.selected is not None:
             self.selected = (
@@ -953,10 +953,10 @@ class MenuCard(MenuGroup):
                 s = self._render_item(item, (i == self.selected), True)
             rendered_items.append(s)
             if self._inline_names and i >= nitems:
-                rendered_inlines[self._inline_names[i-nitems]] = s
+                rendered_kwitems[self._inline_names[i-nitems]] = s
 
         context = self.get_context(
-            dict({'items': tuple(rendered_items)}, **rendered_inlines))
+            dict({'items': tuple(rendered_items)}, **rendered_kwitems))
         lines = []
         for tpl in self._content_tpls:
             try:
