@@ -4,7 +4,8 @@
 #
 # This file may be distributed under the terms of the GNU GPLv3 license.
 import traceback, logging
-from jinja2 import Environment, meta
+import jinja2
+from jinja2 import meta
 
 
 class sentinel:
@@ -105,8 +106,12 @@ class TemplateWrapper():
 class PrinterGCodeMacro:
     def __init__(self, config):
         self.printer = config.get_printer()
-        self.env = Environment(
-            '{%', '%}', '{', '}', extensions=['jinja2.ext.do'])
+        LoggingUndefined = jinja2.make_logging_undefined(
+            logger=logging.getLogger('logger'), base=jinja2.Undefined)
+        self.env = jinja2.Environment(
+            '{%', '%}', '{', '}',
+            extensions=['jinja2.ext.do'],
+            undefined=LoggingUndefined)
 
     def load_template(self, config, option, default=sentinel):
         name = "%s:%s" % ('<dict>' if isinstance(config, dict)
