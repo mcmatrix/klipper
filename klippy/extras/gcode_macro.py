@@ -4,7 +4,7 @@
 #
 # This file may be distributed under the terms of the GNU GPLv3 license.
 import traceback, logging
-import jinja2
+from jinja2 import Environment, meta
 
 
 class sentinel:
@@ -95,7 +95,7 @@ class TemplateWrapper():
                 self.name, traceback.format_exception_only(type(e), e)[-1])
             logging.exception(msg)
             raise self.gcode.error(msg)
-        return jinja2.meta.find_undeclared_variables(ast)
+        return meta.find_undeclared_variables(ast)
 
     def run_gcode_from_command(self, context=None):
         self.gcode.run_script_from_command(self.render(context))
@@ -105,7 +105,7 @@ class TemplateWrapper():
 class PrinterGCodeMacro:
     def __init__(self, config):
         self.printer = config.get_printer()
-        self.env = jinja2.Environment(
+        self.env = Environment(
             '{%', '%}', '{', '}', extensions=['jinja2.ext.do'])
 
     def load_template(self, config, option, default=sentinel):
