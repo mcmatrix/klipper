@@ -15,14 +15,14 @@ import jinja2
 class GetStatusWrapper:
     def __init__(self, printer, eventtime=None):
         self.printer = printer
-        self.gcode = self.printer.lookup_object('gcode')
+        self._gcode = self.printer.lookup_object('gcode')
         self.eventtime = eventtime
         self.cache = {}
     def action_dump(self):
         """Dumps printer variables."""
         def dump_dict(dictionary, path):
             if len(dictionary) < 1:
-                self.gcode.respond_info(path)
+                self._gcode.respond_info(path)
             else:
                 for key, value in dictionary.iteritems():
                     if ' ' in key:
@@ -42,10 +42,10 @@ class GetStatusWrapper:
                                 value.__doc__.splitlines()])
                         else:
                             doc = 'no desc'
-                        self.gcode.respond_info(
+                        self._gcode.respond_info(
                             "%s = <function: '%s'>" % (key, doc))
                     else:
-                        self.gcode.respond_info("%s = %s" % (key, value))
+                        self._gcode.respond_info("%s = %s" % (key, value))
         status = {name: self[name]
                   for name, obj in self.printer.lookup_objects()
                   if obj is not None}
