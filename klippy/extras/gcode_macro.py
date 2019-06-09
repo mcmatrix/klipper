@@ -15,8 +15,26 @@ import jinja2
 class GetStatusWrapper:
     def __init__(self, printer, eventtime=None):
         self.printer = printer
+        self.gcode = self.printer.lookup_object('gcode')
         self.eventtime = eventtime
         self.cache = {}
+    def dump(self):
+        """Dumps printer variables."""
+        def dump_dict(dictionary, path):
+            for key, value in dictionary.iteritems():
+                if ' ' in key:
+                    key = "%s['%s']" % (path, key)
+                else:
+                    key = "%s.%s" % (path, key)
+                if isinstance(value, dict):
+                    dump_dict(value, key)
+                elif callable(value):
+                    self.gcode.respond_info("%s = <function>" % (key,))
+                else:
+                    self.gcode.respond_info("%s = %s" % (key, value))
+        status = {name: self[name]
+                  for name, obj in self.printer.lookup_objects()}
+        dump_dict(status, 'printer')
     def __getitem__(self, val):
         sval = str(val).strip()
         if sval in self.cache:
