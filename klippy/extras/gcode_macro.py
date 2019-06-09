@@ -18,33 +18,50 @@ class GetStatusWrapper:
         self.gcode = self.printer.lookup_object('gcode')
         self.eventtime = eventtime
         self.cache = {}
-    def dump(self):
+    def action_dump(self):
         """Dumps printer variables."""
         def dump_dict(dictionary, path):
-            for key, value in dictionary.iteritems():
-                if ' ' in key:
-                    key = "%s['%s']" % (path, key)
-                else:
-                    key = "%s.%s" % (path, key)
-                if isinstance(value, dict):
-                    dump_dict(value, key)
-                elif callable(value):
-                    self.gcode.respond_info("%s = <function>" % (key,))
-                else:
-                    self.gcode.respond_info("%s = %s" % (key, value))
+            if len(dictionary) < 1:
+                self.gcode.respond_info(path)
+            else:
+                for key, value in dictionary.iteritems():
+                    if ' ' in key:
+                        key = "%s['%s']" % (path, key)
+                    else:
+                        key = "%s.%s" % (path, key)
+                    if isinstance(value, dict):
+                        dump_dict(value, key)
+                    elif isinstance(value, tuple) \
+                            and callable(getattr(value, '_asdict', None)):
+                        # namedtuple
+                        dump_dict(value._asdict(), key)
+                    elif callable(value):
+                        if value.__doc__:
+                            doc = ' '.join([
+                                line.strip() for line in
+                                value.__doc__.splitlines()])
+                        else:
+                            doc = 'no desc'
+                        self.gcode.respond_info(
+                            "%s = <function: '%s'>" % (key, doc))
+                    else:
+                        self.gcode.respond_info("%s = %s" % (key, value))
         status = {name: self[name]
-                  for name, obj in self.printer.lookup_objects()}
+                  for name, obj in self.printer.lookup_objects()
+                  if obj is not None}
         dump_dict(status, 'printer')
+        return ''
     def __getitem__(self, val):
         sval = str(val).strip()
         if sval in self.cache:
             return self.cache[sval]
         po = self.printer.lookup_object(sval, None)
-        if po is None or not hasattr(po, 'get_status'):
+        if po is None:
             raise KeyError(val)
         if self.eventtime is None:
             self.eventtime = self.printer.get_reactor().monotonic()
-        self.cache[sval] = res = dict(po.get_status(self.eventtime))
+        self.cache[sval] = res = (dict() if not hasattr(po, 'get_status')
+                                  else dict(po.get_status(self.eventtime)))
         return res
     def __contains__(self, val):
         try:
