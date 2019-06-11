@@ -6,6 +6,9 @@
 import traceback, logging, ast
 import jinja2
 
+class sentinel:
+    pass
+
 
 ######################################################################
 # Template handling
@@ -15,48 +18,14 @@ import jinja2
 class GetStatusWrapper:
     def __init__(self, printer, eventtime=None):
         self.printer = printer
-        self._gcode = self.printer.lookup_object('gcode')
         self.eventtime = eventtime
         self.cache = {}
-    def action_dump(self):
-        """Dumps printer variables."""
-        def dump_dict(dictionary, path):
-            if len(dictionary) < 1:
-                self._gcode.respond_info(path)
-            else:
-                for key, value in dictionary.iteritems():
-                    if ' ' in key:
-                        key = "%s['%s']" % (path, key)
-                    else:
-                        key = "%s.%s" % (path, key)
-                    if isinstance(value, dict):
-                        dump_dict(value, key)
-                    elif isinstance(value, tuple) \
-                            and callable(getattr(value, '_asdict', None)):
-                        # namedtuple
-                        dump_dict(value._asdict(), key)
-                    elif callable(value):
-                        if value.__doc__:
-                            doc = ' '.join([
-                                line.strip() for line in
-                                value.__doc__.splitlines()])
-                        else:
-                            doc = 'no desc'
-                        self._gcode.respond_info(
-                            "%s = <function: '%s'>" % (key, doc))
-                    else:
-                        self._gcode.respond_info("%s = %s" % (key, value))
-        status = {name: self[name]
-                  for name, obj in self.printer.lookup_objects()
-                  if obj is not None}
-        dump_dict(status, 'printer')
-        return ''
     def __getitem__(self, val):
         sval = str(val).strip()
         if sval in self.cache:
             return self.cache[sval]
-        po = self.printer.lookup_object(sval, None)
-        if po is None:
+        po = self.printer.lookup_object(sval, sentinel)
+        if po is sentinel:
             raise KeyError(val)
         if self.eventtime is None:
             self.eventtime = self.printer.get_reactor().monotonic()
@@ -69,6 +38,11 @@ class GetStatusWrapper:
         except KeyError as e:
             return False
         return True
+    def __iter__(self):
+        for name, obj in self.printer.lookup_objects():
+            yield name
+    def __len__(self):
+        return len(self.printer.lookup_objects())
 
 # Wrapper around a Jinja2 template
 class TemplateWrapper:
