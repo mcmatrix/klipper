@@ -314,11 +314,11 @@ class GCodeParser:
     def respond_info(self, msg, log=True):
         if log:
             logging.info(msg)
-        lines = [l.strip() for l in msg.strip().split('\n')]
+        lines = [l.strip() for l in str(msg).strip().split('\n')]
         self.respond("// " + "\n// ".join(lines))
     def respond_error(self, msg):
         logging.warning(msg)
-        lines = msg.strip().split('\n')
+        lines = str(msg).strip().split('\n')
         if len(lines) > 1:
             self.respond_info("\n".join(lines), log=False)
         self.respond('!! %s' % (lines[0].strip(),))
