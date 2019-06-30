@@ -6,9 +6,6 @@
 import traceback, logging, ast
 import jinja2
 
-class sentinel:
-    pass
-
 
 ######################################################################
 # Template handling
@@ -24,13 +21,12 @@ class GetStatusWrapper:
         sval = str(val).strip()
         if sval in self.cache:
             return self.cache[sval]
-        po = self.printer.lookup_object(sval, sentinel)
-        if po is sentinel:
+        po = self.printer.lookup_object(sval, None)
+        if po is None or not hasattr(po, 'get_status'):
             raise KeyError(val)
         if self.eventtime is None:
             self.eventtime = self.printer.get_reactor().monotonic()
-        self.cache[sval] = res = (dict() if not hasattr(po, 'get_status')
-                                  else dict(po.get_status(self.eventtime)))
+        self.cache[sval] = res = dict(po.get_status(self.eventtime))
         return res
     def __contains__(self, val):
         try:
@@ -40,9 +36,8 @@ class GetStatusWrapper:
         return True
     def __iter__(self):
         for name, obj in self.printer.lookup_objects():
-            yield name
-    def __len__(self):
-        return len(self.printer.lookup_objects())
+            if self.__contains__(name):
+                yield name
 
 # Wrapper around a Jinja2 template
 class TemplateWrapper:
@@ -76,9 +71,7 @@ class TemplateWrapper:
 class PrinterGCodeMacro:
     def __init__(self, config):
         self.printer = config.get_printer()
-        self.env = jinja2.Environment(
-            '{%', '%}', '{', '}',
-            extensions=['jinja2.ext.do'])
+        self.env = jinja2.Environment('{%', '%}', '{', '}')
     def load_template(self, config, option, default=None):
         name = "%s:%s" % (config.get_name(), option)
         if default is None:
