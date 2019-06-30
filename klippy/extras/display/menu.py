@@ -115,6 +115,14 @@ class MenuHelper:
         return result
 
     @staticmethod
+    def aschoice(config, option, choices, default=sentinel):
+        c = config.get(option, default)
+        if c not in choices:
+            raise error("Choice '%s' for option '%s'"
+                        " is not a valid choice" % (c, option))
+        return choices[c]
+
+    @staticmethod
     def seconds2(key):
         """Convert seconds to minutes, hours, days"""
         time = {}
@@ -299,6 +307,7 @@ class MenuContainer(MenuItem):
         self._show_title = MenuHelper.asbool(config.get('show_title', 'true'))
         self._allitems = []
         self._items = []
+        self._handlers = []
 
     def init(self):
         super(MenuContainer, self).init()
@@ -356,7 +365,7 @@ class MenuContainer(MenuItem):
         assert self not in (parents or self._parents), \
             "Recursive relation of '%s' container" % (self.namespace,)
 
-    def append_item(self, s):
+    def insert_item(self, s, index=None):
         item = self._lookup_item(s)
         if item is not None:
             if not self.is_accepted(item):
@@ -368,7 +377,17 @@ class MenuContainer(MenuItem):
                 item.add_parents(self)
                 item.assert_recursive_relation()
                 item.populate_items()
-            self._allitems.append(item)
+            if index is None:
+                self._allitems.append(item)
+            else:
+                self._allitems.insert(index, item)
+
+    def register_handler(self, callback):
+        self._handlers.append(callback)
+
+    # overload
+    def _populate_items(self):
+        pass
 
     def populate_items(self):
         self._allitems = []  # empty list
@@ -376,11 +395,17 @@ class MenuContainer(MenuItem):
             name = '[..]'
             if self._show_title:
                 name += ' %s' % str(self._name())
-            self.append_item(MenuCommand(self.manager, {
+            self.insert_item(MenuCommand(self.manager, {
                 'name': repr(name), 'gcode': '{menu.back()}'},
                 self.namespace))
         for name in self._names_aslist():
-            self.append_item(name)
+            self.insert_item(name)
+        # populate others
+        self._populate_items()
+        # populate items from handlers
+        for cb in self._handlers:
+            if callable(cb):
+                cb()
         self.update_items()
 
     def update_items(self):
@@ -828,7 +853,8 @@ class MenuVSDCard(MenuList):
     def __init__(self, manager, config, namespace=''):
         super(MenuVSDCard, self).__init__(manager, config, namespace)
 
-    def _populate_files(self):
+    def _populate_items(self):
+        super(MenuVSDCard, self)._populate_items()
         sdcard = self.manager.objs.get('virtual_sdcard')
         if sdcard is not None:
             files = sdcard.get_file_list()
@@ -836,7 +862,7 @@ class MenuVSDCard(MenuList):
                 gcode = [
                     'M23 /%s' % str(fname)
                 ]
-                self.append_item(MenuCommand(self.manager, {
+                self.insert_item(MenuCommand(self.manager, {
                     'name': repr('%s' % str(fname)),
                     'cursor': '+',
                     'gcode': "\n".join(gcode),
@@ -844,10 +870,6 @@ class MenuVSDCard(MenuList):
                     # mind the cursor size in width
                     'width': (self.manager.cols-1)
                 }))
-
-    def populate_items(self):
-        super(MenuVSDCard, self).populate_items()
-        self._populate_files()
 
 
 class MenuCard(MenuGroup):
@@ -905,12 +927,12 @@ class MenuCard(MenuGroup):
         menuitems = [n for n, m in self.manager.lookup_menuitems()]
         for var_name, cfg_name in self._tpl_vars:
             if cfg_name in menuitems:
-                self.append_item(cfg_name)
+                self.insert_item(cfg_name)
                 self._inline_names.append(var_name)
         self.update_items()
 
-    def populate_items(self):
-        super(MenuCard, self).populate_items()
+    def _populate_items(self):
+        super(MenuCard, self)._populate_items()
         self.populate_inline_items()
         self._lookup_sticky()
 
@@ -1001,8 +1023,8 @@ class MenuDeck(MenuList):
                 menu.populate_items()
                 self._menu = menu
 
-    def populate_items(self):
-        super(MenuDeck, self).populate_items()
+    def _populate_items(self):
+        super(MenuDeck, self)._populate_items()
         self._populate_menu()
 
     def _names_aslist(self):
@@ -1688,6 +1710,10 @@ class MenuManager:
             except Exception:
                 logging.exception("Script running error")
             self.gcode_queue.pop(0)
+
+    def create_menuitem(self, config, ns=''):
+        return MenuHelper.aschoice(
+            config, 'type', menu_items)(self, config, ns)
 
     def add_menuitem(self, name, menu):
         if name in self.menuitems:
