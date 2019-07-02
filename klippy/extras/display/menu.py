@@ -183,11 +183,13 @@ class MenuItem(object):
         if len(self.cursor) < 1:
             raise error("Cursor with unexpected length, expecting 1.")
         if isinstance(config, dict):
-            # 'itemid' from dict, if empty then id from instance
-            self._itemid = config.get('itemid', hex(id(self)))
+            # itemid taken from dict, if empty then id from instance
+            self._itemid = config.get('__itemid', hex(id(self)))
+            self._namespace = config.get('__namespace', '')
         else:
             # from config the itemid is taken from section name
             self._itemid = " ".join(config.get_name().split()[1:])
+            self._namespace = " ".join(config.get_name().split()[1:])
         # if scroll is enabled and width is not specified then
         # display width is used and adjusted by cursor size
         if self._scroll and not self._width:
@@ -311,6 +313,10 @@ class MenuItem(object):
     def itemid(self):
         return self._itemid
 
+    @property
+    def namespace(self):
+        return self._namespace
+
 
 # menu container baseclass
 class MenuContainer(MenuItem):
@@ -349,7 +355,7 @@ class MenuContainer(MenuItem):
         if isinstance(item, str):
             s = item.strip()
             if s.startswith('.'):
-                s = ' '.join([self.itemid, s[1:]])
+                s = ' '.join([self.namespace, s[1:]])
             item = self.manager.lookup_menuitem(s)
         return item
 
@@ -780,6 +786,7 @@ class MenuCycler(MenuGroup):
     def _lookup_item(self, item):
         if isinstance(item, str) and '|' in item:
             item = MenuItemGroup(self.manager, {
+                '__namespace': self.namespace,
                 'name': repr(' '.join([self.itemid, 'ItemGroup'])),
                 'items': item
             }, '|')
@@ -835,6 +842,7 @@ class MenuList(MenuContainer):
     def _lookup_item(self, item):
         if isinstance(item, str) and ',' in item:
             item = MenuGroup(self.manager, {
+                '__namespace': self.namespace,
                 'name': repr(' '.join([self.itemid, 'Group'])),
                 'items': item
             }, ',')
@@ -895,7 +903,7 @@ class MenuCard(MenuGroup):
         name = str(name).strip()
         if self.inline_namespace_prefix and \
                 name.startswith(self.inline_namespace_prefix):
-            name = ' '.join([self.itemid, name[
+            name = ' '.join([self.namespace, name[
                 len(self.inline_namespace_prefix):]])
         return name
 
@@ -911,6 +919,7 @@ class MenuCard(MenuGroup):
     def _lookup_item(self, item):
         if isinstance(item, str) and ',' in item:
             item = MenuCycler(self.manager, {
+                '__namespace': self.namespace,
                 'name': repr(' '.join([self.itemid, 'Cycler'])),
                 'items': item
             }, ',')
@@ -1007,7 +1016,8 @@ class MenuDeck(MenuList):
         if not self.items:
             itemid = " ".join([self.itemid, "__singlecard__"])
             cfg = {o: config.get(o) for o in config.get_prefix_options('')}
-            cfg['itemid'] = itemid
+            cfg['__itemid'] = itemid
+            cfg['__namespace'] = self.namespace
             self.manager.add_menuitem(itemid, MenuCard(self.manager, cfg))
             self.items = itemid
 
