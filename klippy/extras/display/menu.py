@@ -182,14 +182,13 @@ class MenuItem(object):
         self.__last_state = True
         if len(self.cursor) < 1:
             raise error("Cursor with unexpected length, expecting 1.")
+        # id: item id - used when sending events
+        # ns: item namespace - used in item relative paths
         if isinstance(config, dict):
-            # itemid taken from dict, if empty then id from instance
-            self._itemid = config.get('__itemid', hex(id(self)))
-            self._namespace = config.get('__namespace', '')
+            self._id = config.get('__id', hex(id(self)))
+            self._ns = config.get('__ns', '')
         else:
-            # from config the itemid is taken from section name
-            self._itemid = " ".join(config.get_name().split()[1:])
-            self._namespace = " ".join(config.get_name().split()[1:])
+            self._id = self._ns = " ".join(config.get_name().split()[1:])
         # if scroll is enabled and width is not specified then
         # display width is used and adjusted by cursor size
         if self._scroll and not self._width:
@@ -303,19 +302,19 @@ class MenuItem(object):
 
     def send_event(self, event, *args):
         return self.manager.send_event(
-            "item:%s:%s" % (self.itemid, str(event)), self, *args)
+            "item:%s:%s" % (self.id, str(event)), self, *args)
 
     @property
     def manager(self):
         return self._manager
 
     @property
-    def itemid(self):
-        return self._itemid
+    def id(self):
+        return self._id
 
     @property
-    def namespace(self):
-        return self._namespace
+    def ns(self):
+        return self._ns
 
 
 # menu container baseclass
@@ -355,7 +354,7 @@ class MenuContainer(MenuItem):
         if isinstance(item, str):
             s = item.strip()
             if s.startswith('.'):
-                s = ' '.join([self.namespace, s[1:]])
+                s = ' '.join([self.ns, s[1:]])
             item = self.manager.lookup_menuitem(s)
         return item
 
@@ -381,7 +380,7 @@ class MenuContainer(MenuItem):
 
     def assert_recursive_relation(self, parents=None):
         assert self not in (parents or self._parents), \
-            "Recursive relation of '%s' container" % (self.itemid,)
+            "Recursive relation of '%s' container" % (self.id,)
 
     def insert_item(self, s, index=None):
         item = self._lookup_item(s)
@@ -786,8 +785,8 @@ class MenuCycler(MenuGroup):
     def _lookup_item(self, item):
         if isinstance(item, str) and '|' in item:
             item = MenuItemGroup(self.manager, {
-                '__namespace': self.namespace,
-                'name': repr(' '.join([self.itemid, 'ItemGroup'])),
+                '__ns': self.ns,
+                'name': repr(' '.join([self.id, 'ItemGroup'])),
                 'items': item
             }, '|')
         elif isinstance(item, str) and item.isdigit():
@@ -842,8 +841,8 @@ class MenuList(MenuContainer):
     def _lookup_item(self, item):
         if isinstance(item, str) and ',' in item:
             item = MenuGroup(self.manager, {
-                '__namespace': self.namespace,
-                'name': repr(' '.join([self.itemid, 'Group'])),
+                '__ns': self.ns,
+                'name': repr(' '.join([self.id, 'Group'])),
                 'items': item
             }, ',')
         return super(MenuList, self)._lookup_item(item)
@@ -891,8 +890,8 @@ class MenuCard(MenuGroup):
         self._content_tpls = [manager.gcode_macro.load_template(
             config, o) for o in config.get_prefix_options(prfx)]
         self.sticky = config.get('sticky', None)
-        self.inline_namespace_prefix = config.get(
-            'inline_namespace_prefix', '__ns__')
+        self.inline_ns_prefix = config.get(
+            'inline_ns_prefix', '__ns__')
         self._sticky = None
         self._inline_names = []
         # find all template variables (except variable 'items')
@@ -901,10 +900,10 @@ class MenuCard(MenuGroup):
 
     def _ns_prefix(self, name):
         name = str(name).strip()
-        if self.inline_namespace_prefix and \
-                name.startswith(self.inline_namespace_prefix):
-            name = ' '.join([self.namespace, name[
-                len(self.inline_namespace_prefix):]])
+        if self.inline_ns_prefix and \
+                name.startswith(self.inline_ns_prefix):
+            name = ' '.join([self.ns, name[
+                len(self.inline_ns_prefix):]])
         return name
 
     def _names_aslist(self):
@@ -919,8 +918,8 @@ class MenuCard(MenuGroup):
     def _lookup_item(self, item):
         if isinstance(item, str) and ',' in item:
             item = MenuCycler(self.manager, {
-                '__namespace': self.namespace,
-                'name': repr(' '.join([self.itemid, 'Cycler'])),
+                '__ns': self.ns,
+                'name': repr(' '.join([self.id, 'Cycler'])),
                 'items': item
             }, ',')
         return super(MenuCard, self)._lookup_item(item)
@@ -1014,12 +1013,12 @@ class MenuDeck(MenuList):
         self._show_back = False
         self._show_title = False
         if not self.items:
-            itemid = " ".join([self.itemid, "__singlecard__"])
+            id = " ".join([self.id, "__singlecard__"])
             cfg = {o: config.get(o) for o in config.get_prefix_options('')}
-            cfg['__itemid'] = itemid
-            cfg['__namespace'] = self.namespace
-            self.manager.add_menuitem(itemid, MenuCard(self.manager, cfg))
-            self.items = itemid
+            cfg['__id'] = id
+            cfg['__ns'] = self.ns
+            self.manager.add_menuitem(id, MenuCard(self.manager, cfg))
+            self.items = id
 
     def is_constrained(self):
         return self.constrained
@@ -1771,7 +1770,7 @@ class MenuManager:
     def load_menuitems(self, config):
         for cfg in config.get_prefix_sections('menu '):
             item = self.menuitem_from_config(cfg)
-            self.add_menuitem(item.itemid, item)
+            self.add_menuitem(item.id, item)
 
     # buttons & encoder callbacks
     def encoder_cw_callback(self, eventtime):
