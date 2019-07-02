@@ -166,9 +166,8 @@ class MenuHelper:
 
 # Menu item baseclass
 class MenuItem(object):
-    def __init__(self, manager, config, namespace=''):
+    def __init__(self, manager, config):
         self.cursor = config.get('cursor', MenuCursor.SELECT)
-        self._namespace = namespace
         self._manager = manager
         self._width = MenuHelper.asint(config.get('width', '0'))
         self._scroll = MenuHelper.asbool(config.get('scroll', 'false'))
@@ -183,6 +182,16 @@ class MenuItem(object):
         self.__last_state = True
         if len(self.cursor) < 1:
             raise error("Cursor with unexpected length, expecting 1.")
+        if isinstance(config, dict):
+            # 'itemid' from dict, if empty then id from instance
+            self._itemid = config.get('itemid', hex(id(self)))
+        else:
+            # from config the itemid is taken from section name
+            self._itemid = " ".join(config.get_name().split()[1:])
+        # if scroll is enabled and width is not specified then
+        # display width is used and adjusted by cursor size
+        if self._scroll and not self._width:
+            self._width = self.manager.cols - len(self.cursor)
         self.init()
 
     # override
@@ -290,24 +299,27 @@ class MenuItem(object):
             self.__clear_scroll()
         return s
 
+    def send_event(self, event, *args):
+        return self.manager.send_event(
+            "item:%s:%s" % (self.itemid, str(event)), self, *args)
+
     @property
     def manager(self):
         return self._manager
 
     @property
-    def namespace(self):
-        return self._namespace
+    def itemid(self):
+        return self._itemid
 
 
 # menu container baseclass
 class MenuContainer(MenuItem):
-    def __init__(self, manager, config, namespace=''):
-        super(MenuContainer, self).__init__(manager, config, namespace)
+    def __init__(self, manager, config):
+        super(MenuContainer, self).__init__(manager, config)
         self._show_back = MenuHelper.asbool(config.get('show_back', 'true'))
         self._show_title = MenuHelper.asbool(config.get('show_title', 'true'))
         self._allitems = []
         self._items = []
-        self._handlers = []
 
     def init(self):
         super(MenuContainer, self).init()
@@ -337,7 +349,7 @@ class MenuContainer(MenuItem):
         if isinstance(item, str):
             s = item.strip()
             if s.startswith('.'):
-                s = ' '.join([self.namespace, s[1:]])
+                s = ' '.join([self.itemid, s[1:]])
             item = self.manager.lookup_menuitem(s)
         return item
 
@@ -363,7 +375,7 @@ class MenuContainer(MenuItem):
 
     def assert_recursive_relation(self, parents=None):
         assert self not in (parents or self._parents), \
-            "Recursive relation of '%s' container" % (self.namespace,)
+            "Recursive relation of '%s' container" % (self.itemid,)
 
     def insert_item(self, s, index=None):
         item = self._lookup_item(s)
@@ -382,9 +394,6 @@ class MenuContainer(MenuItem):
             else:
                 self._allitems.insert(index, item)
 
-    def register_handler(self, callback):
-        self._handlers.append(callback)
-
     # overload
     def _populate_items(self):
         pass
@@ -395,17 +404,16 @@ class MenuContainer(MenuItem):
             name = '[..]'
             if self._show_title:
                 name += ' %s' % str(self._name())
-            self.insert_item(MenuCommand(self.manager, {
-                'name': repr(name), 'gcode': '{menu.back()}'},
-                self.namespace))
+            self.insert_item(MenuCommand(self._manager, {
+                'name': repr(name),
+                'gcode': '{menu.back()}'
+            }))
         for name in self._names_aslist():
             self.insert_item(name)
         # populate others
         self._populate_items()
-        # populate items from handlers
-        for cb in self._handlers:
-            if callable(cb):
-                cb()
+        # send populate event
+        self.send_event('populate')
         self.update_items()
 
     def update_items(self):
@@ -422,8 +430,8 @@ class MenuContainer(MenuItem):
 
 
 class MenuCommand(MenuItem):
-    def __init__(self, manager, config, namespace=''):
-        super(MenuCommand, self).__init__(manager, config, namespace)
+    def __init__(self, manager, config):
+        super(MenuCommand, self).__init__(manager, config)
         self._gcode_tpl = manager.gcode_macro.load_template(config, 'gcode')
         self._auto = MenuHelper.asbool(config.get('auto', 'true'))
 
@@ -442,8 +450,8 @@ class MenuCommand(MenuItem):
 
 
 class MenuInput(MenuCommand):
-    def __init__(self, manager, config, namespace=''):
-        super(MenuInput, self).__init__(manager, config, namespace)
+    def __init__(self, manager, config,):
+        super(MenuInput, self).__init__(manager, config)
         self._reverse = MenuHelper.asbool(config.get('reverse', 'false'))
         self._realtime = MenuHelper.asbool(config.get('realtime', 'false'))
         self._readonly_tpl = manager.gcode_macro.load_template(
@@ -597,8 +605,8 @@ class MenuInput(MenuCommand):
 
 
 class MenuGroup(MenuContainer):
-    def __init__(self, manager, config, namespace='', sep=','):
-        super(MenuGroup, self).__init__(manager, config, namespace)
+    def __init__(self, manager, config, sep=','):
+        super(MenuGroup, self).__init__(manager, config)
         self._sep = sep
         self._show_back = False
         self.use_cursor = MenuHelper.asbool(config.get('use_cursor', 'false'))
@@ -742,8 +750,8 @@ class MenuGroup(MenuContainer):
 
 
 class MenuItemGroup(MenuGroup):
-    def __init__(self, manager, config, namespace='', sep='|'):
-        super(MenuItemGroup, self).__init__(manager, config, namespace, sep)
+    def __init__(self, manager, config, sep='|'):
+        super(MenuItemGroup, self).__init__(manager, config, sep)
 
     def is_readonly(self):
         return True
@@ -753,8 +761,8 @@ class MenuItemGroup(MenuGroup):
 
 
 class MenuCycler(MenuGroup):
-    def __init__(self, manager, config, namespace='', sep=','):
-        super(MenuCycler, self).__init__(manager, config, namespace, sep)
+    def __init__(self, manager, config, sep=','):
+        super(MenuCycler, self).__init__(manager, config, sep)
 
     def init(self):
         super(MenuCycler, self).init()
@@ -772,10 +780,9 @@ class MenuCycler(MenuGroup):
     def _lookup_item(self, item):
         if isinstance(item, str) and '|' in item:
             item = MenuItemGroup(self.manager, {
-                'name': repr(' '.join([
-                    self.namespace, self.__class__.__name__, 'ItemGroup'])),
+                'name': repr(' '.join([self.itemid, 'ItemGroup'])),
                 'items': item
-            }, self.namespace, '|')
+            }, '|')
         elif isinstance(item, str) and item.isdigit():
             try:
                 self._interval = max(0, int(item))
@@ -810,8 +817,8 @@ class MenuCycler(MenuGroup):
 
 
 class MenuList(MenuContainer):
-    def __init__(self, manager, config, namespace=''):
-        super(MenuList, self).__init__(manager, config, namespace)
+    def __init__(self, manager, config):
+        super(MenuList, self).__init__(manager, config)
         self._enter_gcode_tpl = manager.gcode_macro.load_template(
             config, 'enter_gcode', '')
         self._leave_gcode_tpl = manager.gcode_macro.load_template(
@@ -828,10 +835,9 @@ class MenuList(MenuContainer):
     def _lookup_item(self, item):
         if isinstance(item, str) and ',' in item:
             item = MenuGroup(self.manager, {
-                'name': repr(' '.join([
-                    self.namespace, self.__class__.__name__, 'Group'])),
+                'name': repr(' '.join([self.itemid, 'Group'])),
                 'items': item
-            }, self.namespace, ',')
+            }, ',')
         return super(MenuList, self)._lookup_item(item)
 
     def update_items(self):
@@ -850,8 +856,8 @@ class MenuList(MenuContainer):
 
 
 class MenuVSDCard(MenuList):
-    def __init__(self, manager, config, namespace=''):
-        super(MenuVSDCard, self).__init__(manager, config, namespace)
+    def __init__(self, manager, config):
+        super(MenuVSDCard, self).__init__(manager, config)
 
     def _populate_items(self):
         super(MenuVSDCard, self)._populate_items()
@@ -866,15 +872,13 @@ class MenuVSDCard(MenuList):
                     'name': repr('%s' % str(fname)),
                     'cursor': '+',
                     'gcode': "\n".join(gcode),
-                    'scroll': True,
-                    # mind the cursor size in width
-                    'width': (self.manager.cols-1)
+                    'scroll': True
                 }))
 
 
 class MenuCard(MenuGroup):
-    def __init__(self, manager, config, namespace=''):
-        super(MenuCard, self).__init__(manager, config, namespace)
+    def __init__(self, manager, config):
+        super(MenuCard, self).__init__(manager, config)
         prfx = 'content_'
         self._content_tpls = [manager.gcode_macro.load_template(
             config, o) for o in config.get_prefix_options(prfx)]
@@ -891,7 +895,7 @@ class MenuCard(MenuGroup):
         name = str(name).strip()
         if self.inline_namespace_prefix and \
                 name.startswith(self.inline_namespace_prefix):
-            name = ' '.join([self.namespace, name[
+            name = ' '.join([self.itemid, name[
                 len(self.inline_namespace_prefix):]])
         return name
 
@@ -907,10 +911,9 @@ class MenuCard(MenuGroup):
     def _lookup_item(self, item):
         if isinstance(item, str) and ',' in item:
             item = MenuCycler(self.manager, {
-                'name': repr(' '.join([
-                    self.namespace, self.__class__.__name__, 'Cycler'])),
+                'name': repr(' '.join([self.itemid, 'Cycler'])),
                 'items': item
-            }, self.namespace, ',')
+            }, ',')
         return super(MenuCard, self)._lookup_item(item)
 
     def _lookup_sticky(self):
@@ -993,8 +996,8 @@ class MenuCard(MenuGroup):
 
 
 class MenuDeck(MenuList):
-    def __init__(self, manager, config, namespace=''):
-        super(MenuDeck, self).__init__(manager, config, namespace)
+    def __init__(self, manager, config):
+        super(MenuDeck, self).__init__(manager, config)
         self.menu = config.get('longpress_menu', None)
         self.constrained = MenuHelper.asbool(
             config.get('constrained', 'false'))
@@ -1002,11 +1005,11 @@ class MenuDeck(MenuList):
         self._show_back = False
         self._show_title = False
         if not self.items:
-            card = MenuCard(manager, config, self.namespace)
-            name = " ".join(
-                config.get_name().split()[1:]) + "__singlecarddeck__"
-            self.manager.add_menuitem(name, card)
-            self.items = name
+            itemid = " ".join([self.itemid, "__singlecard__"])
+            cfg = {o: config.get(o) for o in config.get_prefix_options('')}
+            cfg['itemid'] = itemid
+            self.manager.add_menuitem(itemid, MenuCard(self.manager, cfg))
+            self.items = itemid
 
     def is_constrained(self):
         return self.constrained
@@ -1201,6 +1204,8 @@ class MenuManager:
         self.load_menuitems(config)
         # Load menu root
         self.load_root()
+        # send init event
+        self.send_event('init')
 
     def handle_ready(self):
         # start timer
@@ -1259,7 +1264,7 @@ class MenuManager:
             return False
         return True
 
-    def restart_root(self, root=None, force_exit=True):
+    def restart(self, root=None, force_exit=True):
         if self.is_running():
             self.exit(force_exit)
         self.load_root(root)
@@ -1302,11 +1307,8 @@ class MenuManager:
             starttime = reactor.monotonic() + starttime
         reactor.register_callback(callit, starttime)
 
-    def emit_event(self, event, *args):
-        ret = []
-        if len(str(event)) > 0:
-            ret = self.printer.send_event("menu:" + str(event), self, *args)
-        return ret
+    def send_event(self, event, *args):
+        return self.printer.send_event("menu:" + str(event), self, *args)
 
     def is_running(self):
         return self.running
@@ -1317,6 +1319,8 @@ class MenuManager:
         self.selected = 0
         self.timer = 0
         if isinstance(self.root, MenuContainer):
+            # send begin event
+            self.send_event('begin')
             self.update_parameters(eventtime)
             self.root.populate_items()
             self.stack_push(self.root)
@@ -1576,6 +1580,7 @@ class MenuManager:
                     and current.is_editing()):
                 return
             container.run_leave_gcode()
+            self.send_event('exit')
             self.running = False
 
     def process_actions(self, actions, names, source):
@@ -1627,7 +1632,7 @@ class MenuManager:
                         source.run_longpress_gcode()
                 elif name == 'menu-emit':
                     if len(args[0:]) > 0 and len(str(args[0])) > 0:
-                        self.emit_event(
+                        self.send_event(
                             "action:" + str(args[0]), source, *args[1:])
                     else:
                         malformed = True
@@ -1711,9 +1716,9 @@ class MenuManager:
                 logging.exception("Script running error")
             self.gcode_queue.pop(0)
 
-    def create_menuitem(self, config, ns=''):
+    def menuitem_from_config(self, config):
         return MenuHelper.aschoice(
-            config, 'type', menu_items)(self, config, ns)
+            config, 'type', menu_items)(self, config)
 
     def add_menuitem(self, name, menu):
         if name in self.menuitems:
@@ -1755,9 +1760,8 @@ class MenuManager:
 
     def load_menuitems(self, config):
         for cfg in config.get_prefix_sections('menu '):
-            name = " ".join(cfg.get_name().split()[1:])
-            item = cfg.getchoice('type', menu_items)(self, cfg, name)
-            self.add_menuitem(name, item)
+            item = self.menuitem_from_config(cfg)
+            self.add_menuitem(item.itemid, item)
 
     # buttons & encoder callbacks
     def encoder_cw_callback(self, eventtime):
