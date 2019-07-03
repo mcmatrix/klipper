@@ -302,7 +302,7 @@ class MenuItem(object):
 
     def send_event(self, event, *args):
         return self.manager.send_event(
-            "item:%s:%s" % (self.id, str(event)), self, *args)
+            "item:%s:%s" % (self.id, str(event)), *args)
 
     @property
     def manager(self):
@@ -410,7 +410,7 @@ class MenuContainer(MenuItem):
         # populate successor items
         self._populate_items()
         # send populate event
-        self.send_event('populate')
+        self.send_event('populate', self)
         # insert back as first
         if self._show_back is True:
             name = '[..]'
@@ -1215,7 +1215,7 @@ class MenuManager:
         # Load menu root
         self.load_root()
         # send init event
-        self.send_event('init')
+        self.send_event('init', self)
 
     def handle_ready(self):
         # start timer
@@ -1318,7 +1318,7 @@ class MenuManager:
         reactor.register_callback(callit, starttime)
 
     def send_event(self, event, *args):
-        return self.printer.send_event("menu:" + str(event), self, *args)
+        return self.printer.send_event("menu:" + str(event), *args)
 
     def is_running(self):
         return self.running
@@ -1330,7 +1330,7 @@ class MenuManager:
         self.timer = 0
         if isinstance(self.root, MenuContainer):
             # send begin event
-            self.send_event('begin')
+            self.send_event('begin', self)
             self.update_parameters(eventtime)
             self.root.populate_items()
             self.stack_push(self.root)
@@ -1590,7 +1590,7 @@ class MenuManager:
                     and current.is_editing()):
                 return
             container.run_leave_gcode()
-            self.send_event('exit')
+            self.send_event('exit', self)
             self.running = False
 
     def process_actions(self, actions, names, source):
