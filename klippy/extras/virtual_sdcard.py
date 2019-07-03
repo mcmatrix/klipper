@@ -30,8 +30,6 @@ class VirtualSD:
         printer.register_event_handler("menu:init", self.handle_menu_init)
         printer.register_event_handler(
             "menu:item:__main:populate", self.handle_main_populate)
-        printer.register_event_handler(
-            "menu:item:__sdcard:populate", self.handle_sdcard_populate)
     def handle_shutdown(self):
         if self.work_timer is not None:
             self.must_pause_work = True
@@ -51,25 +49,23 @@ class VirtualSD:
         manager.load_config(os.path.dirname(__file__), 'virtual_sdcard.cfg')
     def handle_main_populate(self, manager, item):
         logging.info("populate event %s" % (item,))
-        sdcard = manager.lookup_menuitem('__sdcard', None)
-        if sdcard:
-            item.insert_item(sdcard)
-    def handle_sdcard_populate(self, manager, item):
-        logging.info("populate event %s" % (item,))
-        files = self.get_file_list()
-        for fname, fsize in files:
-            logging.info("sdcard file '%s'" % (fname,))
-            gcode = [
-                'M23 /%s' % str(fname)
-            ]
-            sdfile = manager.create_menuitem({
-                'type': 'command',
-                'name': repr('%s' % str(fname)),
-                'cursor': '+',
-                'gcode': "\n".join(gcode),
-                'scroll': True
-            })
-            item.insert_item(sdfile)
+        sdmenu = manager.lookup_menuitem('__sdcard', None)
+        if sdmenu is not None:
+            item.insert_item(sdmenu, 3)
+            files = self.get_file_list()
+            for fname, fsize in files:
+                logging.info("sdcard file '%s'" % (fname,))
+                gcode = [
+                    'M23 /%s' % str(fname)
+                ]
+                sdfile = manager.menuitem_from_config({
+                    'type': 'command',
+                    'name': repr('%s' % str(fname)),
+                    'cursor': '+',
+                    'gcode': "\n".join(gcode),
+                    'scroll': True
+                })
+                sdmenu.insert_item(sdfile)
     def stats(self, eventtime):
         if self.work_timer is None:
             return False, ""
