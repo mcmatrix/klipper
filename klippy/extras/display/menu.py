@@ -405,6 +405,13 @@ class MenuContainer(MenuItem):
 
     def populate_items(self):
         self._allitems = []  # empty list
+        for name in self._names_aslist():
+            self.insert_item(name)
+        # populate successor items
+        self._populate_items()
+        # send populate event
+        self.send_event('populate')
+        # insert back as first
         if self._show_back is True:
             name = '[..]'
             if self._show_title:
@@ -412,13 +419,7 @@ class MenuContainer(MenuItem):
             self.insert_item(MenuCommand(self._manager, {
                 'name': repr(name),
                 'gcode': '{menu.back()}'
-            }))
-        for name in self._names_aslist():
-            self.insert_item(name)
-        # populate others
-        self._populate_items()
-        # send populate event
-        self.send_event('populate')
+            }), 0)
         self.update_items()
 
     def update_items(self):
