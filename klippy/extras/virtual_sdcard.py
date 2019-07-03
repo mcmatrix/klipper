@@ -26,6 +26,12 @@ class VirtualSD:
             self.gcode.register_command(cmd, getattr(self, 'cmd_' + cmd))
         for cmd in ['M28', 'M29', 'M30']:
             self.gcode.register_command(cmd, self.cmd_error)
+        # menu
+        self.printer.register_event_handler("menu:init", self.handle_menu_init)
+        self.printer.register_event_handler(
+            "menu:item:__main:populate", self.handle_main_populate)
+        self.printer.register_event_handler(
+            "menu:item:__sdcard:populate", self.handle_sdcard_populate)
     def handle_shutdown(self):
         if self.work_timer is not None:
             self.must_pause_work = True
@@ -40,6 +46,30 @@ class VirtualSD:
             logging.info("Virtual sdcard (%d): %s\nUpcoming (%d): %s",
                          readpos, repr(data[:readcount]),
                          self.file_position, repr(data[readcount:]))
+    def handle_menu_init(self, manager):
+        logging.info("menu:init %s" % (manager,))
+        manager.load_config(os.path.dirname(__file__), 'virtual_sdcard.cfg')
+    def handle_main_populate(self, manager, item):
+        logging.info("populate event %s" % (item,))
+        sdcard = manager.lookup_menuitem('__sdcard', None)
+        if sdcard:
+            item.insert_item(sdcard)
+    def handle_sdcard_populate(self, manager, item):
+        logging.info("populate event %s" % (item,))
+        files = self.get_file_list()
+        for fname, fsize in files:
+            logging.info("sdcard file '%s'" % (fname,))
+            gcode = [
+                'M23 /%s' % str(fname)
+            ]
+            sdfile = manager.create_menuitem({
+                'type': 'command',
+                'name': repr('%s' % str(fname)),
+                'cursor': '+',
+                'gcode': "\n".join(gcode),
+                'scroll': True
+            })
+            item.insert_item(sdfile)
     def stats(self, eventtime):
         if self.work_timer is None:
             return False, ""
