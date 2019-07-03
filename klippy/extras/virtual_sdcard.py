@@ -27,10 +27,10 @@ class VirtualSD:
         for cmd in ['M28', 'M29', 'M30']:
             self.gcode.register_command(cmd, self.cmd_error)
         # menu
-        self.printer.register_event_handler("menu:init", self.handle_menu_init)
-        self.printer.register_event_handler(
+        printer.register_event_handler("menu:init", self.handle_menu_init)
+        printer.register_event_handler(
             "menu:item:__main:populate", self.handle_main_populate)
-        self.printer.register_event_handler(
+        printer.register_event_handler(
             "menu:item:__sdcard:populate", self.handle_sdcard_populate)
     def handle_shutdown(self):
         if self.work_timer is not None:
