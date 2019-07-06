@@ -5,7 +5,7 @@
 # Copyright (C) 2018  Janar Sööt <janar.soot@gmail.com>
 #
 # This file may be distributed under the terms of the GNU GPLv3 license.
-import os, logging
+import os, logging, re
 
 
 class error(Exception):
@@ -1485,11 +1485,23 @@ class MenuManager:
                     lines.append(s.ljust(self.cols))
         return lines
 
+    def _unescape_cchars(self, text):
+        def fixup(m):
+            text = str(m.group(0))
+            if text[:2] == "\\x":
+                try:
+                    return "%c" % (int(text[2:], 16),)
+                except ValueError:
+                    logging.exception('Custom character unescape error')
+            else:
+                return text
+        return re.sub(r'\\x[0-9a-f]{2}', fixup, str(text), flags=re.IGNORECASE)
+
     def screen_update_event(self, eventtime):
         if self.is_running():
             self.lcd_chip.clear()
             for y, line in enumerate(self.render(eventtime)):
-                self.display.draw_text(0, y, line)
+                self.display.draw_text(0, y, self._unescape_cchars(line))
             self.lcd_chip.flush()
             return eventtime + MENU_UPDATE_DELAY
         elif not self.is_running() and self._autorun is True:
