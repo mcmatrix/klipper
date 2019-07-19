@@ -1088,7 +1088,6 @@ class MenuManager:
         self.gcode = self.printer.lookup_object('gcode')
         self.gcode_queue = []
         self.parameters = {}
-        self.objs = {}
         self.root = None
         self._root = config.get('menu_root', '__main')
         self.cols, self.rows = self.lcd_chip.get_dimensions()
@@ -1288,22 +1287,6 @@ class MenuManager:
             else:
                 self._autorun = autorun
 
-    def register_object(self, obj, name=None, override=False):
-        """Register an object with a "get_status" callback"""
-        if obj is not None:
-            if name is None:
-                name = obj.__class__.__name__
-            if override or name not in self.objs:
-                self.objs[name] = obj
-
-    def unregister_object(self, name):
-        """Unregister an object from "get_status" callback list"""
-        if name is not None:
-            if not isinstance(name, str):
-                name = name.__class__.__name__
-            if name in self.objs:
-                self.objs.pop(name)
-
     def after(self, starttime, callback, *args):
         """Helper method for reactor.register_callback.
         The callback will be executed once after the start time elapses.
@@ -1390,17 +1373,6 @@ class MenuManager:
 
     def update_parameters(self, eventtime):
         self.parameters = self.gcode_macro.create_status_wrapper(eventtime)
-        objs = dict(self.objs)
-        for name in objs.keys():
-            try:
-                if objs[name] is not None:
-                    get_status = getattr(objs[name], "get_status", None)
-                    if callable(get_status):
-                        self.parameters[name] = get_status(eventtime)
-                    else:
-                        self.parameters[name] = {}
-            except Exception:
-                logging.exception("Parameter '%s' update error" % str(name))
 
     def stack_push(self, container):
         if not isinstance(container, MenuContainer):
