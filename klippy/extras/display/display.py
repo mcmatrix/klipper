@@ -22,7 +22,7 @@ class PrinterLCD:
         self.lcd_chip = config.getchoice('lcd_type', LCD_chips)(config)
         self.lcd_type = config.get('lcd_type')
         # menu
-        self.menu = menu.MenuManager(config, self.lcd_chip)
+        self.menu = menu.MenuManager(config, self)
         # printer objects
         self.toolhead = self.sdcard = None
         self.fan = self.extruder = self.extruder1 = self.heater_bed = None
@@ -58,6 +58,8 @@ class PrinterLCD:
     # Get menu instance
     def get_menu(self):
         return self.menu
+    def get_lcd_chip(self):
+        return self.lcd_chip
     # Graphics drawing
     def animate_glyphs(self, eventtime, x, y, glyph_name, do_animate):
         frame = do_animate and int(eventtime) & 1
