@@ -6,6 +6,7 @@
 #
 # This file may be distributed under the terms of the GNU GPLv3 license.
 import os, logging, re
+from string import Template
 
 
 class error(Exception):
@@ -21,6 +22,56 @@ class MenuCursor:
     NONE = ' '
     SELECT = '>'
     EDIT = '*'
+
+
+# wrapper for dict to emulate configfile get_name for namespace
+# __ns - item namespace, used in item relative paths
+# $__id - variable is generated name for item
+# internal usage
+class MenuConfig(dict):
+    def get_name(self):
+        __id = 'menuitem' + hex(id(self)).lstrip("0x").rstrip("L")
+        return Template('menu ' + self.get(
+            '__ns', __id)).safe_substitute(__id=__id)
+
+
+# internal usage
+class MenuTemplateActions(object):
+    def __init__(self):
+        self.queue = []
+
+    def __call__(self):
+        self.queue = []
+
+        # custom action wrapper
+        # encapsulate __getattr__
+        class __ActionWrapper__(object):
+            def __getattr__(me, name):
+                def __append(*args):
+                    self.queue.append(
+                        (len(self.queue), name, list(args)))
+                    return ''
+                return __append
+        return __ActionWrapper__()
+
+    def iter_pop(self, n):
+        names = MenuHelper.words_aslist(n)
+        # find matching actions
+        matches = [t for t in self.queue if t[1] in names]
+        for match in matches:
+            i, name, args = match
+            # remove found match from action list
+            self.queue.remove(match)
+            # yield found action
+            yield (name, args)
+        else:
+            raise StopIteration
+
+    def __iter__(self):
+        for i, name, args in self.queue:
+            yield (name, args)
+        else:
+            raise StopIteration
 
 
 # static class for type cast
@@ -146,12 +197,8 @@ class MenuItem(object):
         self.__scroll_diff = 0
         self.__scroll_dir = None
         self.__last_state = True
-        # id: item id - used when sending events
-        # ns: item namespace - used in item relative paths
-        if isinstance(config, dict):
-            self._ns = config.get('__ns', hex(id(self)))
-        else:
-            self._ns = " ".join(config.get_name().split()[1:])
+        # item namespace - used in item relative paths
+        self._ns = " ".join(config.get_name().split()[1:])
         self.init()
 
     # override
@@ -186,6 +233,19 @@ class MenuItem(object):
     # override
     def stop_editing(self, run_script=True):
         pass
+
+    # override
+    def handle_action(self, name, *args):
+        if name == 'emit':
+            if len(args[0:]) > 0 and len(str(args[0])) > 0:
+                self.manager.send_event(
+                    "action:" + str(args[0]), self, *args[1:])
+            else:
+                logging.error("Malformed action: {}({})".format(
+                    name, ','.join(map(str, args[0:]))))
+        elif name == 'log':
+            logging.info("item:{} -> {}".format(
+                self.ns, ' '.join(map(str, args[0:]))))
 
     # override
     def get_context(self, cxt=None):
@@ -515,11 +575,15 @@ class MenuInput(MenuCommand):
         return self._input_value is not None
 
     def stop_editing(self, run_script=True):
+        if not self.is_editing():
+            return
         if run_script is True:
             self.run_stop_gcode()
         self._reset_value()
 
     def start_editing(self, run_script=True):
+        if self.is_editing():
+            return
         self._init_value()
         if run_script is True:
             self.run_start_gcode()
@@ -603,6 +667,14 @@ class MenuInput(MenuCommand):
         if self._realtime and last_value != self._input_value:
             self._value_changed()
 
+    # override
+    def handle_action(self, name, *args):
+        super(MenuInput, self).handle_action(name, *args)
+        if name == 'start_editing':
+            self.start_editing(*args)
+        elif name == 'stop_editing':
+            self.stop_editing(*args)
+
 
 class MenuCallback(MenuContainer):
     def __init__(self, manager, config):
@@ -674,19 +746,21 @@ class MenuView(MenuContainer, MenuSelector):
         super(MenuView, self).__init__(manager, config)
         self._use_cursor = MenuHelper.asbool(config.get('use_cursor', 'false'))
         self.strict = MenuHelper.asbool(config.get('strict', 'true'))
-        self.menu = config.get('longpress_menu', None)
+        self.popup_menu = config.get('popup_menu', None)
         self.content = re.sub(r"\~(\S*):\s*(.+?)\s*\~", self._preproc_content,
                               config.get('content'), 0, re.MULTILINE)
-        self._content_tpl = manager.gcode_macro.load_template(
-            {'c': self.content}, 'c')
+        self._content_tpl = manager.gcode_macro.create_template(
+            '%s:content' % (self.ns,), self.content)
         self._enter_gcode_tpl = manager.gcode_macro.load_template(
             config, 'enter_gcode', '')
         self._leave_gcode_tpl = manager.gcode_macro.load_template(
             config, 'leave_gcode', '')
+        self._longpress_gcode_tpl = manager.gcode_macro.load_template(
+            config, 'longpress_gcode', '')
         self.items = config.get('items', '')
         self.immutable = []
         self._mutable_start = 0
-        self._menu = None
+        self._popup_menu = None
 
     def init(self):
         super(MenuView, self).init()
@@ -725,8 +799,8 @@ class MenuView(MenuContainer, MenuSelector):
     def is_strict(self):
         return self.strict
 
-    def get_longpress_menu(self):
-        return self._menu
+    def get_popup_menu(self):
+        return self._popup_menu
 
     def init_selection(self):
         if not self.is_strict():
@@ -744,14 +818,14 @@ class MenuView(MenuContainer, MenuSelector):
             logging.error("Cannot select non menuitem")
         return self.selected
 
-    def _populate_longpress_menu(self):
-        self._menu = None
-        if self.menu is not None:
-            menu = self.manager.lookup_menuitem(self.menu)
+    def _populate_popup_menu(self):
+        self._popup_menu = None
+        if self.popup_menu is not None:
+            menu = self.manager.lookup_menuitem(self.popup_menu)
             if isinstance(menu, MenuContainer):
                 menu.assert_recursive_relation(self._parents)
                 menu.populate_items()
-                self._menu = menu
+                self._popup_menu = menu
 
     def _populate_items(self):
         super(MenuView, self)._populate_items()
@@ -761,8 +835,8 @@ class MenuView(MenuContainer, MenuSelector):
         # populate mutable list of items
         for name in MenuHelper.lines_aslist(self.items):
             self._insert_item(name)
-        # populate longpress menu item
-        self._populate_menu()
+        # populate popup menu item
+        self._populate_popup_menu()
 
     def insert_item(self, s, index=None):
         # allow runtime items only after immutable list of items
@@ -831,6 +905,10 @@ class MenuView(MenuContainer, MenuSelector):
         context = self.get_context()
         self.manager.queue_gcode(self._leave_gcode_tpl.render(context))
 
+    def get_longpress_gcode(self, cxt=None):
+        context = self.get_context(cxt)
+        return self._longpress_gcode_tpl.render(context)
+
     @property
     def use_cursor(self):
         return self._use_cursor
@@ -849,7 +927,8 @@ class MenuVSDCard(MenuView):
                 gcode = [
                     'M23 /%s' % str(fname)
                 ]
-                self.insert_item(MenuCommand(self.manager, {
+                self.insert_item(self.manager.menuitem_from({
+                    'type': 'command',
                     'name': repr('%s' % str(fname)),
                     'cursor': '+',
                     'gcode': "\n".join(gcode),
@@ -1048,7 +1127,7 @@ class MenuManager:
                 eventtime - self._last_click_press) >= LONG_PRESS_DURATION):
             # long click
             self._last_click_press = 0
-            self._long_click_callback(eventtime)
+            self._click_callback(eventtime, True)
         return eventtime + TIMER_DELAY
 
     def timeout_check(self, eventtime):
@@ -1325,89 +1404,24 @@ class MenuManager:
             self.send_event('exit', self)
             self.running = False
 
-    def process_actions(self, actions, names, source):
-        matches = None
-        if (actions and isinstance(actions, list)
-                and names and isinstance(names, list)):
-            # Process matching actions
-            matches = [t for t in actions if t[1] in names]
-            for match in matches:
-                i, name, args = match
-                malformed = False
-                # remove found actions from global action list
-                actions.remove(match)
-                # process found actions
-                if name == 'menu-back':
-                    self.back()
-                elif name == 'menu-exit':
-                    self.exit()
-                elif name == 'menu-longpress':
-                    self.push_longpress_menu()
-                elif name == 'editing-stop':
-                    if (isinstance(source, MenuInput) and source.is_editing()):
-                        run_script = (MenuHelper.asbool(args[1])
-                                      if len(args[0:]) > 0 else True)
-                        source.stop_editing(run_script)
-                elif name == 'editing-start':
-                    if (isinstance(source, MenuInput)
-                            and not source.is_editing()):
-                        run_script = (MenuHelper.asbool(args[1])
-                                      if len(args[0:]) > 0 else True)
-                        source.start_editing(run_script)
-                elif name == 'run-gcode':
-                    if (isinstance(source, MenuInput) and source.is_editing()):
-                        source.run_gcode()
-                    elif (isinstance(source, MenuCommand)):
-                        source.run_gcode()
-                elif name == 'run-longpress-gcode':
-                    if (isinstance(source, MenuInput) and source.is_editing()):
-                        source.run_longpress_gcode()
-                elif name == 'menu-emit':
-                    if len(args[0:]) > 0 and len(str(args[0])) > 0:
-                        self.send_event(
-                            "action:" + str(args[0]), source, *args[1:])
-                    else:
-                        malformed = True
-                elif name == 'menu-log':
-                    if len(args[0:]) > 0:
-                        logging.info("menu:{} {}".format(
-                            repr(source), ' '.join(map(str, args[0:]))))
-                    else:
-                        malformed = True
-                else:
-                    logging.error("Unknown action: {} {}".format(
-                        name, ' '.join(map(str, args[0:]))))
-                if malformed is True:
-                    logging.error("Malformed action: {} {}".format(
-                        name, ' '.join(map(str, args[0:]))))
-        return matches
+    def handle_action(self, name, *args):
+        if name == 'back':
+            self.back(*args)
+        elif name == 'exit':
+            self.exit(*args)
+        elif name == 'popup':
+            self.push_popup_menu()
+        elif name == 'reset':
+            # reset container selection
+            container = self.stack_peek()
+            if self.running and isinstance(container, MenuContainer):
+                container.stop_editing()
+                container.init_selection()
 
     def enter(self, long_press=False):
-        actions = []
-
-        def cb(name, *args):
-            actions.append((len(actions), name, list(args)))
-            return ''
-
         # action context
-        context = {
-            'menu': {
-                'back': lambda *b: cb('menu-back', *b),
-                'exit': lambda *b: cb('menu-exit', *b),
-                'emit': lambda *b: cb('menu-emit', *b),
-                'log': lambda *b: cb('menu-log', *b),
-                'longpress': lambda *b: cb('menu-longpress', *b)
-            },
-            'editing': {
-                'start': lambda *b: cb('editing-start', *b),
-                'stop': lambda *b: cb('editing-stop', *b)
-            },
-            'run': {
-                'gcode': lambda *b: cb('run-gcode', *b),
-                'longpress_gcode': lambda *b: cb('run-longpress-gcode', *b)
-            }
-        }
-
+        actions = MenuTemplateActions()
+        context = {'menu': actions()}
         container = self.stack_peek()
         if self.running and isinstance(container, MenuContainer):
             self.timer = 0
@@ -1422,8 +1436,9 @@ class MenuManager:
                             if current.is_auto() is True:
                                 self.queue_gcode(gcode)
                             else:
-                                self.process_actions(
-                                    actions, ['run-longpress-gcode'], current)
+                                for name, args in actions.iter_pop(
+                                        'run_gcode'):
+                                    self.queue_gcode(gcode)
                         else:
                             gcode = current.get_gcode(context)
                             if current.is_auto() is True:
@@ -1431,9 +1446,12 @@ class MenuManager:
                                     self.queue_gcode(gcode)
                                 current.stop_editing()
                             else:
-                                self.process_actions(
-                                    actions, ['run-gcode'], current)
-                        self.process_actions(actions, ['editing'], current)
+                                for name, args in actions.iter_pop(
+                                        'run_gcode'):
+                                    self.queue_gcode(gcode)
+                        for name, args in actions.iter_pop(
+                                'start_editing, stop_editing'):
+                            current.handle_action(name, *args)
                     else:
                         current.start_editing()
                 elif isinstance(current, MenuCommand):
@@ -1441,11 +1459,24 @@ class MenuManager:
                     if current.is_auto() is True:
                         self.queue_gcode(gcode)
                     else:
-                        self.process_actions(actions, ['run-gcode'], current)
-                # process actions
-                self.process_actions(actions, [
-                    'menu-back', 'menu-exit', 'deck', 'menu-emit', 'menu-log'
-                ], current)
+                        for name, args in actions.iter_pop('run_gcode'):
+                            self.queue_gcode(gcode)
+                # process general item actions
+                if isinstance(current, MenuItem):
+                    for name, args in actions.iter_pop('emit, log'):
+                        current.handle_action(name, *args)
+                else:  # current is None, no selection
+                    if isinstance(container, MenuView) and long_press is True:
+                        gcode = container.get_longpress_gcode(context)
+                        self.queue_gcode(gcode)
+                # process manager actions
+                for name, args in actions.iter_pop(
+                        'back, popup, exit, reset'):
+                    self.handle_action(name, *args)
+                # find leftovers
+                for name, args in actions:
+                    logging.error("Unknown action: {}({})".format(
+                        name, ','.join(map(str, args[0:]))))
             elif isinstance(container, MenuCallback):
                 container.handle_click(long_press)
 
@@ -1467,6 +1498,8 @@ class MenuManager:
             self.gcode_queue.pop(0)
 
     def menuitem_from(self, config):
+        if isinstance(config, dict):
+            config = MenuConfig(config)
         return MenuHelper.aschoice(
             config, 'type', menu_items)(self, config)
 
@@ -1534,27 +1567,19 @@ class MenuManager:
                 if (eventtime - self._last_click_press) < LONG_PRESS_DURATION:
                     # short click
                     self._last_click_press = 0
-                    self._short_click_callback(eventtime)
+                    self._click_callback(eventtime)
 
-    def _short_click_callback(self, eventtime):
+    def _click_callback(self, eventtime, long_press=False):
         if self.is_running():
-            self.enter()
+            self.enter(long_press)
         else:
             # lets start and populate the menu items
             self.begin(eventtime)
 
-    def _long_click_callback(self, eventtime):
-        if not self.is_running():
-            # lets start and populate the menu items
-            self.begin(eventtime)
-        else:
-            if not self.push_longpress_menu():
-                self.enter(True)
-
-    def push_longpress_menu(self):
+    def push_popup_menu(self):
         container = self.stack_peek()
         if isinstance(container, MenuView):
-            menu = container.get_longpress_menu()
+            menu = container.get_popup_menu()
             if (isinstance(menu, MenuContainer)
                     and not container.is_editing()
                     and menu is not container):
