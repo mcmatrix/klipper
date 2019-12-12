@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 # Support for display menu
 #
-# Based on the RaspberryPiLcdMenu from Alan Aufderheide, February 2013
 # Copyright (C) 2019 Janar Sööt <janar.soot@gmail.com>
 #
 # This file may be distributed under the terms of the GNU GPLv3 license.
@@ -744,7 +743,7 @@ class MenuCallback(MenuContainer):
 class MenuView(MenuContainer, MenuSelector):
     def __init__(self, manager, config):
         super(MenuView, self).__init__(manager, config)
-        self._use_cursor = MenuHelper.asbool(config.get('use_cursor', 'false'))
+        self._use_cursor = MenuHelper.asbool(config.get('use_cursor', 'True'))
         self.strict = MenuHelper.asbool(config.get('strict', 'true'))
         self.popup_menu = config.get('popup_menu', None)
         self.content = re.sub(r"\~(\S*):\s*(.+?)\s*\~", self._preproc_content,
@@ -755,11 +754,13 @@ class MenuView(MenuContainer, MenuSelector):
             config, 'enter_gcode', '')
         self._leave_gcode_tpl = manager.gcode_macro.load_template(
             config, 'leave_gcode', '')
+        self._shortpress_gcode_tpl = manager.gcode_macro.load_template(
+            config, 'shortpress_gcode', '')
         self._longpress_gcode_tpl = manager.gcode_macro.load_template(
             config, 'longpress_gcode', '')
-        self.items = config.get('items', '')
-        self.immutable = []
-        self._mutable_start = 0
+        self.runtime_items = config.get('items', '')  # mutable list of items
+        self.immutable_items = []  # immutable list of items
+        self._runtime_index_start = 0
         self._popup_menu = None
 
     def init(self):
@@ -770,8 +771,9 @@ class MenuView(MenuContainer, MenuSelector):
         return "~:{}~".format(s)
 
     def _preproc_content(self, matched):
-        m = matched.group(0)
-        name = matched.group(1)
+        full = matched.group(0)  # The entire match
+        m = matched.group(1)
+        name = matched.group(2)
         if m == "back":
             item = self.manager.menuitem_from({
                 'type': 'command',
@@ -779,17 +781,19 @@ class MenuView(MenuContainer, MenuSelector):
                 'gcode': '{menu.back()}'
             })
             # add item from content to immutable list of items
-            self.immutable.append(item)
+            self.immutable_items.append(item)
             return self._placeholder(item.ns)
         elif m == "item":
             # add item from content to immutable list of items
-            self.immutable.append(name)
+            self.immutable_items.append(name)
             return self._placeholder(name)
         else:
-            return self._placeholder(name)
+            logging.error(
+                "Unknown placeholder {} in {}:content".format(full, self.ns))
+            return ""
 
     def _names_aslist(self):
-        return self.immutable
+        return self.immutable_items
 
     def _lookup_item(self, item):
         if isinstance(item, dict):
@@ -798,9 +802,6 @@ class MenuView(MenuContainer, MenuSelector):
 
     def is_strict(self):
         return self.strict
-
-    def get_popup_menu(self):
-        return self._popup_menu
 
     def init_selection(self):
         if not self.is_strict():
@@ -818,7 +819,8 @@ class MenuView(MenuContainer, MenuSelector):
             logging.error("Cannot select non menuitem")
         return self.selected
 
-    def _populate_popup_menu(self):
+    def _populate_extra_items(self):
+        # popup menu item
         self._popup_menu = None
         if self.popup_menu is not None:
             menu = self.manager.lookup_menuitem(self.popup_menu)
@@ -830,20 +832,20 @@ class MenuView(MenuContainer, MenuSelector):
     def _populate_items(self):
         super(MenuView, self)._populate_items()
         # mark the end of immutable list of items
-        # and start of mutable list of items
-        self._mutable_start = len(self._allitems)
-        # populate mutable list of items
+        # and start of runtime mutable list of items
+        self._runtime_index_start = len(self._allitems)
+        # populate runtime list of items
         for name in MenuHelper.lines_aslist(self.items):
             self._insert_item(name)
-        # populate popup menu item
-        self._populate_popup_menu()
+        # populate extra menu items
+        self._populate_extra_items()
 
     def insert_item(self, s, index=None):
         # allow runtime items only after immutable list of items
         if index is None:
             super(MenuView, self).insert_item(s)
         else:
-            super(MenuView, self).insert_item(self._mutable_start+index)
+            super(MenuView, self).insert_item(self._runtime_index_start+index)
 
     def _render_item(self, item, selected=False):
         name = "%s" % str(item.render_name())
@@ -869,9 +871,9 @@ class MenuView(MenuContainer, MenuSelector):
         lines = []
         selected_row = None
         context = self.get_context({
-            'placeholders': [
-                self._placeholder(n) for _, n in self._allitems[
-                    self._mutable_start:]
+            'runtime_items': [
+                self._placeholder(n) for i, n in self._allitems[
+                    self._runtime_index_start:] if i.is_enabled()
             ]
         })
         try:
@@ -879,8 +881,8 @@ class MenuView(MenuContainer, MenuSelector):
             # postprocess content
             for row, line in enumerate(MenuHelper.lines_aslist(content)):
                 s = ""
-                for i, text in enumerate(re.split(r"\~:\s*(.+?)\s*\~",
-                                         MenuHelper.asliteral(line))):
+                for i, text in enumerate(
+                        re.split(r"\~:\s*(.+?)\s*\~", line)):
                     if i & 1 == 0:
                         s += text
                     else:
@@ -908,6 +910,16 @@ class MenuView(MenuContainer, MenuSelector):
     def get_longpress_gcode(self, cxt=None):
         context = self.get_context(cxt)
         return self._longpress_gcode_tpl.render(context)
+
+    def get_shortpress_gcode(self, cxt=None):
+        context = self.get_context(cxt)
+        return self._shortpress_gcode_tpl.render(context)
+
+    # override
+    def handle_action(self, name, *args):
+        super(MenuView, self).handle_action(name, *args)
+        if name == 'popup':
+            self.manager.push_container(self._popup_menu)
 
     @property
     def use_cursor(self):
@@ -1327,9 +1339,10 @@ class MenuManager:
                     self.top_row -= 1
             else:
                 self.top_row = 0
-            for row, text in enumerate(MenuHelper.lines_aslist(content)):
+            for row, text in enumerate(
+                    MenuHelper.aslatin(content).splitlines()):
                 if self.top_row <= row < self.top_row + self.rows:
-                    lines.append(text[:self.cols])
+                    lines.append(MenuHelper.asliteral(text))
         return lines
 
     def screen_update_event(self, eventtime):
@@ -1409,14 +1422,24 @@ class MenuManager:
             self.back(*args)
         elif name == 'exit':
             self.exit(*args)
-        elif name == 'popup':
-            self.push_popup_menu()
         elif name == 'reset':
             # reset container selection
             container = self.stack_peek()
-            if self.running and isinstance(container, MenuContainer):
-                container.stop_editing()
-                container.init_selection()
+            if self.running:
+                if isinstance(container, MenuContainer):
+                    container.stop_editing()
+                if isinstance(container, MenuSelector):
+                    container.init_selection()
+
+    def push_container(self, menu):
+        container = self.stack_peek()
+        if self.running and isinstance(container, MenuContainer):
+            if (isinstance(menu, MenuContainer)
+                    and not container.is_editing()
+                    and menu is not container):
+                self.stack_push(menu)
+                return True
+        return False
 
     def enter(self, long_press=False):
         # action context
@@ -1466,12 +1489,18 @@ class MenuManager:
                     for name, args in actions.iter_pop('emit, log'):
                         current.handle_action(name, *args)
                 else:  # current is None, no selection
-                    if isinstance(container, MenuView) and long_press is True:
-                        gcode = container.get_longpress_gcode(context)
+                    if isinstance(container, MenuView):
+                        if long_press is True:
+                            gcode = container.get_longpress_gcode(context)
+                        else:
+                            gcode = container.get_shortpress_gcode(context)
                         self.queue_gcode(gcode)
+                # process container actions
+                for name, args in actions.iter_pop('popup'):
+                    container.handle_action(name, *args)
                 # process manager actions
                 for name, args in actions.iter_pop(
-                        'back, popup, exit, reset'):
+                        'back, exit, reset'):
                     self.handle_action(name, *args)
                 # find leftovers
                 for name, args in actions:
@@ -1499,7 +1528,7 @@ class MenuManager:
 
     def menuitem_from(self, config):
         if isinstance(config, dict):
-            config = MenuConfig(config)
+            config = MenuConfig(dict(config))
         return MenuHelper.aschoice(
             config, 'type', menu_items)(self, config)
 
@@ -1575,17 +1604,6 @@ class MenuManager:
         else:
             # lets start and populate the menu items
             self.begin(eventtime)
-
-    def push_popup_menu(self):
-        container = self.stack_peek()
-        if isinstance(container, MenuView):
-            menu = container.get_popup_menu()
-            if (isinstance(menu, MenuContainer)
-                    and not container.is_editing()
-                    and menu is not container):
-                self.stack_push(menu)
-                return True
-        return False
 
     def back_callback(self, eventtime):
         if self.back_pin:
