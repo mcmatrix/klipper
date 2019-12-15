@@ -110,22 +110,20 @@ class MenuHelper:
         return s.lower() in ('y', 'yes', 't', 'true', 'on', '1')
 
     @staticmethod
-    def asint(s, default=0):
-        if s is None:
-            return default
+    def asint(s, default=sentinel):
         if isinstance(s, (int, float)):
             return int(s)
         s = str(s).strip()
-        return int(float(s)) if MenuHelper.isfloat(s) else int(default)
+        return int(float(s)) if MenuHelper.isfloat(s) else (
+            int(float(default)) if default is not sentinel else int(float(s)))
 
     @staticmethod
-    def asfloat(s, default=0.0):
-        if s is None:
-            return default
+    def asfloat(s, default=sentinel):
         if isinstance(s, (int, float)):
             return float(s)
         s = str(s).strip()
-        return float(s) if MenuHelper.isfloat(s) else float(default)
+        return float(s) if MenuHelper.isfloat(s) else (
+            float(default) if default is not sentinel else float(s))
 
     @staticmethod
     def isfloat(value):
@@ -168,7 +166,10 @@ class MenuHelper:
 
     @staticmethod
     def aschoice(config, option, choices, default=sentinel):
-        c = config.get(option, default)
+        if default is not sentinel:
+            c = config.get(option, default)
+        else:
+            c = config.get(option)
         if c not in choices:
             raise error("Choice '%s' for option '%s'"
                         " is not a valid choice" % (c, option))
@@ -543,8 +544,10 @@ class MenuInput(MenuCommand):
         self._reverse = MenuHelper.asbool(config.get('reverse', 'false'))
         self._realtime = MenuHelper.asbool(config.get('realtime', 'false'))
         self._input_tpl = manager.gcode_macro.load_template(config, 'input')
-        self._input_min = config.getfloat('input_min', -999999.0)
-        self._input_max = config.getfloat('input_max', 999999.0)
+        self._input_min_tpl = manager.gcode_macro.load_template(
+            config, 'input_min', '-999999.0')
+        self._input_max_tpl = manager.gcode_macro.load_template(
+            config, 'input_max', '999999.0')
         self._input_step = config.getfloat('input_step', above=0.)
         self._input_step2 = config.getfloat('input_step2', 0, minval=0.)
         self._longpress_gcode_tpl = manager.gcode_macro.load_template(
@@ -618,6 +621,14 @@ class MenuInput(MenuCommand):
         })
         return context
 
+    def _eval_min(self):
+        context = super(MenuInput, self).get_context()
+        return self._input_min_tpl.render(context)
+
+    def _eval_max(self):
+        context = super(MenuInput, self).get_context()
+        return self._input_max_tpl.render(context)
+
     def _eval_value(self):
         context = super(MenuInput, self).get_context()
         return self._input_tpl.render(context)
@@ -629,6 +640,8 @@ class MenuInput(MenuCommand):
     def _init_value(self):
         self._input_value = None
         self.__last_value = None
+        self._input_min = MenuHelper.asfloat(self._eval_min())
+        self._input_max = MenuHelper.asfloat(self._eval_max())
         value = self._eval_value()
         if MenuHelper.isfloat(value):
             self._input_value = min(self._input_max, max(
