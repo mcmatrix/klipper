@@ -178,7 +178,6 @@ class MenuItem(object):
     """Menu item abstract class.
     """
     def __init__(self, manager, config):
-        super(MenuItem, self).__init__()
         if type(self) is MenuItem:
             raise Exception(
                 'Abstract MenuItem cannot be instantiated directly')
@@ -465,7 +464,6 @@ class MenuSelector(object):
         if type(self) is MenuSelector:
             raise Exception(
                 'Abstract MenuSelector cannot be instantiated directly')
-        super(MenuSelector, self).__init__()
         if not hasattr(self, '__len__'):
             raise Exception(
                 'MenuSelector derived class must implement __len__')
