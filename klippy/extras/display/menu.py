@@ -708,10 +708,6 @@ class MenuView(MenuContainer):
         self._use_cursor = MenuHelper.asbool(config.get('use_cursor', 'True'))
         self._strict = MenuHelper.asbool(config.get('strict', 'true'))
         self.popup_menu = config.get('popup_menu', None)
-        self.content = re.sub(r"\~(\S*):\s*(.+?)\s*\~", self._preproc_content,
-                              config.get('content'), 0, re.MULTILINE)
-        self._content_tpl = manager.gcode_macro.create_template(
-            '%s:content' % (self.ns,), self.content)
         self._enter_gcode_tpl = manager.gcode_macro.load_template(
             config, 'enter_gcode', '')
         self._leave_gcode_tpl = manager.gcode_macro.load_template(
@@ -725,6 +721,10 @@ class MenuView(MenuContainer):
         self._runtime_index_start = 0
         self._popup_menu = None
         self.__selected = None
+        self.content = re.sub(r"\~(\S*):\s*(.+?)\s*\~", self._preproc_content,
+                              config.get('content'), 0, re.MULTILINE)
+        self._content_tpl = manager.gcode_macro.create_template(
+            '%s:content' % (self.ns,), self.content)
 
     def init(self):
         super(MenuView, self).init()
