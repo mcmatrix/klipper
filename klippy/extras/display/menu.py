@@ -39,35 +39,37 @@ class MenuTemplateActions(object):
     def __init__(self):
         self.queue = []
 
-    def __call__(self):
+    def __call__(self, item, n, **kwargs):
+        _handle = getattr(item, "handle_action", None)
+        if callable(_handle):
+            for name, args in self.iter_pop(n):
+                _handle(name, *args, **kwargs)
+
+    def get_caller(self):
         self.queue = []
 
-        # custom action wrapper
-        # encapsulate __getattr__
-        class __ActionWrapper__(object):
+        # custom action caller, encapsulate __getattr__
+        class __ActionCaller__(object):
             def __getattr__(me, name):
                 def __append(*args):
                     self.queue.append(
                         (len(self.queue), name, list(args)))
                     return ''
                 return __append
-        return __ActionWrapper__()
+        return __ActionCaller__()
 
     def iter_pop(self, n):
         names = MenuHelper.words_aslist(n)
         # find matching actions
-        matches = [t for t in self.queue if t[1] in names]
+        if len(names) == 1 and names[0] == '*':
+            matches = [t for t in self.queue]
+        else:
+            matches = [t for t in self.queue if t[1] in names]
         for match in matches:
             i, name, args = match
             # remove found match from action list
             self.queue.remove(match)
             # yield found action
-            yield (name, args)
-        else:
-            raise StopIteration
-
-    def __iter__(self):
-        for i, name, args in self.queue:
             yield (name, args)
         else:
             raise StopIteration
@@ -234,7 +236,7 @@ class MenuItem(object):
         pass
 
     # override
-    def handle_action(self, name, *args):
+    def handle_action(self, name, *args, **kwargs):
         if name == 'emit':
             if len(args[0:]) > 0 and len(str(args[0])) > 0:
                 self.manager.send_event(
@@ -527,6 +529,13 @@ class MenuCommand(MenuItem):
         context = self.get_context(cxt)
         return self._gcode_tpl.render(context)
 
+    # override
+    def handle_action(self, name, *args, **kwargs):
+        super(MenuCommand, self).handle_action(name, *args, **kwargs)
+        if name == 'run_gcode':
+            gcode = kwargs.pop('gcode', '')
+            self.manager.queue_gcode(gcode)
+
 
 class MenuInput(MenuCommand):
     def __init__(self, manager, config,):
@@ -667,8 +676,8 @@ class MenuInput(MenuCommand):
             self._value_changed()
 
     # override
-    def handle_action(self, name, *args):
-        super(MenuInput, self).handle_action(name, *args)
+    def handle_action(self, name, *args, **kwargs):
+        super(MenuInput, self).handle_action(name, *args, **kwargs)
         if name == 'start_editing':
             self.start_editing(*args)
         elif name == 'stop_editing':
@@ -916,8 +925,8 @@ class MenuView(MenuContainer, MenuSelector):
         return self._shortpress_gcode_tpl.render(context)
 
     # override
-    def handle_action(self, name, *args):
-        super(MenuView, self).handle_action(name, *args)
+    def handle_action(self, name, *args, **kwargs):
+        super(MenuView, self).handle_action(name, *args, **kwargs)
         if name == 'popup':
             self.manager.push_container(self._popup_menu)
 
@@ -1417,7 +1426,7 @@ class MenuManager:
             self.send_event('exit', self)
             self.running = False
 
-    def handle_action(self, name, *args):
+    def handle_action(self, name, *args, **kwargs):
         if name == 'back':
             self.back(*args)
         elif name == 'exit':
@@ -1444,7 +1453,7 @@ class MenuManager:
     def enter(self, long_press=False):
         # action context
         actions = MenuTemplateActions()
-        context = {'menu': actions()}
+        context = {'menu': actions.get_caller()}
         container = self.stack_peek()
         if self.running and isinstance(container, MenuContainer):
             self.timer = 0
@@ -1459,9 +1468,7 @@ class MenuManager:
                             if current.is_auto() is True:
                                 self.queue_gcode(gcode)
                             else:
-                                for name, args in actions.iter_pop(
-                                        'run_gcode'):
-                                    self.queue_gcode(gcode)
+                                actions(current, 'run_gcode', gcode=gcode)
                         else:
                             gcode = current.get_gcode(context)
                             if current.is_auto() is True:
@@ -1469,12 +1476,8 @@ class MenuManager:
                                     self.queue_gcode(gcode)
                                 current.stop_editing()
                             else:
-                                for name, args in actions.iter_pop(
-                                        'run_gcode'):
-                                    self.queue_gcode(gcode)
-                        for name, args in actions.iter_pop(
-                                'start_editing, stop_editing'):
-                            current.handle_action(name, *args)
+                                actions(current, 'run_gcode', gcode=gcode)
+                        actions(current, 'start_editing, stop_editing')
                     else:
                         current.start_editing()
                 elif isinstance(current, MenuCommand):
@@ -1482,12 +1485,10 @@ class MenuManager:
                     if current.is_auto() is True:
                         self.queue_gcode(gcode)
                     else:
-                        for name, args in actions.iter_pop('run_gcode'):
-                            self.queue_gcode(gcode)
+                        actions(current, 'run_gcode', gcode=gcode)
                 # process general item actions
                 if isinstance(current, MenuItem):
-                    for name, args in actions.iter_pop('emit, log'):
-                        current.handle_action(name, *args)
+                    actions(current, 'emit, log')
                 else:  # current is None, no selection
                     if isinstance(container, MenuView):
                         if long_press is True:
@@ -1496,14 +1497,11 @@ class MenuManager:
                             gcode = container.get_shortpress_gcode(context)
                         self.queue_gcode(gcode)
                 # process container actions
-                for name, args in actions.iter_pop('popup'):
-                    container.handle_action(name, *args)
+                actions(container, 'popup')
                 # process manager actions
-                for name, args in actions.iter_pop(
-                        'back, exit, reset'):
-                    self.handle_action(name, *args)
+                actions(self, 'back, exit, reset')
                 # find leftovers
-                for name, args in actions:
+                for name, args in actions.iter_pop('*'):
                     logging.error("Unknown action: {}({})".format(
                         name, ','.join(map(str, args[0:]))))
             elif isinstance(container, MenuCallback):
