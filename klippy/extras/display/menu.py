@@ -99,10 +99,8 @@ class MenuHelper:
         return ''.join(MenuHelper.aslatin(s).splitlines())
 
     @staticmethod
-    def asbool(s, default=False):
-        if s is None:
-            return bool(default)
-        elif isinstance(s, (bool, int, float)):
+    def asbool(s):
+        if isinstance(s, (bool, int, float)):
             return bool(s)
         elif MenuHelper.isfloat(s):
             return bool(MenuHelper.asfloat(s))
@@ -463,7 +461,7 @@ class MenuSelector(object):
     """Menu container selector abstract class.
     Use together with MenuContainer
     """
-    def __init__(self):
+    def __init__(self, manager, config):
         if type(self) is MenuSelector:
             raise Exception(
                 'Abstract MenuSelector cannot be instantiated directly')
@@ -474,10 +472,17 @@ class MenuSelector(object):
         if not hasattr(self, '__getitem__'):
             raise Exception(
                 'MenuSelector derived class must implement __getitem__')
+        self._strict = MenuHelper.asbool(config.get('strict', 'true'))
         self.__selected = None
 
+    def is_strict(self):
+        return self._strict
+
     def init_selection(self):
-        self.select_at(0)
+        if not self.is_strict():
+            self.select_at(None)
+        else:
+            self.select_at(0)
 
     def select_at(self, index):
         self.__selected = index
@@ -766,7 +771,6 @@ class MenuView(MenuContainer, MenuSelector):
     def __init__(self, manager, config):
         super(MenuView, self).__init__(manager, config)
         self._use_cursor = MenuHelper.asbool(config.get('use_cursor', 'True'))
-        self.strict = MenuHelper.asbool(config.get('strict', 'true'))
         self.popup_menu = config.get('popup_menu', None)
         self.content = re.sub(r"\~(\S*):\s*(.+?)\s*\~", self._preproc_content,
                               config.get('content'), 0, re.MULTILINE)
@@ -821,15 +825,6 @@ class MenuView(MenuContainer, MenuSelector):
         if isinstance(item, dict):
             item = self.manager.menuitem_from(item)
         return super(MenuView, self)._lookup_item(item)
-
-    def is_strict(self):
-        return self.strict
-
-    def init_selection(self):
-        if not self.is_strict():
-            self.select_at(None)
-        else:
-            self.select_at(0)
 
     def select_item(self, needle):
         if isinstance(needle, MenuItem):
@@ -1180,7 +1175,7 @@ class MenuManager:
     def _allow_timeout(self):
         container = self.stack_peek()
         if (container is self.root):
-            if (isinstance(container, MenuView)
+            if (isinstance(container, MenuSelector)
                 and ((container.is_strict() and container.selected != 0)
                      or (not container.is_strict()
                          and container.selected is not None))):
