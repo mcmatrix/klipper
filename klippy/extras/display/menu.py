@@ -704,9 +704,9 @@ class MenuCallback(MenuContainer):
 
 class MenuView(MenuContainer):
     def __init__(self, manager, config):
-        self._strict = MenuHelper.asbool(config.get('strict', 'true'))
         super(MenuView, self).__init__(manager, config)
         self._use_cursor = MenuHelper.asbool(config.get('use_cursor', 'True'))
+        self._strict = MenuHelper.asbool(config.get('strict', 'true'))
         self.popup_menu = config.get('popup_menu', None)
         self.content = re.sub(r"\~(\S*):\s*(.+?)\s*\~", self._preproc_content,
                               config.get('content'), 0, re.MULTILINE)
@@ -728,7 +728,6 @@ class MenuView(MenuContainer):
 
     def init(self):
         super(MenuView, self).init()
-        self.init_selection()
 
     def _placeholder(self, s):
         return "~:{}~".format(s)
