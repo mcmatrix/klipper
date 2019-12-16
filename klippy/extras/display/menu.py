@@ -851,7 +851,8 @@ class MenuView(MenuContainer):
                                 current.heartbeat(eventtime)
                                 selected_row = len(rows)
                             s += self._render_item(current, selected)
-                rows.append(s)
+                if s.strip():
+                    rows.append(s)
         except Exception:
             logging.exception('View rendering error')
         return ("\n".join(rows), selected_row)
