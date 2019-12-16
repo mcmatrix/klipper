@@ -805,7 +805,7 @@ class MenuView(MenuContainer):
             super(MenuView, self).insert_item(self._runtime_index_start+index)
 
     def _render_item(self, item, selected=False):
-        name = "%s" % str(item.render_name())
+        name = "%s" % str(item.render_name(scroll=selected))
         if selected and not self.is_editing():
             if self.use_cursor:
                 name = (item.cursor if isinstance(item, MenuItem)
