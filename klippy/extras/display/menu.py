@@ -859,6 +859,7 @@ class MenuView(MenuContainer):
                             s += self._render_item(current, selected)
                 if s.strip():
                     rows.append(s)
+                    logging.info("{}".format(s))
         except Exception:
             logging.exception('View rendering error')
         return ("\n".join(rows), selected_row)
