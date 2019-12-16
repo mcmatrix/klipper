@@ -184,8 +184,7 @@ class MenuItem(object):
         self.cursor = config.get('cursor', MenuCursor.SELECT)[:1]
         self._manager = manager
         # default display width adjusted by cursor size
-        self._width = MenuHelper.asint(config.get(
-            'width', (self.manager.cols - len(self.cursor))))
+        self._width = MenuHelper.asint(config.get('width', '0'))
         self._scroll = MenuHelper.asbool(config.get('scroll', 'false'))
         self._enable_tpl = manager.gcode_macro.load_template(
             config, 'enable', 'True')
@@ -198,6 +197,13 @@ class MenuItem(object):
         self.__last_state = True
         # item namespace - used in item relative paths
         self._ns = " ".join(config.get_name().split()[1:])
+        # if scroll is enabled and width is not specified then
+        # display width is used and adjusted by cursor size
+        if self._scroll and not self._width:
+            self._width = self.manager.cols - len(self.cursor)
+        # clamp width
+        self._width = min(
+            self.manager.cols - len(self.cursor), max(0, self._width))
         self.init()
 
     # override
@@ -853,7 +859,6 @@ class MenuView(MenuContainer):
                             s += self._render_item(current, selected)
                 if s.strip():
                     rows.append(s)
-                    logging.info("row: {}".format(s))
         except Exception:
             logging.exception('View rendering error')
         return ("\n".join(rows), selected_row)
