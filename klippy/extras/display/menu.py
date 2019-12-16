@@ -1270,8 +1270,9 @@ class MenuManager:
             except Exception:
                 logging.exception("Parameter '%s' update error" % str(name))
         # menu default jinja2 context
+        _tpl = self.gcode_macro.create_template("update_context", "")
         self.context = {
-            'printer': self.gcode_macro.create_status_wrapper(eventtime),
+            'printer': _tpl.create_status_wrapper(eventtime),
             'object': parameter
         }
 
