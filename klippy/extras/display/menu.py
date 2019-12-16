@@ -1349,7 +1349,7 @@ class MenuManager:
                     MenuHelper.aslatin(content).splitlines()):
                 if self.top_row <= row < self.top_row + self.rows:
                     text = MenuHelper.asliteral(text)
-                    text = text.replace('&nbsp;', ' ')
+                    text = text.replace('~space~', ' ')
                     lines.append(text.ljust(self.cols))
         return lines
 
