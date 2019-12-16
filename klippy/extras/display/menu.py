@@ -844,6 +844,7 @@ class MenuView(MenuContainer):
                         s += text
                     else:
                         idx = self.index_of(text)
+                        logging.info("Index {} for {}".format(idx, text))
                         if idx is not None:
                             current = self[idx]
                             selected = (idx == self.selected)
