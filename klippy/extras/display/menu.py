@@ -16,13 +16,6 @@ class sentinel:
     pass
 
 
-# static class for cursor
-class MenuCursor:
-    NONE = ' '
-    SELECT = '>'
-    EDIT = '*'
-
-
 # wrapper for dict to emulate configfile get_name for namespace
 # __ns - item namespace, used in item relative paths
 # $__id - variable is generated name for item
@@ -181,7 +174,7 @@ class MenuItem(object):
         if type(self) is MenuItem:
             raise Exception(
                 'Abstract MenuItem cannot be instantiated directly')
-        self.cursor = config.get('cursor', MenuCursor.SELECT)[:1]
+        self.cursor = config.get('cursor', '|')[:1]
         self._manager = manager
         # default display width adjusted by cursor size
         self._width = MenuHelper.asint(config.get('width', '0'))
@@ -341,6 +334,7 @@ class MenuContainer(MenuItem):
             raise Exception(
                 'Abstract MenuContainer cannot be instantiated directly')
         super(MenuContainer, self).__init__(manager, config)
+        self.cursor = config.get('cursor', '>')[:1]
         self._allitems = []
         self._names = []
         self._items = []
@@ -815,18 +809,18 @@ class MenuView(MenuContainer):
         if selected and not self.is_editing():
             if self.use_cursor:
                 name = (item.cursor if isinstance(item, MenuItem)
-                        else MenuCursor.SELECT) + name
+                        else '>') + name
             else:
                 name = (name if self.manager.blink_slow_state
                         else ' '*len(name))
         elif selected and self.is_editing():
             if self.use_cursor:
-                name = MenuCursor.EDIT + name
+                name = '*' + name
             else:
                 name = (name if self.manager.blink_fast_state
                         else ' '*len(name))
         elif self.use_cursor:
-            name = MenuCursor.NONE + name
+            name = ' ' + name
         return name
 
     def render_content(self, eventtime):
