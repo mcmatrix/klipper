@@ -1346,7 +1346,7 @@ class MenuManager:
             for row, text in enumerate(
                     MenuHelper.aslatin(content).splitlines()):
                 if self.top_row <= row < self.top_row + self.rows:
-                    lines.append(MenuHelper.asliteral(text))
+                    lines.append(MenuHelper.asliteral(text).ljust(self.cols))
         return lines
 
     def screen_update_event(self, eventtime):
@@ -1368,7 +1368,11 @@ class MenuManager:
         if self.running and isinstance(container, MenuContainer):
             self.timer = 0
             if isinstance(container, MenuView):
-                container.select_prev()
+                current = container.selected_item()
+                if isinstance(current, MenuInput) and current.is_editing():
+                    current.dec_value(fast_rate)
+                else:
+                    container.select_prev()
             elif isinstance(container, MenuCallback):
                 container.handle_up(fast_rate)
 
@@ -1377,7 +1381,11 @@ class MenuManager:
         if self.running and isinstance(container, MenuContainer):
             self.timer = 0
             if isinstance(container, MenuView):
-                container.select_next()
+                current = container.selected_item()
+                if isinstance(current, MenuInput) and current.is_editing():
+                    current.inc_value(fast_rate)
+                else:
+                    container.select_next()
             elif isinstance(container, MenuCallback):
                 container.handle_down(fast_rate)
 
