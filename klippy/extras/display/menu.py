@@ -725,8 +725,9 @@ class MenuView(MenuContainer):
         self.immutable_items = []  # immutable list of items
         self._runtime_index_start = 0
         self._popup_menu = None
-        self.content = re.sub(r"\~(\w*):\s*(.+?)\s*\~", self._preproc_content,
-                              config.get('content'), 0, re.MULTILINE)
+        self.content = re.sub(
+            r"\~(\w*):'\s*([a-zA-Z0-9_. ]+?)\s*'\~", self._preproc_content,
+            config.get('content'), 0, re.MULTILINE)
         self._content_tpl = manager.gcode_macro.create_template(
             '%s:content' % (self.ns,), self.content)
 
@@ -734,7 +735,7 @@ class MenuView(MenuContainer):
         super(MenuView, self).init()
 
     def _placeholder(self, s):
-        return "~:{}~".format(s)
+        return "~name:'{}'~".format(s)
 
     def _preproc_content(self, matched):
         full = matched.group(0)  # The entire match
@@ -839,8 +840,8 @@ class MenuView(MenuContainer):
             # postprocess content
             for line in MenuHelper.lines_aslist(content):
                 s = ""
-                for i, text in enumerate(
-                        re.split(r"\~:\s*(.+?)\s*\~", line)):
+                for i, text in enumerate(re.split(
+                        r"\~name:'\s*([a-zA-Z0-9_. ]+?)\s*'\~", line)):
                     if i & 1 == 0:
                         s += text
                     else:
@@ -1348,7 +1349,7 @@ class MenuManager:
                     MenuHelper.aslatin(content).splitlines()):
                 if self.top_row <= row < self.top_row + self.rows:
                     text = MenuHelper.asliteral(text)
-                    text = text.replace('~space~', ' ')
+                    text = text.replace('&nbsp;', ' ')
                     lines.append(text.ljust(self.cols))
         return lines
 
