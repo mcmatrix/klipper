@@ -788,7 +788,7 @@ class MenuView(MenuContainer):
         # and start of runtime mutable list of items
         self._runtime_index_start = len(self._allitems)
         # populate runtime list of items
-        for name in MenuHelper.lines_aslist(self.items):
+        for name in MenuHelper.lines_aslist(self.runtime_items):
             self._insert_item(name)
         # populate extra menu items
         self._populate_extra_items()
