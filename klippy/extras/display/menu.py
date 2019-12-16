@@ -859,7 +859,7 @@ class MenuView(MenuContainer):
                             s += self._render_item(current, selected)
                 if s.strip():
                     rows.append(s)
-                    logging.info("{}".format(s))
+                    # logging.info("{}".format(s))
         except Exception:
             logging.exception('View rendering error')
         return ("\n".join(rows), selected_row)
@@ -1021,7 +1021,6 @@ class MenuManager:
         self._last_click_press = 0
         self.analog_pullup = config.getfloat(
             'analog_pullup_resistor', 4700., above=0.)
-        self.analog_pin_debug = config.getboolean('analog_pin_debug', False)
         self._encoder_fast_rate = config.getfloat(
             'encoder_fast_rate', .03, above=0.)
         self._last_encoder_cw_eventtime = 0
@@ -1053,7 +1052,7 @@ class MenuManager:
                             "Unable to parse analog_range_click_pin")
                     self.buttons.register_adc_button(
                         self.click_pin, p_min, p_max, self.analog_pullup,
-                        self.click_callback, self.analog_pin_debug)
+                        self.click_callback)
                 else:
                     self.buttons.register_buttons(
                         [self.click_pin], self.click_callback)
@@ -1067,7 +1066,7 @@ class MenuManager:
                             "Unable to parse analog_range_back_pin")
                     self.buttons.register_adc_button_push(
                         self.back_pin, p_min, p_max, self.analog_pullup,
-                        self.back_callback, self.analog_pin_debug)
+                        self.back_callback)
                 else:
                     self.buttons.register_button_push(
                         self.back_pin, self.back_callback)
@@ -1081,7 +1080,7 @@ class MenuManager:
                             "Unable to parse analog_range_up_pin")
                     self.buttons.register_adc_button_push(
                         self.up_pin, p_min, p_max, self.analog_pullup,
-                        self.up_callback, self.analog_pin_debug)
+                        self.up_callback)
                 else:
                     self.buttons.register_button_push(
                         self.up_pin, self.up_callback)
@@ -1095,7 +1094,7 @@ class MenuManager:
                             "Unable to parse analog_range_down_pin")
                     self.buttons.register_adc_button_push(
                         self.down_pin, p_min, p_max, self.analog_pullup,
-                        self.down_callback, self.analog_pin_debug)
+                        self.down_callback)
                 else:
                     self.buttons.register_button_push(
                         self.down_pin, self.down_callback)
@@ -1109,7 +1108,7 @@ class MenuManager:
                             "Unable to parse analog_range_kill_pin")
                     self.buttons.register_adc_button_push(
                         self.kill_pin, p_min, p_max, self.analog_pullup,
-                        self.kill_callback, self.analog_pin_debug)
+                        self.kill_callback)
                 else:
                     self.buttons.register_button_push(
                         self.kill_pin, self.kill_callback)
@@ -1353,8 +1352,7 @@ class MenuManager:
             for row, text in enumerate(
                     MenuHelper.aslatin(content).splitlines()):
                 if self.top_row <= row < self.top_row + self.rows:
-                    text = MenuHelper.asliteral(text)
-                    lines.append(text[:self.cols].ljust(self.cols))
+                    lines.append(MenuHelper.asliteral(text).ljust(self.cols))
         return lines
 
     def screen_update_event(self, eventtime):
