@@ -464,14 +464,14 @@ class MenuSelector(object):
         if type(self) is MenuSelector:
             raise Exception(
                 'Abstract MenuSelector cannot be instantiated directly')
-        self.__initial = MenuHelper.asint(config.get('initial', 0), None)
-        self.__selected = None
+        self._initial = MenuHelper.asint(config.get('initial', 0), None)
+        self._selected = None
 
     def init_selection(self):
         self.select_at(self.initial)
 
     def select_at(self, index):
-        self.__selected = index
+        self._selected = index
         # select element
         item = self.selected_item()
         if isinstance(item, MenuItem):
@@ -507,11 +507,11 @@ class MenuSelector(object):
 
     @property
     def initial(self):
-        return self.__initial
+        return self._initial
 
     @property
     def selected(self):
-        return self.__selected
+        return self._selected
 
 
 class MenuCommand(MenuItem):
