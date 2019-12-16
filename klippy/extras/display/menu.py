@@ -552,6 +552,10 @@ class MenuInput(MenuCommand):
             self.manager.queue_gcode(self.get_gcode())
             self._is_dirty = False
 
+    def eval_enable(self):
+        context = super(MenuInput, self).get_context()
+        return MenuHelper.asbool(self._enable_tpl.render(context))
+
     def get_context(self, cxt=None):
         context = super(MenuInput, self).get_context(cxt)
         context.update({
