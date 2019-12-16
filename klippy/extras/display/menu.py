@@ -302,7 +302,7 @@ class MenuItem(object):
 
     def render_name(self, selected=False, use_cursor=True):
         def _blink(_text, _bstate):
-            if self._blink and not use_cursor:
+            if (self._blink or not use_cursor) and _bstate:
                 s = ""
                 for i in range(0, len(_text)):
                     s += _text[i] if int(self._blink_mask) & (1 << i) else ' '
