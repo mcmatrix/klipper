@@ -101,12 +101,16 @@ class MenuHelper:
         return s.lower() in ('y', 'yes', 't', 'true', 'on', '1')
 
     @staticmethod
-    def asint(s, default=sentinel):
+    def asint(s, default=sentinel, binary=False):
         if isinstance(s, (int, float)):
             return int(s)
         s = str(s).strip()
-        return int(float(s)) if MenuHelper.isfloat(s) else (
-            int(float(default)) if default is not sentinel else int(float(s)))
+        if binary:
+            return int(s, 2)
+        else:
+            return int(float(s)) if MenuHelper.isfloat(s) else (
+                int(float(default)) if default is not sentinel
+                else int(float(s)))
 
     @staticmethod
     def asfloat(s, default=sentinel):
@@ -174,8 +178,11 @@ class MenuItem(object):
         if type(self) is MenuItem:
             raise Exception(
                 'Abstract MenuItem cannot be instantiated directly')
-        self.cursor = config.get('cursor', '|')[:1]
         self._manager = manager
+        self.cursor = config.get('cursor', '|')[:1]
+        self._blink = MenuHelper.asbool(config.get('blink', 'false'))
+        self._blink_mask = MenuHelper.asint(
+            config.get('blink_binmsk', '0b0'), binary=True)
         # default display width adjusted by cursor size
         self._width = MenuHelper.asint(config.get('width', '0'))
         self._scroll = MenuHelper.asbool(config.get('scroll', 'false'))
@@ -316,6 +323,14 @@ class MenuItem(object):
     def send_event(self, event, *args):
         return self.manager.send_event(
             "item:%s:%s" % (self.ns, str(event)), *args)
+
+    @property
+    def use_blink(self):
+        return self._blink
+
+    @property
+    def blink_mask(self):
+        return self._blink_mask
 
     @property
     def manager(self):
@@ -807,20 +822,22 @@ class MenuView(MenuContainer):
             super(MenuView, self).insert_item(self._runtime_index_start+index)
 
     def _render_item(self, item, selected=False):
+        def _blink(_name, _mask, _enable, _state):
+            if _enable and _state:
+                s = ""
+                for i in range(0, len(_name)):
+                    s += _name[i] if _mask & (1 << i) else ' '
+                return s
+            return _name
         name = "%s" % str(item.render_name(scroll=selected))
         if selected and not self.is_editing():
-            if self.use_cursor:
-                name = (item.cursor if isinstance(item, MenuItem)
-                        else '>') + name
-            else:
-                name = (name if self.manager.blink_slow_state
-                        else ' '*len(name))
+            name = (item.cursor if self.use_cursor else '') + _blink(
+                name, item.blink_mask, item.use_blink or not self.use_cursor,
+                self.manager.blink_slow_state)
         elif selected and self.is_editing():
-            if self.use_cursor:
-                name = '*' + name
-            else:
-                name = (name if self.manager.blink_fast_state
-                        else ' '*len(name))
+            name = ('*' if self.use_cursor else '') + _blink(
+                name, item.blink_mask, item.use_blink or not self.use_cursor,
+                self.manager.blink_fast_state)
         elif self.use_cursor:
             name = ' ' + name
         return name
