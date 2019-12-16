@@ -1336,7 +1336,7 @@ class MenuManager:
             container.heartbeat(eventtime)
             content, viewport_row = container.render_content(eventtime)
             if viewport_row is not None:
-                while viewport_row > (self.top_row + self.rows):
+                while viewport_row >= (self.top_row + self.rows):
                     self.top_row += 1
                 while viewport_row < self.top_row and self.top_row > 0:
                     self.top_row -= 1
