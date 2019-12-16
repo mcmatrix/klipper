@@ -777,7 +777,7 @@ class MenuView(MenuContainer, MenuSelector):
         self.immutable_items = []  # immutable list of items
         self._runtime_index_start = 0
         self._popup_menu = None
-        self.content = re.sub(r"\~(\S*):\s*(.+?)\s*\~", self._preproc_content,
+        self.content = re.sub(r"\~(\w*):\s*(.+?)\s*\~", self._preproc_content,
                               config.get('content'), 0, re.MULTILINE)
         self._content_tpl = manager.gcode_macro.create_template(
             '%s:content' % (self.ns,), self.content)
