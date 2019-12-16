@@ -1346,7 +1346,8 @@ class MenuManager:
             for row, text in enumerate(
                     MenuHelper.aslatin(content).splitlines()):
                 if self.top_row <= row < self.top_row + self.rows:
-                    lines.append(MenuHelper.asliteral(text).ljust(self.cols))
+                    text = MenuHelper.asliteral(text)
+                    lines.append(text[:self.cols].ljust(self.cols))
         return lines
 
     def screen_update_event(self, eventtime):
