@@ -325,7 +325,7 @@ class MenuItem(object):
             s = (self.cursor if use_cursor else '') + _blink(
                 s, self.manager.blink_slow_state)
         elif selected and self.is_editing():
-            s = ('*' if self._use_cursor else '') + _blink(
+            s = ('*' if use_cursor else '') + _blink(
                 s, self.manager.blink_fast_state)
         elif use_cursor:
             s = ' ' + s
