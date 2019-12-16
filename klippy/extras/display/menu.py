@@ -825,7 +825,7 @@ class MenuView(MenuContainer):
 
     def render_content(self, eventtime):
         content = ""
-        lines = []
+        rows = []
         selected_row = None
         context = self.get_context({
             'runtime_items': [
@@ -836,7 +836,7 @@ class MenuView(MenuContainer):
         try:
             content = self._content_tpl.render(context)
             # postprocess content
-            for row, line in enumerate(MenuHelper.lines_aslist(content)):
+            for line in MenuHelper.lines_aslist(content):
                 s = ""
                 for i, text in enumerate(
                         re.split(r"\~:\s*(.+?)\s*\~", line)):
@@ -849,12 +849,12 @@ class MenuView(MenuContainer):
                             selected = (idx == self.selected)
                             if selected:
                                 current.heartbeat(eventtime)
-                                selected_row = row
+                                selected_row = len(rows)
                             s += self._render_item(current, selected)
-                lines.append(s)
+                rows.append(s)
         except Exception:
             logging.exception('View rendering error')
-        return ("\n".join(lines), selected_row)
+        return ("\n".join(rows), selected_row)
 
     def run_enter_gcode(self):
         context = self.get_context()
