@@ -16,13 +16,72 @@ class sentinel:
     pass
 
 
+class MenuRenderBuffer(object):
+    """Helper class for callback view render buffer"""
+    def __init__(self, width, height):
+        self.width = width
+        self.height = height
+        self.buffer = [" " * self.width] * self.height
+        self.current = {
+            'x': 0,
+            'y': 0
+        }
+        self.dirty = False
+
+    def is_dirty(self):
+        return self.dirty
+
+    def set_xy(self, x, y):
+        if not (0 <= x < self.width):
+            raise IndexError
+        if not (0 <= y < self.height):
+            raise IndexError
+        self.current['x'] = x
+        self.current['y'] = y
+
+    def get_xy(self):
+        return self.current
+
+    def write(self, text, x=None, y=None):
+        if x is None:
+            x = self.current['x']
+        if y is None:
+            y = self.current['y']
+
+        if x >= self.width:
+            raise IndexError
+        if y >= self.height:
+            raise IndexError
+
+        line = self.buffer[y]
+        new_line = line[0:x] + text + line[x + len(text):]
+        line = new_line[:self.width]
+        self.buffer[y] = line
+        self.current = {
+            'x': x + len(text),
+            'y': y
+        }
+        self.dirty = True
+
+    def clear(self):
+        self.set_xy(0, 0)
+        self.buffer = [" " * self.width] * self.height
+        self.dirty = False
+
+    def get_buffer(self):
+        return list(self.buffer)
+
+    def get_lines(self):
+        return "\n".join(self.buffer)
+
+
 # wrapper for dict to emulate configfile get_name for namespace
 # __ns - item namespace, used in item relative paths
 # $__id - variable is generated name for item
 # internal usage
 class MenuConfig(dict):
     def get_name(self):
-        __id = 'menuitem' + hex(id(self)).lstrip("0x").rstrip("L")
+        __id = '__menuitem_' + hex(id(self)).lstrip("0x").rstrip("L")
         return Template('menu ' + self.get(
             '__ns', __id)).safe_substitute(__id=__id)
 
@@ -232,11 +291,11 @@ class MenuItem(object):
         return self.eval_enable()
 
     # override
-    def start_editing(self, run_script=True):
+    def start_editing(self):
         pass
 
     # override
-    def stop_editing(self, run_script=True):
+    def stop_editing(self):
         pass
 
     # override
@@ -255,7 +314,16 @@ class MenuItem(object):
     # override
     def get_context(self, cxt=None):
         # get default menu context
-        return self.manager.get_context(cxt)
+        context = self.manager.get_context(cxt)
+        # add default 'me' props
+        context.update({
+            'me': {
+                'editing': self.is_editing(),
+                'width': self._width,
+                'ns': self.ns
+            }
+        })
+        return context
 
     def eval_enable(self):
         context = self.get_context()
@@ -491,16 +559,22 @@ class MenuContainer(MenuItem):
 class MenuCommand(MenuItem):
     def __init__(self, manager, config):
         super(MenuCommand, self).__init__(manager, config)
-        self._gcode_tpl = manager.gcode_macro.load_template(
-            config, 'gcode', '')
+        self._shortpress_gcode_tpl = manager.gcode_macro.load_template(
+            config, 'shortpress_gcode', '')
+        self._longpress_gcode_tpl = manager.gcode_macro.load_template(
+            config, 'longpress_gcode', '')
         self._auto = MenuHelper.asbool(config.get('auto', 'true'))
 
     def is_auto(self):
         return self._auto
 
-    def get_gcode(self, cxt=None):
+    def get_longpress_gcode(self, cxt=None):
         context = self.get_context(cxt)
-        return self._gcode_tpl.render(context)
+        return self._longpress_gcode_tpl.render(context)
+
+    def get_shortpress_gcode(self, cxt=None):
+        context = self.get_context(cxt)
+        return self._shortpress_gcode_tpl.render(context)
 
     # override
     def handle_action(self, name, *args, **kwargs):
@@ -522,12 +596,8 @@ class MenuInput(MenuCommand):
             config, 'input_max', '999999.0')
         self._input_step = config.getfloat('input_step', above=0.)
         self._input_step2 = config.getfloat('input_step2', 0, minval=0.)
-        self._longpress_gcode_tpl = manager.gcode_macro.load_template(
-            config, 'longpress_gcode', '')
-        self._start_gcode_tpl = manager.gcode_macro.load_template(
-            config, 'start_gcode', '')
-        self._stop_gcode_tpl = manager.gcode_macro.load_template(
-            config, 'stop_gcode', '')
+        self._gcode_tpl = manager.gcode_macro.load_template(
+            config, 'gcode', '')
 
     def init(self):
         super(MenuInput, self).init()
@@ -542,34 +612,22 @@ class MenuInput(MenuCommand):
     def is_realtime(self):
         return self._realtime
 
-    def get_longpress_gcode(self, cxt=None):
+    def get_gcode(self, cxt=None):
         context = self.get_context(cxt)
-        return self._longpress_gcode_tpl.render(context)
-
-    def run_start_gcode(self):
-        context = self.get_context()
-        self.manager.queue_gcode(self._start_gcode_tpl.render(context))
-
-    def run_stop_gcode(self):
-        context = self.get_context()
-        self.manager.queue_gcode(self._stop_gcode_tpl.render(context))
+        return self._gcode_tpl.render(context)
 
     def is_editing(self):
         return self._input_value is not None
 
-    def stop_editing(self, run_script=True):
+    def stop_editing(self):
         if not self.is_editing():
             return
-        if run_script is True:
-            self.run_stop_gcode()
         self._reset_value()
 
-    def start_editing(self, run_script=True):
+    def start_editing(self):
         if self.is_editing():
             return
         self._init_value()
-        if run_script is True:
-            self.run_start_gcode()
 
     def get_value(self):
         return self._input_value
@@ -683,6 +741,14 @@ class MenuCallback(MenuContainer):
         self._render_callback = None
         self._enter_callback = None
         self._leave_callback = None
+
+    # buffer factory
+    def create_buffer(self, cols=None, rows=None):
+        if cols is None:
+            cols = self.manager.cols
+        if rows is None:
+            rows = self.manager.rows
+        return MenuRenderBuffer(cols, rows)
 
     # register callbacks
     def register_click_callback(self, callback):
@@ -1479,35 +1545,31 @@ class MenuManager:
                 current = container.selected_item()
                 if isinstance(current, MenuContainer):
                     self.stack_push(current)
-                elif isinstance(current, MenuInput):
-                    if current.is_editing():
-                        if long_press is True:
-                            gcode = current.get_longpress_gcode(context)
-                            if current.is_auto() is True:
-                                self.queue_gcode(gcode)
-                            else:
-                                actions(current, 'run_gcode', gcode=gcode)
+                elif isinstance(current, MenuCommand):
+                    # MenuInput inherits from MenuCommand
+                    if long_press is True:
+                        gcode = current.get_longpress_gcode(context)
+                        if current.is_auto() is True:
+                            self.queue_gcode(gcode)
+                            if not current.is_editing():
+                                current.start_editing()
                         else:
-                            gcode = current.get_gcode(context)
-                            if current.is_auto() is True:
-                                if not current.is_realtime():
-                                    self.queue_gcode(gcode)
+                            actions(current, 'run_gcode', gcode=gcode)
+                    else:
+                        gcode = current.get_shortpress_gcode(context)
+                        if current.is_auto() is True:
+                            self.queue_gcode(gcode)
+                            if current.is_editing():
                                 current.stop_editing()
                             else:
-                                actions(current, 'run_gcode', gcode=gcode)
-                        actions(current, 'start_editing, stop_editing')
-                    else:
-                        current.start_editing()
-                elif isinstance(current, MenuCommand):
-                    gcode = current.get_gcode(context)
-                    if current.is_auto() is True:
-                        self.queue_gcode(gcode)
-                    else:
-                        actions(current, 'run_gcode', gcode=gcode)
+                                current.start_editing()
+                        else:
+                            actions(current, 'run_gcode', gcode=gcode)
+                    actions(current, 'start_editing, stop_editing')
                 # process general item actions
                 if isinstance(current, MenuItem):
                     actions(current, 'emit, log')
-                else:  # current is None, no selection
+                else:  # current is None, no selection. pass click to container
                     if isinstance(container, MenuView):
                         if long_press is True:
                             gcode = container.get_longpress_gcode(context)
