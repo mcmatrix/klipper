@@ -687,8 +687,7 @@ class MenuInput(MenuCommand):
         if MenuHelper.isfloat(value):
             self._input_value = min(self._input_max, max(
                 self._input_min, MenuHelper.asfloat(value)))
-            if self._realtime:
-                self._value_changed()
+            self._value_changed()
         else:
             logging.error("Cannot init input value")
 
@@ -709,7 +708,7 @@ class MenuInput(MenuCommand):
         self._input_value = min(self._input_max, max(
             self._input_min, self._input_value))
 
-        if self._realtime and last_value != self._input_value:
+        if last_value != self._input_value:
             self._value_changed()
 
     def dec_value(self, fast_rate=False):
@@ -726,7 +725,7 @@ class MenuInput(MenuCommand):
         self._input_value = min(self._input_max, max(
             self._input_min, self._input_value))
 
-        if self._realtime and last_value != self._input_value:
+        if last_value != self._input_value:
             self._value_changed()
 
     # override
