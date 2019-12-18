@@ -851,7 +851,7 @@ class MenuView(MenuContainer):
                 'type': 'command',
                 'name': repr(name),
                 'cursor': '>',
-                'gcode': '{menu.back()}'
+                'press_gcode': '{menu.back()}'
             })
             # add item from content to immutable list of items
             self.immutable_items.append(item)
