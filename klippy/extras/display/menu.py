@@ -114,18 +114,22 @@ class MenuTemplateActions(object):
 
         # wrapper for action caller, encapsulate __getattr__, __setattr__
         class __CallWrapper__(object):
-            def __setattr__(me, name, value):
-                self.attrs[name] = value
-
             def __getattr__(me, name):
-                def __append(*args):
+                def _setattr(key, val):
+                    self.attrs[key] = val
+                    return ''
+
+                def _append(*args):
                     self.queue.append(
                         (len(self.queue), name, list(args)))
                     return ''
+
                 if name in kwargs:
                     return kwargs[name]
+                elif name == "setattr":
+                    return _setattr
                 else:
-                    return __append
+                    return _append
         return __CallWrapper__()
 
     def iter_pop(self, n):
