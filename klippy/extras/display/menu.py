@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# Support for display menu
+# Support for display menu (v2.0)
 #
 # Copyright (C) 2019 Janar Sööt <janar.soot@gmail.com>
 #
@@ -94,6 +94,7 @@ class MenuConfig(dict):
 class MenuTemplateActions(object):
     def __init__(self):
         self.queue = []
+        self.attrs = {}
 
     def __call__(self, item, n, **kwargs):
         _handle = getattr(item, "handle_action", None)
@@ -101,11 +102,21 @@ class MenuTemplateActions(object):
             for name, args in self.iter_pop(n):
                 _handle(name, *args, **kwargs)
 
+    def __getattr__(self, name):
+        if name in self.attrs:
+            return self.attrs[name]
+        else:
+            return None
+
     def get_caller(self, **kwargs):
         self.queue = []
+        self.attrs = {}
 
-        # wrapper for action caller, encapsulate __getattr__
+        # wrapper for action caller, encapsulate __getattr__, __setattr__
         class __CallWrapper__(object):
+            def __setattr__(me, name, value):
+                self.attrs[name] = value
+
             def __getattr__(me, name):
                 def __append(*args):
                     self.queue.append(
@@ -575,30 +586,18 @@ class MenuContainer(MenuItem):
 class MenuCommand(MenuItem):
     def __init__(self, manager, config):
         super(MenuCommand, self).__init__(manager, config)
-        self._press_gcode_tpl = manager.gcode_macro.load_template(
-            config, 'press_gcode', '')
-        self._auto = MenuHelper.asbool(config.get('auto', 'true'))
+        self._press_script_tpl = manager.gcode_macro.load_template(
+            config, 'press_script', '')
 
-    def is_auto(self):
-        return self._auto
-
-    def get_press_gcode(self, cxt=None):
+    def get_press_script(self, cxt=None):
         context = self.get_context(cxt)
-        return self._press_gcode_tpl.render(context)
-
-    # override
-    def handle_action(self, name, *args, **kwargs):
-        super(MenuCommand, self).handle_action(name, *args, **kwargs)
-        if name == 'run_gcode':
-            gcode = kwargs.pop('gcode', '')
-            self.manager.queue_gcode(gcode)
+        return self._press_script_tpl.render(context)
 
 
 class MenuInput(MenuCommand):
     def __init__(self, manager, config,):
         super(MenuInput, self).__init__(manager, config)
         self._reverse = MenuHelper.asbool(config.get('reverse', 'false'))
-        self._realtime = MenuHelper.asbool(config.get('realtime', 'false'))
         self._input_tpl = manager.gcode_macro.load_template(config, 'input')
         self._input_min_tpl = manager.gcode_macro.load_template(
             config, 'input_min', '-999999.0')
@@ -606,25 +605,21 @@ class MenuInput(MenuCommand):
             config, 'input_max', '999999.0')
         self._input_step = config.getfloat('input_step', above=0.)
         self._input_step2 = config.getfloat('input_step2', 0, minval=0.)
-        self._input_gcode_tpl = manager.gcode_macro.load_template(
-            config, 'input_gcode', '')
+        self._input_script_tpl = manager.gcode_macro.load_template(
+            config, 'input_script', '')
 
     def init(self):
         super(MenuInput, self).init()
         self._is_dirty = False
         self.__last_change = None
         self._input_value = None
-        self.__last_value = None
 
     def is_scrollable(self):
         return False
 
-    def is_realtime(self):
-        return self._realtime
-
-    def get_input_gcode(self, cxt=None):
+    def get_input_script(self, cxt=None):
         context = self.get_context(cxt)
-        return self._input_gcode_tpl.render(context)
+        return self._input_script_tpl.render(context)
 
     def is_editing(self):
         return self._input_value is not None
@@ -644,12 +639,11 @@ class MenuInput(MenuCommand):
 
     def heartbeat(self, eventtime):
         super(MenuInput, self).heartbeat(eventtime)
-        if (self._realtime
-                and self._is_dirty is True
+        if (self._is_dirty is True
                 and self.__last_change is not None
                 and self._input_value is not None
-                and (eventtime - self.__last_change) > 0.200):
-            self.manager.queue_gcode(self.get_input_gcode())
+                and (eventtime - self.__last_change) > 0.250):
+            self.manager.queue_gcode(self.get_input_script())
             self._is_dirty = False
 
     def eval_enable(self):
@@ -683,7 +677,6 @@ class MenuInput(MenuCommand):
 
     def _init_value(self):
         self._input_value = None
-        self.__last_value = None
         self._input_min = MenuHelper.asfloat(self._eval_min())
         self._input_max = MenuHelper.asfloat(self._eval_max())
         value = self._eval_value()
@@ -741,6 +734,7 @@ class MenuInput(MenuCommand):
             self.stop_editing(*args)
 
 
+# Experimental
 class MenuCallback(MenuContainer):
     def __init__(self, manager, config):
         super(MenuCallback, self).__init__(manager, config)
@@ -817,12 +811,10 @@ class MenuCallback(MenuContainer):
 class MenuView(MenuContainer):
     def __init__(self, manager, config):
         super(MenuView, self).__init__(manager, config)
-        self._enter_gcode_tpl = manager.gcode_macro.load_template(
-            config, 'enter_gcode', '')
-        self._leave_gcode_tpl = manager.gcode_macro.load_template(
-            config, 'leave_gcode', '')
-        self._press_gcode_tpl = manager.gcode_macro.load_template(
-            config, 'press_gcode', '')
+        self._enter_gcode = config.get('enter_gcode', None)
+        self._leave_gcode = config.get('leave_gcode', None)
+        self._press_script_tpl = manager.gcode_macro.load_template(
+            config, 'press_script', '')
         self.__initial = MenuHelper.asint(config.get('initial', 0), None)
         self.__selected = None
         self.popup_menu = config.get('popup_menu', None)
@@ -851,7 +843,7 @@ class MenuView(MenuContainer):
                 'type': 'command',
                 'name': repr(name),
                 'cursor': '>',
-                'press_gcode': '{menu.back()}'
+                'press_script': '{menu.back()}'
             })
             # add item from content to immutable list of items
             self.immutable_items.append(item)
@@ -957,16 +949,14 @@ class MenuView(MenuContainer):
         return ("\n".join(rows), selected_row)
 
     def run_enter_gcode(self):
-        context = self.get_context()
-        self.manager.queue_gcode(self._enter_gcode_tpl.render(context))
+        self.manager.queue_gcode(self._enter_gcode)
 
     def run_leave_gcode(self):
-        context = self.get_context()
-        self.manager.queue_gcode(self._leave_gcode_tpl.render(context))
+        self.manager.queue_gcode(self._leave_gcode)
 
-    def get_press_gcode(self, cxt=None):
+    def get_press_script(self, cxt=None):
         context = self.get_context(cxt)
-        return self._press_gcode_tpl.render(context)
+        return self._press_script_tpl.render(context)
 
     # override
     def handle_action(self, name, *args, **kwargs):
@@ -1022,12 +1012,12 @@ class MenuView(MenuContainer):
         return self.__selected
 
 
-class MenuVSDCard(MenuView):
+class MenuVSDView(MenuView):
     def __init__(self, manager, config):
-        super(MenuVSDCard, self).__init__(manager, config)
+        super(MenuVSDView, self).__init__(manager, config)
 
     def _populate_items(self):
-        super(MenuVSDCard, self)._populate_items()
+        super(MenuVSDView, self)._populate_items()
         sdcard = self.manager.objs.get('virtual_sdcard')
         if sdcard is not None:
             files = sdcard.get_file_list()
@@ -1039,7 +1029,7 @@ class MenuVSDCard(MenuView):
                     'type': 'command',
                     'name': repr('%s' % str(fname)),
                     'cursor': '+',
-                    'gcode': "\n".join(gcode),
+                    'press_script': "\n".join(gcode),
                     'scroll': True
                 }))
 
@@ -1047,8 +1037,9 @@ class MenuVSDCard(MenuView):
 menu_items = {
     'command': MenuCommand,
     'input': MenuInput,
+    'callback': MenuCallback,
     'view': MenuView,
-    'vsdcard': MenuVSDCard
+    'vsdview': MenuVSDView
 }
 
 MENU_UPDATE_DELAY = .100
@@ -1558,24 +1549,23 @@ class MenuManager:
                 current = container.selected_item()
                 if isinstance(current, MenuContainer):
                     self.stack_push(current)
-                elif isinstance(current, MenuCommand):
-                    # MenuInput inherits from MenuCommand
-                    gcode = current.get_press_gcode(context)
-                    if current.is_auto() is True:
-                        self.queue_gcode(gcode)
-                        if not current.is_editing():
-                            current.start_editing()
-                        elif current.is_editing() and not long_press:
-                            current.stop_editing()
-                    else:
-                        actions(current, 'run_gcode', gcode=gcode)
-                    actions(current, 'start_editing, stop_editing')
+                elif isinstance(current, (MenuInput, MenuCommand)):
+                    gcode = current.get_press_script(context)
+                    self.queue_gcode(gcode)
+                    if isinstance(current, MenuInput):
+                        if not actions.manual:
+                            if not current.is_editing():
+                                current.start_editing()
+                            elif current.is_editing() and not long_press:
+                                current.stop_editing()
+                        else:
+                            actions(current, 'start_editing, stop_editing')
                 # process general item actions
                 if isinstance(current, MenuItem):
                     actions(current, 'emit, log')
                 else:  # current is None, no selection. pass click to container
                     if isinstance(container, MenuView):
-                        gcode = container.get_press_gcode(context)
+                        gcode = container.get_press_script(context)
                         self.queue_gcode(gcode)
                 # process container actions
                 actions(container, 'popup')
