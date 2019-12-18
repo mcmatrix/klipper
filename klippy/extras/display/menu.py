@@ -860,6 +860,8 @@ class MenuView(MenuContainer):
             # add item from content to immutable list of items
             self.immutable_items.append(name)
             return self._placeholder(name)
+        elif m == "text":
+            return full
         else:
             logging.error(
                 "Unknown placeholder {} in {}:content".format(full, self.ns))
@@ -1435,6 +1437,7 @@ class MenuManager:
                     MenuHelper.aslatin(content).splitlines()):
                 if self.top_row <= row < self.top_row + self.rows:
                     text = MenuHelper.asliteral(text)
+                    text = re.sub(r'<\?text:(.+?)\?>', r'\1', text)
                     lines.append(text.ljust(self.cols))
         return lines
 
