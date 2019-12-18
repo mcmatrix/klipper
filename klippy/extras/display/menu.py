@@ -587,6 +587,75 @@ class MenuContainer(MenuItem):
         return self._items[key]
 
 
+class MenuSelector(MenuContainer):
+    """Menu selector abstract class.
+    """
+    def __init__(self, manager, config):
+        if type(self) is MenuSelector:
+            raise Exception(
+                'Abstract MenuSelector cannot be instantiated directly')
+        super(MenuSelector, self).__init__(manager, config)
+        self.__initial = MenuHelper.asint(config.get('initial', 0), None)
+        self.__selected = None
+
+    # selector methods
+    def init_selection(self):
+        self.select_at(self.initial)
+
+    def select_at(self, index):
+        self.__selected = index
+        # select element
+        item = self.selected_item()
+        if isinstance(item, MenuItem):
+            item.select()
+        return item
+
+    def select_item(self, needle):
+        if isinstance(needle, MenuItem):
+            if self.selected_item() is not needle:
+                index = self.index_of(needle)
+                if index is not None:
+                    self.select_at(index)
+        else:
+            logging.error("Cannot select non menuitem")
+        return self.selected
+
+    def selected_item(self):
+        if isinstance(self.selected, int) and 0 <= self.selected < len(self):
+            return self[self.selected]
+        else:
+            return None
+
+    def select_next(self):
+        if not isinstance(self.selected, int):
+            index = 0 if len(self) else None
+        elif 0 <= self.selected < len(self) - 1:
+            index = self.selected + 1
+        else:
+            index = self.selected
+        return self.select_at(index)
+
+    def select_prev(self):
+        if not isinstance(self.selected, int):
+            index = 0 if len(self) else None
+        elif 0 < self.selected < len(self):
+            index = self.selected - 1
+        else:
+            index = self.selected
+        return self.select_at(index)
+
+    def is_home_selected(self):
+        return self.initial == self.selected
+
+    @property
+    def initial(self):
+        return self.__initial
+
+    @property
+    def selected(self):
+        return self.__selected
+
+
 class MenuCommand(MenuItem):
     def __init__(self, manager, config):
         super(MenuCommand, self).__init__(manager, config)
@@ -811,15 +880,13 @@ class MenuCallback(MenuContainer):
             self._leave_callback()
 
 
-class MenuView(MenuContainer):
+class MenuView(MenuSelector):
     def __init__(self, manager, config):
         super(MenuView, self).__init__(manager, config)
         self._enter_gcode = config.get('enter_gcode', None)
         self._leave_gcode = config.get('leave_gcode', None)
         self._press_script_tpl = manager.gcode_macro.load_template(
             config, 'press_script', '')
-        self.__initial = MenuHelper.asint(config.get('initial', 0), None)
-        self.__selected = None
         self.popup_menu = config.get('popup_menu', None)
         self._popup_menu = None
         self.runtime_items = config.get('items', '')  # mutable list of items
@@ -830,9 +897,6 @@ class MenuView(MenuContainer):
             config.get('content'), 0, re.MULTILINE)
         self._content_tpl = manager.gcode_macro.create_template(
             '%s:content' % (self.ns,), self.content)
-
-    def init(self):
-        super(MenuView, self).init()
 
     def _placeholder(self, s):
         return "<?name:{}?>".format(s)
@@ -869,16 +933,6 @@ class MenuView(MenuContainer):
         if isinstance(item, dict):
             item = self.manager.menuitem_from(item)
         return super(MenuView, self)._lookup_item(item)
-
-    def select_item(self, needle):
-        if isinstance(needle, MenuItem):
-            if self.selected_item() is not needle:
-                index = self.index_of(needle)
-                if index is not None:
-                    self.select_at(index)
-        else:
-            logging.error("Cannot select non menuitem")
-        return self.selected
 
     def _populate_extra_items(self):
         # popup menu item
@@ -966,53 +1020,6 @@ class MenuView(MenuContainer):
         super(MenuView, self).handle_action(name, *args, **kwargs)
         if name == 'popup':
             self.manager.push_container(self._popup_menu)
-
-    # selector methods
-    def init_selection(self):
-        self.select_at(self.initial)
-
-    def select_at(self, index):
-        self.__selected = index
-        # select element
-        item = self.selected_item()
-        if isinstance(item, MenuItem):
-            item.select()
-        return item
-
-    def selected_item(self):
-        if isinstance(self.selected, int) and 0 <= self.selected < len(self):
-            return self[self.selected]
-        else:
-            return None
-
-    def select_next(self):
-        if not isinstance(self.selected, int):
-            index = 0 if len(self) else None
-        elif 0 <= self.selected < len(self) - 1:
-            index = self.selected + 1
-        else:
-            index = self.selected
-        return self.select_at(index)
-
-    def select_prev(self):
-        if not isinstance(self.selected, int):
-            index = 0 if len(self) else None
-        elif 0 < self.selected < len(self):
-            index = self.selected - 1
-        else:
-            index = self.selected
-        return self.select_at(index)
-
-    def is_home_selected(self):
-        return self.initial == self.selected
-
-    @property
-    def initial(self):
-        return self.__initial
-
-    @property
-    def selected(self):
-        return self.__selected
 
 
 class MenuVSDView(MenuView):
@@ -1247,7 +1254,7 @@ class MenuManager:
     def _allow_timeout(self):
         container = self.stack_peek()
         if (container is self.root):
-            if (isinstance(container, MenuView)
+            if (isinstance(container, MenuSelector)
                     and not container.is_home_selected()):
                 return True
             return False
@@ -1307,7 +1314,7 @@ class MenuManager:
             # send begin event
             self.send_event('begin', self)
             self.update_context(eventtime)
-            if isinstance(self.root, MenuView):
+            if isinstance(self.root, MenuSelector):
                 self.root.init_selection()
             self.root.populate_items()
             self.stack_push(self.root)
@@ -1371,7 +1378,7 @@ class MenuManager:
             container.handle_enter()
         if not container.is_editing():
             container.update_items()
-            if isinstance(container, MenuView):
+            if isinstance(container, MenuSelector):
                 container.init_selection()
         self.menustack.append(container)
 
@@ -1387,7 +1394,7 @@ class MenuManager:
                     raise error("Wrong type, expected MenuContainer")
                 if not top.is_editing():
                     top.update_items()
-                    if isinstance(top, MenuView):
+                    if isinstance(top, MenuSelector):
                         top.init_selection()
                 if isinstance(container, MenuView):
                     container.run_leave_gcode()
@@ -1433,6 +1440,7 @@ class MenuManager:
                     text = MenuHelper.asliteral(text)
                     text = re.sub(r'<\?text:(.+?)\?>', r'\1', text)
                     lines.append(text.ljust(self.cols))
+                    logging.info("{}".format(repr(text.ljust(self.cols))))
         return lines
 
     def screen_update_event(self, eventtime):
@@ -1453,7 +1461,7 @@ class MenuManager:
         container = self.stack_peek()
         if self.running and isinstance(container, MenuContainer):
             self.timer = 0
-            if isinstance(container, MenuView):
+            if isinstance(container, MenuSelector):
                 current = container.selected_item()
                 if isinstance(current, MenuInput) and current.is_editing():
                     current.dec_value(fast_rate)
@@ -1466,7 +1474,7 @@ class MenuManager:
         container = self.stack_peek()
         if self.running and isinstance(container, MenuContainer):
             self.timer = 0
-            if isinstance(container, MenuView):
+            if isinstance(container, MenuSelector):
                 current = container.selected_item()
                 if isinstance(current, MenuInput) and current.is_editing():
                     current.inc_value(fast_rate)
@@ -1479,7 +1487,7 @@ class MenuManager:
         container = self.stack_peek()
         if self.running and isinstance(container, MenuContainer):
             self.timer = 0
-            if isinstance(container, MenuView):
+            if isinstance(container, MenuSelector):
                 current = container.selected_item()
                 if isinstance(current, MenuInput) and current.is_editing():
                     if force is True:
@@ -1492,7 +1500,7 @@ class MenuManager:
             parent = self.stack_peek(1)
             if isinstance(parent, MenuContainer):
                 self.stack_pop()
-                if isinstance(parent, MenuView):
+                if isinstance(parent, MenuSelector):
                     index = parent.index_of(container, True)
                     parent.select_at(index)
             else:
@@ -1503,7 +1511,7 @@ class MenuManager:
         container = self.stack_peek()
         if self.running and isinstance(container, MenuContainer):
             self.timer = 0
-            if isinstance(container, MenuView):
+            if isinstance(container, MenuSelector):
                 current = container.selected_item()
                 if (not force and isinstance(current, MenuInput)
                         and current.is_editing()):
@@ -1526,7 +1534,7 @@ class MenuManager:
             if self.running:
                 if isinstance(container, MenuContainer):
                     container.stop_editing()
-                if isinstance(container, MenuView):
+                if isinstance(container, MenuSelector):
                     container.init_selection()
 
     def push_container(self, menu):
@@ -1548,7 +1556,7 @@ class MenuManager:
         container = self.stack_peek()
         if self.running and isinstance(container, MenuContainer):
             self.timer = 0
-            if isinstance(container, MenuView):
+            if isinstance(container, MenuSelector):
                 current = container.selected_item()
                 if isinstance(current, MenuContainer):
                     self.stack_push(current)
