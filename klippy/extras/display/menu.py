@@ -157,6 +157,10 @@ class MenuItem(object):
     def stop_editing(self):
         pass
 
+    def _action_error(self, name, msg, *args):
+        logging.error("'{}' -> {}({}): {}".format(
+            self.ns, name, ','.join(map(str, args[0:])), msg))
+
     # override
     def handle_action(self, name, *args, **kwargs):
         if name == 'emit':
@@ -164,8 +168,7 @@ class MenuItem(object):
                 self.manager.send_event(
                     "action:" + str(args[0]), self, *args[1:])
             else:
-                logging.error("Malformed action: {}({})".format(
-                    name, ','.join(map(str, args[0:]))))
+                self._action_error(name, "malformed action", *args)
         elif name == 'log':
             logging.info("item:{} -> {}".format(
                 self.ns, ' '.join(map(str, args[0:]))))
@@ -719,8 +722,10 @@ class MenuView(MenuSelector):
         self._leave_gcode = config.get('leave_gcode', None)
         self._press_script_tpl = manager.gcode_macro.load_template(
             config, 'press_script', '')
-        self.popup_menu = config.get('popup_menu', None)
-        self._popup_menu = None
+        prfx = 'popup_'
+        self.popup_menus = {o[len(prfx):]: config.get(o)
+                            for o in config.get_prefix_options(prfx)}
+        self._popup_menus = {}
         self.runtime_items = config.get('items', '')  # mutable list of items
         self.immutable_items = []  # immutable list of items
         self._runtime_index_start = 0
@@ -766,13 +771,13 @@ class MenuView(MenuSelector):
 
     def _populate_extra_items(self):
         # popup menu item
-        self._popup_menu = None
-        if self.popup_menu is not None:
-            menu = self.manager.lookup_menuitem(self.popup_menu)
+        self._popup_menu = dict()
+        for key in self.popup_menus:
+            menu = self.manager.lookup_menuitem(self.popup_menu[key])
             if isinstance(menu, MenuContainer):
                 menu.assert_recursive_relation(self._parents)
                 menu.populate_items()
-                self._popup_menu = menu
+                self._popup_menu[key] = menu
 
     def _populate_items(self):
         super(MenuView, self)._populate_items()
@@ -795,7 +800,7 @@ class MenuView(MenuSelector):
     def get_context(self, cxt=None):
         context = super(MenuView, self).get_context(cxt)
         context['me'].update({
-            'has_popup': not not self._popup_menu
+            'popup_names': self._popup_menu.keys()
         })
         return context
 
@@ -849,7 +854,15 @@ class MenuView(MenuSelector):
     def handle_action(self, name, *args, **kwargs):
         super(MenuView, self).handle_action(name, *args, **kwargs)
         if name == 'popup':
-            self.manager.push_container(self._popup_menu)
+            if len(args[0:]) == 1:
+                key = str(args[0])
+                if key in self._popup_menu:
+                    self.manager.push_container(self._popup_menu[key])
+                else:
+                    self._action_error(
+                        name, "menu '{}' not found".format(key), *args)
+            else:
+                self._action_error(name, "takes exactly one argument", *args)
 
 
 class MenuVSDView(MenuView):
