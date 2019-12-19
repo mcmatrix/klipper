@@ -153,10 +153,14 @@ class _MenuActionQueue(object):
 class MenuHelper:
     @staticmethod
     def asliteral(s):
+        """Literals are beginning or ending by the back-tick '`' (grave accent)
+        character instead of double or single quotes. To escape a back-tick use
+        a double back-tick."""
         s = str(s)
-        if (s.startswith('"') and s.endswith('"')) or \
-                (s.startswith("'") and s.endswith("'")):
-            s = s[1:-1]
+        if s.startswith('``') or s.startswith('`'):
+            s = s[1:]
+        if s.endswith('``') or s.endswith('`'):
+            s = s[:-1]
         return s
 
     @staticmethod
@@ -923,8 +927,6 @@ class MenuView(MenuSelector):
             # add item from content to immutable list of items
             self.immutable_items.append(name)
             return self._placeholder(name)
-        elif m == "text":
-            return full
         else:
             logging.error(
                 "Unknown placeholder {} in {}:content".format(full, self.ns))
@@ -1442,7 +1444,6 @@ class MenuManager:
                     MenuHelper.aslatin(content).splitlines()):
                 if self.top_row <= row < self.top_row + self.rows:
                     text = MenuHelper.asliteral(text)
-                    text = re.sub(r'<\?text:(.+?)\?>', r'\1', text)
                     lines.append(text.ljust(self.cols))
         return lines
 
