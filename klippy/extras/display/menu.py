@@ -407,7 +407,7 @@ class MenuContainer(MenuItem):
     def update_items(self):
         _a = [(item, name) for item, name in self._allitems
               if item.is_enabled()]
-        self._items, self._names = zip(*_a)
+        self._items, self._names = zip(*_a) or ([], [])
 
     # override
     def render_content(self, eventtime):
