@@ -297,6 +297,7 @@ class MenuContainer(MenuItem):
                 'Abstract MenuContainer cannot be instantiated directly')
         super(MenuContainer, self).__init__(manager, config)
         self.cursor = config.get('cursor', '>')
+        self._autorun = manager.asbool(config.get('autorun', 'False'))
         self._allitems = []
         self._names = []
         self._items = []
@@ -420,6 +421,10 @@ class MenuContainer(MenuItem):
 
     def __getitem__(self, key):
         return self._items[key]
+
+    @property
+    def autorun(self):
+        return self._autorun
 
 
 class MenuSelector(MenuContainer):
@@ -771,13 +776,13 @@ class MenuView(MenuSelector):
 
     def _populate_extra_items(self):
         # popup menu item
-        self._popup_menu = dict()
+        self._popup_menus = dict()
         for key in self.popup_menus:
-            menu = self.manager.lookup_menuitem(self.popup_menu[key])
+            menu = self.manager.lookup_menuitem(self.popup_menus[key])
             if isinstance(menu, MenuContainer):
                 menu.assert_recursive_relation(self._parents)
                 menu.populate_items()
-                self._popup_menu[key] = menu
+                self._popup_menus[key] = menu
 
     def _populate_items(self):
         super(MenuView, self)._populate_items()
@@ -800,7 +805,7 @@ class MenuView(MenuSelector):
     def get_context(self, cxt=None):
         context = super(MenuView, self).get_context(cxt)
         context['me'].update({
-            'popup_names': self._popup_menu.keys()
+            'popup_names': self._popup_menus.keys()
         })
         return context
 
@@ -856,8 +861,8 @@ class MenuView(MenuSelector):
         if name == 'popup':
             if len(args[0:]) == 1:
                 key = str(args[0])
-                if key in self._popup_menu:
-                    self.manager.push_container(self._popup_menu[key])
+                if key in self._popup_menus:
+                    self.manager.push_container(self._popup_menus[key])
                 else:
                     self._action_error(
                         name, "menu '{}' not found".format(key), *args)
@@ -1111,11 +1116,14 @@ class MenuManager:
             self.exit(force_exit)
         self.load_root(root, True)
 
-    def load_root(self, root=None, autorun=False):
+    def load_root(self, root=None, autorun=None):
         root = self._root if root is None else root
         if root is not None:
             self.root = self.lookup_menuitem(root)
-            self._autorun = autorun
+            if autorun is None and isinstance(self.root, MenuContainer):
+                self._autorun = self.root.autorun
+            else:
+                self._autorun = not not autorun
 
     def register_object(self, obj, name=None, override=False):
         """Register an object with a "get_status" callback"""
