@@ -929,7 +929,7 @@ class MenuManager:
         self.context = {}
         self.objs = {}
         self.root = None
-        self._root = config.get('menu_root', '__main')
+        self.root_names = config.get('menu_root', '__main')
         self.cols, self.rows = self.lcd_chip.get_dimensions()
         self.timeout = config.getint('menu_timeout', 0)
         self.timer = 0
@@ -1117,13 +1117,23 @@ class MenuManager:
         self.load_root(root, True)
 
     def load_root(self, root=None, autorun=None):
-        root = self._root if root is None else root
-        if root is not None:
+        self.root = None
+        if root is None:
+            # find first enabled root from list
+            for name in self.lines_aslist(self.root_names):
+                item = self.lookup_menuitem(name)
+                if item.is_enabled():
+                    self.root = item
+                    break
+            if self.root is None:
+                logging.error("No active root item found!")
+        else:
             self.root = self.lookup_menuitem(root)
-            if autorun is None and isinstance(self.root, MenuContainer):
-                self._autorun = self.root.autorun
-            else:
-                self._autorun = not not autorun
+
+        if autorun is None and isinstance(self.root, MenuContainer):
+            self._autorun = self.root.autorun
+        else:
+            self._autorun = not not autorun
 
     def register_object(self, obj, name=None, override=False):
         """Register an object with a "get_status" callback"""
@@ -1175,7 +1185,7 @@ class MenuManager:
             self.running = True
             return
         elif self.root is not None:
-            logging.error("Invalid root '%s', menu stopped!" % str(self._root))
+            logging.error("Invalid root, menu stopped!")
         self.running = False
 
     def get_status(self, eventtime):
