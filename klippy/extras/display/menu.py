@@ -16,6 +16,7 @@ class sentinel:
     pass
 
 
+# Experimental
 class MenuRenderBuffer(object):
     """Helper class for callback view render buffer"""
     def __init__(self, cols, rows):
@@ -60,10 +61,9 @@ class MenuRenderBuffer(object):
         if row >= self.rows:
             raise IndexError
 
-        line = self.buffer[row]
-        new_line = line[0:col] + text + line[col + len(text):]
-        line = new_line[:self.cols]
-        self.buffer[row] = line
+        old_line = self.buffer[row]
+        new_line = old_line[:col] + text + old_line[col + len(text):]
+        self.buffer[row] = new_line[:self.cols]
         self.position = {
             'col': col + len(text),
             'row': row
@@ -79,44 +79,44 @@ class MenuRenderBuffer(object):
         return list(self.buffer)
 
 
-# wrapper for dict to emulate configfile get_name for namespace
-# __ns - item namespace, used in item relative paths
-# $__id - variable is generated name for item
-# internal usage
-class MenuConfig(dict):
+class _MenuConfig(dict):
+    """Wrapper for dict to emulate configfile get_name for namespace.
+        __ns - item namespace key, used in item relative paths
+        $__id - generated id text variable
+    """
     def get_name(self):
         __id = '__menuitem_' + hex(id(self)).lstrip("0x").rstrip("L")
         return Template('menu ' + self.get(
             '__ns', __id)).safe_substitute(__id=__id)
 
 
-# internal usage
-class MenuTemplateActions(object):
+class _MenuActionQueue(object):
+    """Helper class for queuing action calls"""
     def __init__(self):
         self.queue = []
-        self.attrs = {}
+        self.params = {}
 
-    def __call__(self, item, n, **kwargs):
+    def handle(self, item, n, **kwargs):
         _handle = getattr(item, "handle_action", None)
         if callable(_handle):
             for name, args in self.iter_pop(n):
                 _handle(name, *args, **kwargs)
 
-    def __getattr__(self, name):
-        if name in self.attrs:
-            return self.attrs[name]
+    def get_param(self, name):
+        if name in self.params:
+            return self.params[name]
         else:
             return None
 
-    def get_caller(self, **kwargs):
+    def get_context(self, **kwargs):
         self.queue = []
-        self.attrs = {}
+        self.params = {}
 
-        # wrapper for action caller, encapsulate __getattr__, __setattr__
-        class __CallWrapper__(object):
+        # wrapper for action context, encapsulate __getattr__
+        class __ActionContext__(object):
             def __getattr__(me, name):
-                def _setattr(key, val):
-                    self.attrs[key] = val
+                def _set(key, val):
+                    self.params[key] = val
                     return ''
 
                 def _append(*args):
@@ -126,11 +126,11 @@ class MenuTemplateActions(object):
 
                 if name in kwargs:
                     return kwargs[name]
-                elif name == "setattr":
-                    return _setattr
+                elif name == "set_param":
+                    return _set
                 else:
                     return _append
-        return __CallWrapper__()
+        return __ActionContext__()
 
     def iter_pop(self, n):
         names = MenuHelper.words_aslist(n)
@@ -480,6 +480,10 @@ class MenuContainer(MenuItem):
         return []
 
     # overload
+    def is_homed(self):
+        return True
+
+    # overload
     def is_accepted(self, item):
         return isinstance(item, MenuItem)
 
@@ -644,7 +648,7 @@ class MenuSelector(MenuContainer):
             index = self.selected
         return self.select_at(index)
 
-    def is_home_selected(self):
+    def is_homed(self):
         return self.initial == self.selected
 
     @property
@@ -1440,7 +1444,6 @@ class MenuManager:
                     text = MenuHelper.asliteral(text)
                     text = re.sub(r'<\?text:(.+?)\?>', r'\1', text)
                     lines.append(text.ljust(self.cols))
-                    logging.info("{}".format(repr(text.ljust(self.cols))))
         return lines
 
     def screen_update_event(self, eventtime):
@@ -1549,9 +1552,9 @@ class MenuManager:
 
     def press(self, long_press=False):
         # action context
-        actions = MenuTemplateActions()
+        actions = _MenuActionQueue()
         context = {
-            'menu': actions.get_caller(is_longpress=long_press)
+            'menu': actions.get_context(is_longpress=long_press)
         }
         container = self.stack_peek()
         if self.running and isinstance(container, MenuContainer):
@@ -1564,24 +1567,25 @@ class MenuManager:
                     gcode = current.get_press_script(context)
                     self.queue_gcode(gcode)
                     if isinstance(current, MenuInput):
-                        if not actions.manual:
+                        if not actions.get_param('manual'):
                             if not current.is_editing():
                                 current.start_editing()
                             elif current.is_editing() and not long_press:
                                 current.stop_editing()
                         else:
-                            actions(current, 'start_editing, stop_editing')
+                            actions.handle(
+                                current, 'start_editing, stop_editing')
                 # process general item actions
                 if isinstance(current, MenuItem):
-                    actions(current, 'emit, log')
+                    actions.handle(current, 'emit, log')
                 else:  # current is None, no selection. pass click to container
                     if isinstance(container, MenuView):
                         gcode = container.get_press_script(context)
                         self.queue_gcode(gcode)
                 # process container actions
-                actions(container, 'popup')
+                actions.handle(container, 'popup')
                 # process manager actions
-                actions(self, 'back, exit, reset')
+                actions.handle(self, 'back, exit, reset')
                 # find leftovers
                 for name, args in actions.iter_pop('*'):
                     logging.error("Unknown action: {}({})".format(
@@ -1608,7 +1612,7 @@ class MenuManager:
 
     def menuitem_from(self, config):
         if isinstance(config, dict):
-            config = MenuConfig(dict(config))
+            config = _MenuConfig(dict(config))
         return MenuHelper.aschoice(
             config, 'type', menu_items)(self, config)
 
