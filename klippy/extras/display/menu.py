@@ -1245,26 +1245,26 @@ class MenuManager:
         return eventtime + TIMER_DELAY
 
     def timeout_check(self, eventtime):
+        permit_check = False
+        if (self.is_running()and self.timeout > 0
+                and isinstance(self.root, MenuContainer)):
+            container = self.stack_peek()
+            if container is self.root:
+                if not container.is_homed():
+                    permit_check = True
+                elif not self._autorun:
+                    permit_check = True
+            else:
+                permit_check = True
+
         # check timeout
-        if (self.is_running() and self.timeout > 0
-                and self.root is not None
-                and self._autorun is True
-                and self._allow_timeout()):
+        if permit_check is True:
             if self.timer >= self.timeout:
                 self.exit()
             else:
                 self.timer += 1
         else:
             self.timer = 0
-
-    def _allow_timeout(self):
-        container = self.stack_peek()
-        if (container is self.root):
-            if (isinstance(container, MenuSelector)
-                    and not container.is_home_selected()):
-                return True
-            return False
-        return True
 
     def restart(self, root=None, force_exit=True):
         if self.is_running():
