@@ -90,182 +90,6 @@ class _MenuConfig(dict):
             '__ns', __id)).safe_substitute(__id=__id)
 
 
-class _MenuActionQueue(object):
-    """Helper class for queuing action calls"""
-    def __init__(self):
-        self.queue = []
-        self.params = {}
-
-    def handle(self, item, n, **kwargs):
-        _handle = getattr(item, "handle_action", None)
-        if callable(_handle):
-            for name, args in self.iter_pop(n):
-                _handle(name, *args, **kwargs)
-
-    def get_param(self, name):
-        if name in self.params:
-            return self.params[name]
-        else:
-            return None
-
-    def get_context(self, **kwargs):
-        self.queue = []
-        self.params = {}
-
-        # wrapper for action context, encapsulate __getattr__
-        class __ActionContext__(object):
-            def __getattr__(me, name):
-                def _set(key, val):
-                    self.params[key] = val
-                    return ''
-
-                def _append(*args):
-                    self.queue.append(
-                        (len(self.queue), name, list(args)))
-                    return ''
-
-                if name in kwargs:
-                    return kwargs[name]
-                elif name == "set_param":
-                    return _set
-                else:
-                    return _append
-        return __ActionContext__()
-
-    def iter_pop(self, n):
-        names = MenuHelper.words_aslist(n)
-        # find matching actions
-        if len(names) == 1 and names[0] == '*':
-            matches = [t for t in self.queue]
-        else:
-            matches = [t for t in self.queue if t[1] in names]
-        for match in matches:
-            i, name, args = match
-            # remove found match from action list
-            self.queue.remove(match)
-            # yield found action
-            yield (name, args)
-        else:
-            raise StopIteration
-
-
-# static class for type cast
-class MenuHelper:
-    @staticmethod
-    def asliteral(s):
-        """Literals are beginning or ending by the back-tick '`' (grave accent)
-        character instead of double or single quotes. To escape a back-tick use
-        a double back-tick."""
-        s = str(s)
-        if s.startswith('``') or s.startswith('`'):
-            s = s[1:]
-        if s.endswith('``') or s.endswith('`'):
-            s = s[:-1]
-        return s
-
-    @staticmethod
-    def aslatin(s):
-        if isinstance(s, str):
-            return s
-        elif isinstance(s, unicode):
-            return unicode(s).encode('latin-1', 'ignore')
-        else:
-            return str(s)
-
-    @staticmethod
-    def asflatline(s):
-        return ''.join(MenuHelper.aslatin(s).splitlines())
-
-    @staticmethod
-    def asbool(s):
-        if isinstance(s, (bool, int, float)):
-            return bool(s)
-        elif MenuHelper.isfloat(s):
-            return bool(MenuHelper.asfloat(s))
-        s = str(s).strip()
-        return s.lower() in ('y', 'yes', 't', 'true', 'on', '1')
-
-    @staticmethod
-    def asint(s, default=sentinel):
-        if isinstance(s, (int, float)):
-            return int(s)
-        s = str(s).strip()
-        prefix = s[0:2]
-        try:
-            if prefix == '0x':
-                return int(s, 16)
-            elif prefix == '0b':
-                return int(s, 2)
-            else:
-                return int(float(s))
-        except ValueError as e:
-            if default is not sentinel:
-                return default
-            raise e
-
-    @staticmethod
-    def asfloat(s, default=sentinel):
-        if isinstance(s, (int, float)):
-            return float(s)
-        s = str(s).strip()
-        try:
-            return float(s)
-        except ValueError as e:
-            if default is not sentinel:
-                return default
-            raise e
-
-    @staticmethod
-    def isfloat(value):
-        try:
-            float(value)
-            return True
-        except ValueError:
-            return False
-
-    @staticmethod
-    def lines_aslist(value, default=[]):
-        if isinstance(value, str):
-            value = filter(None, [x.strip() for x in value.splitlines()])
-        try:
-            return list(value)
-        except Exception:
-            logging.exception("Lines as list parsing error")
-            return list(default)
-
-    @staticmethod
-    def words_aslist(value, sep=',', default=[]):
-        if isinstance(value, str):
-            value = filter(None, [x.strip() for x in value.split(sep)])
-        try:
-            return list(value)
-        except Exception:
-            logging.exception("Words as list parsing error")
-            return list(default)
-
-    @staticmethod
-    def aslist(value, flatten=True, default=[]):
-        values = MenuHelper.lines_aslist(value)
-        if not flatten:
-            return values
-        result = []
-        for value in values:
-            subvalues = MenuHelper.words_aslist(value, sep=',')
-            result.extend(subvalues)
-        return result
-
-    @staticmethod
-    def aschoice(config, option, choices, default=sentinel):
-        if default is not sentinel:
-            c = config.get(option, default)
-        else:
-            c = config.get(option)
-        if c not in choices:
-            raise error("Choice '%s' for option '%s'"
-                        " is not a valid choice" % (c, option))
-        return choices[c]
-
-
 class MenuItem(object):
     """Menu item abstract class.
     """
@@ -274,12 +98,12 @@ class MenuItem(object):
             raise Exception(
                 'Abstract MenuItem cannot be instantiated directly')
         self._manager = manager
-        self._use_blink = MenuHelper.asbool(config.get('use_blink', 'False'))
-        self._blink_mask = MenuHelper.asint(config.get('blink_mask', '0'))
-        self._use_cursor = MenuHelper.asbool(config.get('use_cursor', 'True'))
+        self._use_blink = manager.asbool(config.get('use_blink', 'False'))
+        self._blink_mask = manager.asint(config.get('blink_mask', '0'))
+        self._use_cursor = manager.asbool(config.get('use_cursor', 'True'))
         self.cursor = config.get('cursor', '|')
-        self._width = MenuHelper.asint(config.get('width', '0'))
-        self._scroll = MenuHelper.asbool(config.get('scroll', 'False'))
+        self._width = manager.asint(config.get('width', '0'))
+        self._scroll = manager.asbool(config.get('scroll', 'False'))
         self._enable_tpl = manager.gcode_macro.load_template(
             config, 'enable', 'True')
         self._name_tpl = manager.gcode_macro.load_template(
@@ -306,7 +130,7 @@ class MenuItem(object):
 
     def _name(self):
         context = self.get_context()
-        return MenuHelper.asliteral(MenuHelper.asflatline(
+        return self.manager.astext(self.manager.asflatline(
             self._name_tpl.render(context)))
 
     # override
@@ -362,7 +186,7 @@ class MenuItem(object):
 
     def eval_enable(self):
         context = self.get_context()
-        return MenuHelper.asbool(self._enable_tpl.render(context))
+        return self.manager.asbool(self._enable_tpl.render(context))
 
     # Called when a item is selected
     def select(self):
@@ -603,7 +427,7 @@ class MenuSelector(MenuContainer):
             raise Exception(
                 'Abstract MenuSelector cannot be instantiated directly')
         super(MenuSelector, self).__init__(manager, config)
-        self.__initial = MenuHelper.asint(config.get('initial', 0), None)
+        self.__initial = manager.asint(config.get('initial', 0), None)
         self.__selected = None
 
     # selector methods
@@ -678,7 +502,7 @@ class MenuCommand(MenuItem):
 class MenuInput(MenuCommand):
     def __init__(self, manager, config,):
         super(MenuInput, self).__init__(manager, config)
-        self._reverse = MenuHelper.asbool(config.get('reverse', 'false'))
+        self._reverse = manager.asbool(config.get('reverse', 'false'))
         self._input_tpl = manager.gcode_macro.load_template(config, 'input')
         self._input_min_tpl = manager.gcode_macro.load_template(
             config, 'input_min', '-999999.0')
@@ -729,12 +553,12 @@ class MenuInput(MenuCommand):
 
     def eval_enable(self):
         context = super(MenuInput, self).get_context()
-        return MenuHelper.asbool(self._enable_tpl.render(context))
+        return self.manager.asbool(self._enable_tpl.render(context))
 
     def get_context(self, cxt=None):
         context = super(MenuInput, self).get_context(cxt)
         context['me'].update({
-            'input': MenuHelper.asfloat(
+            'input': self.manager.asfloat(
                 self._eval_value() if self._input_value is None
                 else self._input_value)
         })
@@ -758,12 +582,12 @@ class MenuInput(MenuCommand):
 
     def _init_value(self):
         self._input_value = None
-        self._input_min = MenuHelper.asfloat(self._eval_min())
-        self._input_max = MenuHelper.asfloat(self._eval_max())
+        self._input_min = self.manager.asfloat(self._eval_min())
+        self._input_max = self.manager.asfloat(self._eval_max())
         value = self._eval_value()
-        if MenuHelper.isfloat(value):
+        if self.manager.isfloat(value):
             self._input_value = min(self._input_max, max(
-                self._input_min, MenuHelper.asfloat(value)))
+                self._input_min, self.manager.asfloat(value)))
             self._value_changed()
         else:
             logging.error("Cannot init input value")
@@ -916,7 +740,7 @@ class MenuView(MenuSelector):
         if m == "back":
             item = self.manager.menuitem_from({
                 'type': 'command',
-                'name': repr(name),
+                'name': self.manager.asliteral(name),
                 'cursor': '>',
                 'press_script': '{menu.back()}'
             })
@@ -956,7 +780,7 @@ class MenuView(MenuSelector):
         # and start of runtime mutable list of items
         self._runtime_index_start = len(self._allitems)
         # populate runtime list of items
-        for name in MenuHelper.lines_aslist(self.runtime_items):
+        for name in self.manager.lines_aslist(self.runtime_items):
             self._insert_item(name)
         # populate extra menu items
         self._populate_extra_items()
@@ -989,7 +813,7 @@ class MenuView(MenuSelector):
             })
             content = self._content_tpl.render(context)
             # postprocess content
-            for line in MenuHelper.lines_aslist(content):
+            for line in self.manager.lines_aslist(content):
                 s = ""
                 for i, text in enumerate(re.split(
                         r"<\?name:\s*([a-zA-Z0-9_. ]+?)\s*\?>", line)):
@@ -1043,7 +867,7 @@ class MenuVSDView(MenuView):
                 ]
                 self.insert_item(self.manager.menuitem_from({
                     'type': 'command',
-                    'name': repr('%s' % str(fname)),
+                    'name': self.manager.asliteral(fname),
                     'cursor': '+',
                     'press_script': "\n".join(gcode),
                     'scroll': True
@@ -1091,6 +915,9 @@ class MenuManager:
         self.cols, self.rows = self.lcd_chip.get_dimensions()
         self.timeout = config.getint('menu_timeout', 0)
         self.timer = 0
+        # queue for action calls
+        self._action_queue = []
+        self._action_params = {}
         # buttons
         self.encoder_pins = config.get('encoder_pins', None)
         self.click_pin = config.get('click_pin', None)
@@ -1441,9 +1268,9 @@ class MenuManager:
             else:
                 self.top_row = 0
             for row, text in enumerate(
-                    MenuHelper.aslatin(content).splitlines()):
+                    self.aslatin(content).splitlines()):
                 if self.top_row <= row < self.top_row + self.rows:
-                    text = MenuHelper.asliteral(text)
+                    text = self.astext(text)
                     lines.append(text.ljust(self.cols))
         return lines
 
@@ -1553,9 +1380,8 @@ class MenuManager:
 
     def press(self, long_press=False):
         # action context
-        actions = _MenuActionQueue()
         context = {
-            'menu': actions.get_context(is_longpress=long_press)
+            'menu': self._get_action_context(is_longpress=long_press)
         }
         container = self.stack_peek()
         if self.running and isinstance(container, MenuContainer):
@@ -1568,27 +1394,27 @@ class MenuManager:
                     gcode = current.get_press_script(context)
                     self.queue_gcode(gcode)
                     if isinstance(current, MenuInput):
-                        if not actions.get_param('manual'):
+                        if not self._from_action_context('manual'):
                             if not current.is_editing():
                                 current.start_editing()
                             elif current.is_editing() and not long_press:
                                 current.stop_editing()
                         else:
-                            actions.handle(
+                            self._handle_actions(
                                 current, 'start_editing, stop_editing')
                 # process general item actions
                 if isinstance(current, MenuItem):
-                    actions.handle(current, 'emit, log')
+                    self._handle_actions(current, 'emit, log')
                 else:  # current is None, no selection. pass click to container
                     if isinstance(container, MenuView):
                         gcode = container.get_press_script(context)
                         self.queue_gcode(gcode)
                 # process container actions
-                actions.handle(container, 'popup')
+                self._handle_actions(container, 'popup')
                 # process manager actions
-                actions.handle(self, 'back, exit, reset')
+                self._handle_actions(self, 'back, exit, reset')
                 # find leftovers
-                for name, args in actions.iter_pop('*'):
+                for name, args in self._actions_iter_pop('*'):
                     logging.error("Unknown action: {}({})".format(
                         name, ','.join(map(str, args[0:]))))
             elif isinstance(container, MenuCallback):
@@ -1614,7 +1440,7 @@ class MenuManager:
     def menuitem_from(self, config):
         if isinstance(config, dict):
             config = _MenuConfig(dict(config))
-        return MenuHelper.aschoice(
+        return self.aschoice(
             config, 'type', menu_items)(self, config)
 
     def add_menuitem(self, name, menu):
@@ -1706,3 +1532,176 @@ class MenuManager:
         if self.kill_pin:
             # Emergency Stop
             self.printer.invoke_shutdown("Shutdown due to kill button!")
+
+    # action context methods
+    def _handle_actions(self, item, n, **kwargs):
+        _handle = getattr(item, "handle_action", None)
+        if callable(_handle):
+            for name, args in self._actions_iter_pop(n):
+                _handle(name, *args, **kwargs)
+
+    def _from_action_context(self, name):
+        if name in self._action_params:
+            return self._action_params[name]
+        else:
+            return None
+
+    def _get_action_context(self, **kwargs):
+        self._action_queue = []
+        self._action_params = {}
+
+        # wrapper for action context, encapsulate __getattr__
+        class __ActionContext__(object):
+            def __getattr__(me, name):
+                def _set(key, val):
+                    self._action_params[key] = val
+                    return ''
+
+                def _append(*args):
+                    self._action_queue.append(
+                        (len(self._action_queue), name, list(args)))
+                    return ''
+
+                if name in kwargs:
+                    return kwargs[name]
+                elif name == "set_param":
+                    return _set
+                else:
+                    return _append
+        return __ActionContext__()
+
+    def _actions_iter_pop(self, n):
+        names = self.words_aslist(n)
+        # find matching actions
+        if len(names) == 1 and names[0] == '*':
+            matches = [t for t in self._action_queue]
+        else:
+            matches = [t for t in self._action_queue if t[1] in names]
+        for match in matches:
+            i, name, args = match
+            # remove found match from action list
+            self._action_queue.remove(match)
+            # yield found action
+            yield (name, args)
+        else:
+            raise StopIteration
+
+    # manager helper methods
+    @classmethod
+    def astext(cls, s):
+        """Literals are beginning or ending by the back-tick '`' (grave accent)
+        character instead of double or single quotes. To escape a back-tick use
+        a double back-tick."""
+        s = str(s)
+        if s.startswith('``') or s.startswith('`'):
+            s = s[1:]
+        if s.endswith('``') or s.endswith('`'):
+            s = s[:-1]
+        return s
+
+    @classmethod
+    def asliteral(cls, s):
+        """Enclose text by the back-tick"""
+        return '`' + str(s) + '`'
+
+    @classmethod
+    def aslatin(cls, s):
+        if isinstance(s, str):
+            return s
+        elif isinstance(s, unicode):
+            return unicode(s).encode('latin-1', 'ignore')
+        else:
+            return str(s)
+
+    @classmethod
+    def asflatline(cls, s):
+        return ''.join(cls.aslatin(s).splitlines())
+
+    @classmethod
+    def asbool(cls, s):
+        if isinstance(s, (bool, int, float)):
+            return bool(s)
+        elif cls.isfloat(s):
+            return bool(cls.asfloat(s))
+        s = str(s).strip()
+        return s.lower() in ('y', 'yes', 't', 'true', 'on', '1')
+
+    @classmethod
+    def asint(cls, s, default=sentinel):
+        if isinstance(s, (int, float)):
+            return int(s)
+        s = str(s).strip()
+        prefix = s[0:2]
+        try:
+            if prefix == '0x':
+                return int(s, 16)
+            elif prefix == '0b':
+                return int(s, 2)
+            else:
+                return int(float(s))
+        except ValueError as e:
+            if default is not sentinel:
+                return default
+            raise e
+
+    @classmethod
+    def asfloat(cls, s, default=sentinel):
+        if isinstance(s, (int, float)):
+            return float(s)
+        s = str(s).strip()
+        try:
+            return float(s)
+        except ValueError as e:
+            if default is not sentinel:
+                return default
+            raise e
+
+    @classmethod
+    def isfloat(cls, value):
+        try:
+            float(value)
+            return True
+        except ValueError:
+            return False
+
+    @classmethod
+    def lines_aslist(cls, value, default=[]):
+        if isinstance(value, str):
+            value = filter(None, [x.strip() for x in value.splitlines()])
+        try:
+            return list(value)
+        except Exception:
+            logging.exception("Lines as list parsing error")
+            return list(default)
+
+    @classmethod
+    def words_aslist(cls, value, sep=',', default=[]):
+        if isinstance(value, str):
+            value = filter(None, [x.strip() for x in value.split(sep)])
+        try:
+            return list(value)
+        except Exception:
+            logging.exception("Words as list parsing error")
+            return list(default)
+
+    @classmethod
+    def aslist(cls, value, flatten=True, default=[]):
+        values = cls.lines_aslist(value)
+        if not flatten:
+            return values
+        result = []
+        for value in values:
+            subvalues = cls.words_aslist(value, sep=',')
+            result.extend(subvalues)
+        return result
+
+    @classmethod
+    def aschoice(cls, config, option, choices, default=sentinel):
+        if default is not sentinel:
+            c = config.get(option, default)
+        else:
+            c = config.get(option)
+        if c not in choices:
+            raise error("Choice '%s' for option '%s'"
+                        " is not a valid choice" % (c, option))
+        return choices[c]
