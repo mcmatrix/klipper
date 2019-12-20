@@ -114,7 +114,6 @@ class MenuItem(object):
         self.__scroll_dir = None
         self.__last_state = True
         self._action_queue = []
-        self._action_params = {}
         # item namespace - used in item relative paths
         self._ns = " ".join(config.get_name().split()[1:])
         # if scroll is enabled and width is not specified then
@@ -288,7 +287,6 @@ class MenuItem(object):
 
     def actions_queue_wrapper(self):
         self._action_queue = []
-        self._action_params = {}
 
         # queue wrapper for action call, encapsulate __getattr__
         class __Action__(object):
@@ -296,28 +294,16 @@ class MenuItem(object):
                 me.scope = scope
 
             def __getattr__(me, name):
-                def _set(key, val):
-                    self._action_params[key] = val
-                    return ''
-
                 def _append(*args):
                     self._action_queue.append(
                         (len(self._action_queue), me.scope, name, list(args)))
                     return ''
 
-                if name == "set_param":
-                    return _set
-                elif me.scope == "self" and name == "parent":
+                if me.scope == "self" and name == "parent":
                     return __Action__('parent')
                 else:
                     return _append
         return __Action__('self')
-
-    def actions_get_param(self, name):
-        if name in self._action_params:
-            return self._action_params[name]
-        else:
-            return None
 
     def actions_queue_iter(self):
         for action in self._action_queue:
@@ -586,6 +572,9 @@ class MenuInput(MenuCommand):
     def __init__(self, manager, config,):
         super(MenuInput, self).__init__(manager, config)
         self._reverse = manager.asbool(config.get('reverse', 'false'))
+        self._fall_into = manager.asbool(config.get('fall_into', 'false'))
+        self._manage_editing = manager.asbool(
+            config.get('manage_editing', 'false'))
         self._input_tpl = manager.gcode_macro.load_template(config, 'input')
         self._input_min_tpl = manager.gcode_macro.load_template(
             config, 'input_min', '-999999.0')
@@ -604,6 +593,11 @@ class MenuInput(MenuCommand):
 
     def is_scrollable(self):
         return False
+
+    def select(self):
+        super(MenuInput, self).select()
+        if self._fall_into is True:
+            self.start_editing()
 
     def get_input_script(self, cxt=None):
         context = self.get_context(cxt)
@@ -718,6 +712,10 @@ class MenuInput(MenuCommand):
 
     def handle_action_stop_editing(self):
         self.stop_editing()
+
+    @property
+    def manage_editing(self):
+        return self._manage_editing
 
 
 # Experimental
@@ -1492,7 +1490,7 @@ class MenuManager:
                     gcode = current.get_press_script(context)
                     self.queue_gcode(gcode)
                     if isinstance(current, MenuInput):
-                        if not current.actions_get_param('manage_editing'):
+                        if not current.manage_editing:
                             if not current.is_editing() and event == 'short':
                                 current.start_editing()
                             elif current.is_editing() and event == 'short':
