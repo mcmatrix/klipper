@@ -903,7 +903,7 @@ menu_items = {
 MENU_UPDATE_DELAY = .100
 TIMER_DELAY = .200
 LONG_PRESS_DURATION = 0.800
-DBL_PRESS_DURATION = 0.400
+DBL_PRESS_DURATION = 0.250
 BLINK_FAST_SEQUENCE = (True, True, False, False)
 BLINK_SLOW_SEQUENCE = (True, True, True, True, False, False, False)
 
@@ -1084,9 +1084,9 @@ class MenuManager:
         if self.timeout_idx == 0:
             self.timeout_check(eventtime)
         # check press
-        if self._last_click_press > 0:
+        if self._dbl_click_count > 0 and self._last_click_press > 0:
             diff = eventtime - self._last_click_press
-            if self._dbl_click_count > 1 and diff >= DBL_PRESS_DURATION:
+            if self._dbl_click_count > 1:
                 # dbl click
                 self._last_click_press = 0
                 self._dbl_click_count = 0
@@ -1098,6 +1098,11 @@ class MenuManager:
                 self._dbl_click_count = 0
                 logging.info("long press!")
                 self._click_callback(eventtime, True)
+            elif diff >= DBL_PRESS_DURATION:
+                # short click
+                self._last_click_press = 0
+                self._dbl_click_count = 0
+                logging.info("short press!")
 
         return eventtime + TIMER_DELAY
 
@@ -1546,16 +1551,17 @@ class MenuManager:
         if self.click_pin:
             if state:
                 self._last_click_press = eventtime
-                self._dbl_click_count += 1
             elif self._last_click_press > 0:
                 diff = eventtime - self._last_click_press
-                if (self._dbl_click_count == 1
-                        and DBL_PRESS_DURATION < diff < LONG_PRESS_DURATION):
+                if diff < DBL_PRESS_DURATION:
+                    self._dbl_click_count += 1
+                else:
+                    self._dbl_click_count = 1
                     # short click
-                    self._last_click_press = 0
-                    self._dbl_click_count = 0
-                    logging.info("short press!")
-                    self._click_callback(eventtime)
+                    # self._last_click_press = 0
+                    # self._dbl_click_count = 0
+                    # logging.info("short press!")
+                    # self._click_callback(eventtime)
 
     def _click_callback(self, eventtime, long_press=False):
         if self.is_running():
