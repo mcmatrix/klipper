@@ -956,7 +956,7 @@ class MenuManager:
         self.analog_range_kill_pin = config.get(
             'analog_range_kill_pin', None)
         self._last_click_press = 0
-        self._dbl_click_count = 0
+        self._click_counter = 0
         self.analog_pullup = config.getfloat(
             'analog_pullup_resistor', 4700., above=0.)
         self._encoder_fast_rate = config.getfloat(
@@ -1086,22 +1086,22 @@ class MenuManager:
         # check press
         if self._last_click_press > 0:
             diff = eventtime - self._last_click_press
-            if self._dbl_click_count > 1:
+            if self._click_counter > 1:
                 # dbl click
                 self._last_click_press = 0
-                self._dbl_click_count = 0
+                self._click_counter = 0
                 logging.info("dbl press!")
                 # self._click_callback(eventtime, True)
-            elif diff >= LONG_PRESS_DURATION:
+            elif self._click_counter == 0 and diff >= LONG_PRESS_DURATION:
                 # long click
                 self._last_click_press = 0
-                self._dbl_click_count = 0
+                self._click_counter = 0
                 logging.info("long press!")
                 self._click_callback(eventtime, True)
-            elif diff > DBL_PRESS_DURATION:
+            elif self._click_counter == 1 and diff >= DBL_PRESS_DURATION:
                 # short click
                 self._last_click_press = 0
-                self._dbl_click_count = 0
+                self._click_counter = 0
                 logging.info("short press!")
 
         return eventtime + TIMER_DELAY
@@ -1551,11 +1551,12 @@ class MenuManager:
         if self.click_pin:
             if state:
                 self._last_click_press = eventtime
-                self._dbl_click_count += 1
-            #elif self._last_click_press > 0:
-            #    diff = eventtime - self._last_click_press
-            #    if diff > DBL_PRESS_DURATION:
-            #        self._dbl_click_count = 0
+            elif self._last_click_press > 0:
+                diff = eventtime - self._last_click_press
+                if diff < DBL_PRESS_DURATION:
+                    self._click_counter += 1
+                else:
+                    self._click_counter = 1
                     # short click
                     # self._last_click_press = 0
                     # self._dbl_click_count = 0
