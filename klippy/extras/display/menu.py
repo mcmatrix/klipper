@@ -906,7 +906,7 @@ LONG_PRESS_DURATION = 0.800
 DBL_PRESS_DURATION = 0.300
 #  Blinking sequence per 0.100 ->  1 - on, 0 - off
 BLINK_FAST_SEQUENCE = (1, 1, 1, 1, 0, 0, 0, 0)
-BLINK_SLOW_SEQUENCE = (1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0)
+BLINK_SLOW_SEQUENCE = (1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0)
 
 
 class MenuManager:
