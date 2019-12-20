@@ -903,6 +903,7 @@ menu_items = {
 MENU_UPDATE_DELAY = .100
 TIMER_DELAY = .200
 LONG_PRESS_DURATION = 0.800
+DBL_PRESS_DURATION = 0.400
 BLINK_FAST_SEQUENCE = (True, True, False, False)
 BLINK_SLOW_SEQUENCE = (True, True, True, True, False, False, False)
 
@@ -955,6 +956,7 @@ class MenuManager:
         self.analog_range_kill_pin = config.get(
             'analog_range_kill_pin', None)
         self._last_click_press = 0
+        self._dbl_click_count = 0
         self.analog_pullup = config.getfloat(
             'analog_pullup_resistor', 4700., above=0.)
         self._encoder_fast_rate = config.getfloat(
@@ -1081,12 +1083,22 @@ class MenuManager:
         )
         if self.timeout_idx == 0:
             self.timeout_check(eventtime)
-        # check long press
-        if (self._last_click_press > 0 and (
-                eventtime - self._last_click_press) >= LONG_PRESS_DURATION):
-            # long click
-            self._last_click_press = 0
-            self._click_callback(eventtime, True)
+        # check press
+        if self._last_click_press > 0:
+            diff = eventtime - self._last_click_press
+            if self._dbl_click_count > 1 and diff >= DBL_PRESS_DURATION:
+                # dbl click
+                self._last_click_press = 0
+                self._dbl_click_count = 0
+                logging.info("dbl press!")
+                # self._click_callback(eventtime, True)
+            elif diff >= LONG_PRESS_DURATION:
+                # long click
+                self._last_click_press = 0
+                self._dbl_click_count = 0
+                logging.info("long press!")
+                self._click_callback(eventtime, True)
+
         return eventtime + TIMER_DELAY
 
     def timeout_check(self, eventtime):
@@ -1534,10 +1546,15 @@ class MenuManager:
         if self.click_pin:
             if state:
                 self._last_click_press = eventtime
+                self._dbl_click_count += 1
             elif self._last_click_press > 0:
-                if (eventtime - self._last_click_press) < LONG_PRESS_DURATION:
+                diff = eventtime - self._last_click_press
+                if (self._dbl_click_count == 1
+                        and DBL_PRESS_DURATION < diff < LONG_PRESS_DURATION):
                     # short click
                     self._last_click_press = 0
+                    self._dbl_click_count = 0
+                    logging.info("short press!")
                     self._click_callback(eventtime)
 
     def _click_callback(self, eventtime, long_press=False):
