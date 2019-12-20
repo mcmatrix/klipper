@@ -695,9 +695,9 @@ class MenuCallback(MenuContainer):
         super(MenuCallback, self).render_content(eventtime)
 
     # handle callback calls
-    def handle_press(self, long_press=False):
+    def handle_press(self, event):
         if callable(self._press_callback):
-            self._press_callback(long_press)
+            self._press_callback(event)
 
     def handle_back(self, force=False):
         if callable(self._back_callback):
@@ -904,8 +904,9 @@ MENU_UPDATE_DELAY = .100
 TIMER_DELAY = .100
 LONG_PRESS_DURATION = 0.800
 DBL_PRESS_DURATION = 0.300
-BLINK_FAST_SEQUENCE = (True, True, False, False)
-BLINK_SLOW_SEQUENCE = (True, True, True, True, False, False, False)
+#  Blinking sequence per 0.100 ->  1 - on, 0 - off
+BLINK_FAST_SEQUENCE = (1, 1, 1, 1, 0, 0, 0, 0)
+BLINK_SLOW_SEQUENCE = (1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0)
 
 
 class MenuManager:
@@ -1090,20 +1091,17 @@ class MenuManager:
                 # dbl click
                 self._last_click_press = 0
                 self._click_counter = 0
-                logging.info("dbl press!")
-                # self._click_callback(eventtime, True)
+                self._click_callback(eventtime, 'double')
             elif self._click_counter == 0 and diff >= LONG_PRESS_DURATION:
                 # long click
                 self._last_click_press = 0
                 self._click_counter = 0
-                logging.info("long press!")
-                self._click_callback(eventtime, True)
+                self._click_callback(eventtime, 'long')
             elif self._click_counter == 1 and diff >= DBL_PRESS_DURATION:
                 # short click
                 self._last_click_press = 0
                 self._click_counter = 0
-                logging.info("short press!")
-
+                self._click_callback(eventtime, 'short')
         return eventtime + TIMER_DELAY
 
     def timeout_check(self, eventtime):
@@ -1426,11 +1424,9 @@ class MenuManager:
                 return True
         return False
 
-    def press(self, long_press=False):
+    def press(self, event='short'):
         # action context
-        context = {
-            'menu': self._get_action_context(is_longpress=long_press)
-        }
+        context = {'menu': self._get_action_context(press_event=event)}
         container = self.stack_peek()
         if self.running and isinstance(container, MenuContainer):
             self.timer = 0
@@ -1443,9 +1439,9 @@ class MenuManager:
                     self.queue_gcode(gcode)
                     if isinstance(current, MenuInput):
                         if not self._from_action_context('manual'):
-                            if not current.is_editing():
+                            if not current.is_editing() and event == 'short':
                                 current.start_editing()
-                            elif current.is_editing() and not long_press:
+                            elif current.is_editing() and event == 'short':
                                 current.stop_editing()
                         else:
                             self._handle_actions(
@@ -1466,7 +1462,7 @@ class MenuManager:
                     logging.error("Unknown action: {}({})".format(
                         name, ','.join(map(str, args[0:]))))
             elif isinstance(container, MenuCallback):
-                container.handle_press(long_press)
+                container.handle_press(event)
 
     def queue_gcode(self, script):
         if not script:
@@ -1557,15 +1553,10 @@ class MenuManager:
                     self._click_counter += 1
                 else:
                     self._click_counter = 1
-                    # short click
-                    # self._last_click_press = 0
-                    # self._dbl_click_count = 0
-                    # logging.info("short press!")
-                    # self._click_callback(eventtime)
 
-    def _click_callback(self, eventtime, long_press=False):
+    def _click_callback(self, eventtime, event):
         if self.is_running():
-            self.press(long_press)
+            self.press(event)
         else:
             # lets start and populate the menu items
             self.begin(eventtime)
