@@ -113,6 +113,8 @@ class MenuItem(object):
         self.__scroll_diff = 0
         self.__scroll_dir = None
         self.__last_state = True
+        self._action_queue = []
+        self._action_params = {}
         # item namespace - used in item relative paths
         self._ns = " ".join(config.get_name().split()[1:])
         # if scroll is enabled and width is not specified then
@@ -157,22 +159,6 @@ class MenuItem(object):
     def stop_editing(self):
         pass
 
-    def _action_error(self, name, msg, *args):
-        logging.error("'{}' -> {}({}): {}".format(
-            self.ns, name, ','.join(map(str, args[0:])), msg))
-
-    # override
-    def handle_action(self, name, *args, **kwargs):
-        if name == 'emit':
-            if len(args[0:]) > 0 and len(str(args[0])) > 0:
-                self.manager.send_event(
-                    "action:" + str(args[0]), self, *args[1:])
-            else:
-                self._action_error(name, "malformed action", *args)
-        elif name == 'log':
-            logging.info("item:{} -> {}".format(
-                self.ns, ' '.join(map(str, args[0:]))))
-
     # override
     def get_context(self, cxt=None):
         # get default menu context
@@ -183,7 +169,8 @@ class MenuItem(object):
                 'is_editing': self.is_editing(),
                 'width': self._width,
                 'ns': self.ns
-            }
+            },
+            'action': self.actions_queue_wrapper()
         })
         return context
 
@@ -270,6 +257,89 @@ class MenuItem(object):
     def send_event(self, event, *args):
         return self.manager.send_event(
             "item:%s:%s" % (self.ns, str(event)), *args)
+
+    def handle_actions(self, **kwargs):
+        for name, scope, args in self.actions_queue_iter():
+            _handle = None
+            if scope == 'self':
+                _handle = getattr(self, "handle_action_" + name, None)
+            elif scope == 'parent':
+                container = self.manager.stack_peek()
+                _handle = getattr(container, "handle_action_" + name, None)
+            else:
+                self.action_error(
+                    name, None, "unknown action scope '%s'" % (scope,), *args)
+                continue
+            if callable(_handle):
+                try:
+                    _handle(*args, **kwargs)
+                except Exception as e:
+                    self.action_error(name, scope, e, *args)
+            else:
+                self.action_error(name, scope, "unknown action", *args)
+
+    def action_error(self, name, scope, msg, *args):
+        if scope is None:
+            logging.error("'{}' -> {}({}): {}".format(
+                self.ns, name, ','.join(map(str, args[0:])), msg))
+        else:
+            logging.error("'{}' [{}] -> {}({}): {}".format(
+                self.ns, scope, name, ','.join(map(str, args[0:])), msg))
+
+    def actions_queue_wrapper(self):
+        self._action_queue = []
+        self._action_params = {}
+
+        # queue wrapper for action call, encapsulate __getattr__
+        class __Action__(object):
+            def __init__(me, scope):
+                me.scope = scope
+
+            def __getattr__(me, name):
+                def _set(key, val):
+                    self._action_params[key] = val
+                    return ''
+
+                def _append(*args):
+                    self._action_queue.append(
+                        (len(self._action_queue), me.scope, name, list(args)))
+                    return ''
+
+                if name == "set_param":
+                    return _set
+                elif me.scope == "self" and name == "parent":
+                    return __Action__('parent')
+                else:
+                    return _append
+        return __Action__('self')
+
+    def actions_get_param(self, name):
+        if name in self._action_params:
+            return self._action_params[name]
+        else:
+            return None
+
+    def actions_queue_iter(self):
+        for action in self._action_queue:
+            i, scope, name, args = action
+            # remove from action list
+            self._action_queue.remove(action)
+            yield (name, scope, args)
+        else:
+            raise StopIteration
+
+    # actions
+    def handle_action_back(self):
+        self.manager.back()
+
+    def handle_action_exit(self):
+        self.manager.exit()
+
+    def handle_action_emit(self, name, *args):
+        self.manager.send_event("action:" + str(name), self, *args)
+
+    def handle_action_log(self, msg):
+        logging.info("item:{} -> {}".format(self.ns, msg))
 
     @property
     def cursor(self):
@@ -487,6 +557,11 @@ class MenuSelector(MenuContainer):
     def is_homed(self):
         return self.initial == self.selected
 
+    # actions
+    def handle_action_reset(self):
+        self.stop_editing()
+        self.init_selection()
+
     @property
     def initial(self):
         return self.__initial
@@ -637,13 +712,12 @@ class MenuInput(MenuCommand):
         if last_value != self._input_value:
             self._value_changed()
 
-    # override
-    def handle_action(self, name, *args, **kwargs):
-        super(MenuInput, self).handle_action(name, *args, **kwargs)
-        if name == 'start_editing':
-            self.start_editing(*args)
-        elif name == 'stop_editing':
-            self.stop_editing(*args)
+    # actions
+    def handle_action_start_editing(self):
+        self.start_editing()
+
+    def handle_action_stop_editing(self):
+        self.stop_editing()
 
 
 # Experimental
@@ -752,7 +826,7 @@ class MenuView(MenuSelector):
                 'type': 'command',
                 'name': self.manager.asliteral(name),
                 'cursor': '>',
-                'press_script': '{menu.back()}'
+                'press_script': '{action.back()}'
             })
             # add item from content to immutable list of items
             self.immutable_items.append(item)
@@ -855,19 +929,12 @@ class MenuView(MenuSelector):
         context = self.get_context(cxt)
         return self._press_script_tpl.render(context)
 
-    # override
-    def handle_action(self, name, *args, **kwargs):
-        super(MenuView, self).handle_action(name, *args, **kwargs)
-        if name == 'popup':
-            if len(args[0:]) == 1:
-                key = str(args[0])
-                if key in self._popup_menus:
-                    self.manager.push_container(self._popup_menus[key])
-                else:
-                    self._action_error(
-                        name, "menu '{}' not found".format(key), *args)
-            else:
-                self._action_error(name, "takes exactly one argument", *args)
+    # actions
+    def handle_action_popup(self, name):
+        if name in self._popup_menus:
+            self.manager.push_container(self._popup_menus[name])
+        else:
+            raise Exception("menu '{}' not found".format(name))
 
 
 class MenuVSDView(MenuView):
@@ -904,7 +971,7 @@ MENU_UPDATE_DELAY = .100
 TIMER_DELAY = .100
 LONG_PRESS_DURATION = 0.800
 DBL_PRESS_DURATION = 0.300
-#  Blinking sequence per 0.100 ->  1 - on, 0 - off
+#  Blinking sequence per 0.100 ->  1 - on, 0 - blank
 BLINK_FAST_SEQUENCE = (1, 1, 1, 1, 0, 0, 0, 0)
 BLINK_SLOW_SEQUENCE = (1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0)
 
@@ -935,9 +1002,6 @@ class MenuManager:
         self.cols, self.rows = self.lcd_chip.get_dimensions()
         self.timeout = config.getint('menu_timeout', 0)
         self.timer = 0
-        # queue for action calls
-        self._action_queue = []
-        self._action_params = {}
         # buttons
         self.encoder_pins = config.get('encoder_pins', None)
         self.click_pin = config.get('click_pin', None)
@@ -1400,20 +1464,6 @@ class MenuManager:
             self.send_event('exit', self)
             self.running = False
 
-    def handle_action(self, name, *args, **kwargs):
-        if name == 'back':
-            self.back(*args)
-        elif name == 'exit':
-            self.exit(*args)
-        elif name == 'reset':
-            # reset container selection
-            container = self.stack_peek()
-            if self.running:
-                if isinstance(container, MenuContainer):
-                    container.stop_editing()
-                if isinstance(container, MenuSelector):
-                    container.init_selection()
-
     def push_container(self, menu):
         container = self.stack_peek()
         if self.running and isinstance(container, MenuContainer):
@@ -1426,7 +1476,11 @@ class MenuManager:
 
     def press(self, event='short'):
         # action context
-        context = {'menu': self._get_action_context(press_event=event)}
+        context = {
+            'menu': {
+                'press_event': event
+            }
+        }
         container = self.stack_peek()
         if self.running and isinstance(container, MenuContainer):
             self.timer = 0
@@ -1438,29 +1492,19 @@ class MenuManager:
                     gcode = current.get_press_script(context)
                     self.queue_gcode(gcode)
                     if isinstance(current, MenuInput):
-                        if not self._from_action_context('manual'):
+                        if not current.actions_get_param('manage_editing'):
                             if not current.is_editing() and event == 'short':
                                 current.start_editing()
                             elif current.is_editing() and event == 'short':
                                 current.stop_editing()
-                        else:
-                            self._handle_actions(
-                                current, 'start_editing, stop_editing')
                 # process general item actions
                 if isinstance(current, MenuItem):
-                    self._handle_actions(current, 'emit, log')
+                    current.handle_actions()
                 else:  # current is None, no selection. pass click to container
                     if isinstance(container, MenuView):
                         gcode = container.get_press_script(context)
                         self.queue_gcode(gcode)
-                # process container actions
-                self._handle_actions(container, 'popup')
-                # process manager actions
-                self._handle_actions(self, 'back, exit, reset')
-                # find leftovers
-                for name, args in self._actions_iter_pop('*'):
-                    logging.error("Unknown action: {}({})".format(
-                        name, ','.join(map(str, args[0:]))))
+                        container.handle_actions()
             elif isinstance(container, MenuCallback):
                 container.handle_press(event)
 
@@ -1577,59 +1621,6 @@ class MenuManager:
         if self.kill_pin:
             # Emergency Stop
             self.printer.invoke_shutdown("Shutdown due to kill button!")
-
-    # action context methods
-    def _handle_actions(self, item, n, **kwargs):
-        _handle = getattr(item, "handle_action", None)
-        if callable(_handle):
-            for name, args in self._actions_iter_pop(n):
-                _handle(name, *args, **kwargs)
-
-    def _from_action_context(self, name):
-        if name in self._action_params:
-            return self._action_params[name]
-        else:
-            return None
-
-    def _get_action_context(self, **kwargs):
-        self._action_queue = []
-        self._action_params = {}
-
-        # wrapper for action context, encapsulate __getattr__
-        class __ActionContext__(object):
-            def __getattr__(me, name):
-                def _set(key, val):
-                    self._action_params[key] = val
-                    return ''
-
-                def _append(*args):
-                    self._action_queue.append(
-                        (len(self._action_queue), name, list(args)))
-                    return ''
-
-                if name in kwargs:
-                    return kwargs[name]
-                elif name == "set_param":
-                    return _set
-                else:
-                    return _append
-        return __ActionContext__()
-
-    def _actions_iter_pop(self, n):
-        names = self.words_aslist(n)
-        # find matching actions
-        if len(names) == 1 and names[0] == '*':
-            matches = [t for t in self._action_queue]
-        else:
-            matches = [t for t in self._action_queue if t[1] in names]
-        for match in matches:
-            i, name, args = match
-            # remove found match from action list
-            self._action_queue.remove(match)
-            # yield found action
-            yield (name, args)
-        else:
-            raise StopIteration
 
     # manager helper methods
     @classmethod
