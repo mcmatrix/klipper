@@ -901,9 +901,9 @@ menu_items = {
 }
 
 MENU_UPDATE_DELAY = .100
-TIMER_DELAY = .200
+TIMER_DELAY = .100
 LONG_PRESS_DURATION = 0.800
-DBL_PRESS_DURATION = 0.200
+DBL_PRESS_DURATION = 0.300
 BLINK_FAST_SEQUENCE = (True, True, False, False)
 BLINK_SLOW_SEQUENCE = (True, True, True, True, False, False, False)
 
@@ -1074,7 +1074,7 @@ class MenuManager:
         self.blink_slow_idx = (
             (self.blink_slow_idx + 1) % len(BLINK_SLOW_SEQUENCE)
         )
-        self.timeout_idx = (self.timeout_idx + 1) % 5  # 0.2*5 = 1s
+        self.timeout_idx = (self.timeout_idx + 1) % 10  # 0.1*10 = 1s
         self.blink_fast_state = (
             not not BLINK_FAST_SEQUENCE[self.blink_fast_idx]
         )
