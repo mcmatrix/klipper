@@ -1084,7 +1084,7 @@ class MenuManager:
         if self.timeout_idx == 0:
             self.timeout_check(eventtime)
         # check press
-        if self._dbl_click_count > 0 and self._last_click_press > 0:
+        if self._last_click_press > 0:
             diff = eventtime - self._last_click_press
             if self._dbl_click_count > 1:
                 # dbl click
@@ -1098,7 +1098,7 @@ class MenuManager:
                 self._dbl_click_count = 0
                 logging.info("long press!")
                 self._click_callback(eventtime, True)
-            elif diff >= DBL_PRESS_DURATION:
+            elif diff > DBL_PRESS_DURATION:
                 # short click
                 self._last_click_press = 0
                 self._dbl_click_count = 0
@@ -1551,12 +1551,11 @@ class MenuManager:
         if self.click_pin:
             if state:
                 self._last_click_press = eventtime
-            elif self._last_click_press > 0:
-                diff = eventtime - self._last_click_press
-                if diff < DBL_PRESS_DURATION:
-                    self._dbl_click_count += 1
-                else:
-                    self._dbl_click_count = 1
+                self._dbl_click_count += 1
+            #elif self._last_click_press > 0:
+            #    diff = eventtime - self._last_click_press
+            #    if diff > DBL_PRESS_DURATION:
+            #        self._dbl_click_count = 0
                     # short click
                     # self._last_click_press = 0
                     # self._dbl_click_count = 0
