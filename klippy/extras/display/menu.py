@@ -1622,10 +1622,10 @@ class MenuManager:
 
     # actions
     def handle_action_back(self, force=False):
-        self.manager.back(force)
+        self.back(force)
 
     def handle_action_exit(self, force=False):
-        self.manager.exit(force)
+        self.exit(force)
 
     # manager helper methods
     @classmethod
