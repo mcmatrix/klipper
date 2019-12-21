@@ -98,8 +98,9 @@ class MenuItem(object):
             raise Exception(
                 'Abstract MenuItem cannot be instantiated directly')
         self._manager = manager
-        self._use_blink = manager.asbool(config.get('use_blink', 'False'))
-        self._blink_mask = manager.asint(config.get('blink_mask', '0'))
+        self._use_blinking = manager.asbool(
+            config.get('use_blinking', 'False'))
+        self._blinking_mask = config.get('blinking_mask', '')
         self._use_cursor = manager.asbool(config.get('use_cursor', 'True'))
         self.cursor = config.get('cursor', '|')
         self._width = manager.asint(config.get('width', '0'))
@@ -217,11 +218,14 @@ class MenuItem(object):
         ].ljust(self._width)
 
     def render_name(self, selected=False):
-        def _blink(_text, _bstate):
-            if (self._use_blink or not self._use_cursor) and not _bstate:
+        def _blinking(_text, _bstate):
+            if (self._use_blinking or not self._use_cursor) and not _bstate:
                 s = ""
                 for i in range(0, len(_text)):
-                    s += _text[i] if int(self._blink_mask) & (1 << i) else ' '
+                    try:
+                        s += _text[i] if self._blinking_mask[i] == '+' else ' '
+                    except IndexError:
+                        s += ' '
                 return s
             return _text
         s = str(self._name())
@@ -238,11 +242,11 @@ class MenuItem(object):
             self.__clear_scroll()
         # blinker & cursor
         if selected and not self.is_editing():
-            s = (self.cursor if self._use_cursor else '') + _blink(
-                s, self.manager.blink_slow_state)
+            s = (self.cursor if self._use_cursor else '') + _blinking(
+                s, self.manager.blinking_slow_state)
         elif selected and self.is_editing():
-            s = ('*' if self._use_cursor else '') + _blink(
-                s, self.manager.blink_fast_state)
+            s = ('*' if self._use_cursor else '') + _blinking(
+                s, self.manager.blinking_fast_state)
         elif self._use_cursor:
             s = ' ' + s
         return s
@@ -968,8 +972,8 @@ TIMER_DELAY = .100
 LONG_PRESS_DURATION = 0.800
 DBL_PRESS_DURATION = 0.300
 #  Blinking sequence per 0.100 ->  1 - on, 0 - blank
-BLINK_FAST_SEQUENCE = (1, 1, 1, 1, 0, 0, 0, 0)
-BLINK_SLOW_SEQUENCE = (1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0)
+BLINKING_FAST_SEQUENCE = (1, 1, 1, 1, 0, 0, 0, 0)
+BLINKING_SLOW_SEQUENCE = (1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0)
 
 
 class MenuManager:
@@ -979,11 +983,11 @@ class MenuManager:
         self.menustack = []
         self._autorun = False
         self.top_row = 0
-        self.blink_fast_state = True
-        self.blink_slow_state = True
+        self.blinking_fast_state = True
+        self.blinking_slow_state = True
         self._last_eventtime = 0
-        self.blink_fast_idx = 0
-        self.blink_slow_idx = 0
+        self.blinking_fast_idx = 0
+        self.blinking_slow_idx = 0
         self.timeout_idx = 0
         self.display = display
         self.lcd_chip = display.get_lcd_chip()
@@ -1129,18 +1133,18 @@ class MenuManager:
     def timer_event(self, eventtime):
         self._last_eventtime = eventtime
         # take next from sequence
-        self.blink_fast_idx = (
-            (self.blink_fast_idx + 1) % len(BLINK_FAST_SEQUENCE)
+        self.blinking_fast_idx = (
+            (self.blinking_fast_idx + 1) % len(BLINKING_FAST_SEQUENCE)
         )
-        self.blink_slow_idx = (
-            (self.blink_slow_idx + 1) % len(BLINK_SLOW_SEQUENCE)
+        self.blinking_slow_idx = (
+            (self.blinking_slow_idx + 1) % len(BLINKING_SLOW_SEQUENCE)
         )
         self.timeout_idx = (self.timeout_idx + 1) % 10  # 0.1*10 = 1s
-        self.blink_fast_state = (
-            not not BLINK_FAST_SEQUENCE[self.blink_fast_idx]
+        self.blinking_fast_state = (
+            not not BLINKING_FAST_SEQUENCE[self.blinking_fast_idx]
         )
-        self.blink_slow_state = (
-            not not BLINK_SLOW_SEQUENCE[self.blink_slow_idx]
+        self.blinking_slow_state = (
+            not not BLINKING_SLOW_SEQUENCE[self.blinking_slow_idx]
         )
         if self.timeout_idx == 0:
             self.timeout_check(eventtime)
@@ -1269,8 +1273,8 @@ class MenuManager:
             'timeout': self.timeout,
             'autorun': self._autorun,
             'running': self.running,
-            'blink_fast': self.blink_fast_state,
-            'blink_slow': self.blink_slow_state,
+            'blinking_fast': self.blinking_fast_state,
+            'blinking_slow': self.blinking_slow_state,
             'rows': self.rows,
             'cols': self.cols
         }
