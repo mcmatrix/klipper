@@ -131,7 +131,7 @@ class MenuItem(object):
 
     def _name(self):
         context = self.get_context()
-        return self.manager.astext(self.manager.asflatline(
+        return self.manager.stripliterals(self.manager.asflatline(
             self._name_tpl.render(context)))
 
     # override
@@ -265,6 +265,8 @@ class MenuItem(object):
             elif scope == 'parent':
                 container = self.manager.stack_peek()
                 _handle = getattr(container, "handle_action_" + name, None)
+            elif scope == 'menu':
+                _handle = getattr(self.manager, "handle_action_" + name, None)
             else:
                 self.action_error(
                     name, None, "unknown action scope '%s'" % (scope,), *args)
@@ -301,6 +303,8 @@ class MenuItem(object):
 
                 if me.scope == "self" and name == "parent":
                     return __Action__('parent')
+                elif me.scope == "self" and name == "menu":
+                    return __Action__('menu')
                 else:
                     return _append
         return __Action__('self')
@@ -315,12 +319,6 @@ class MenuItem(object):
             raise StopIteration
 
     # actions
-    def handle_action_back(self):
-        self.manager.back()
-
-    def handle_action_exit(self):
-        self.manager.exit()
-
     def handle_action_emit(self, name, *args):
         self.manager.send_event("action:" + str(name), self, *args)
 
@@ -573,8 +571,8 @@ class MenuInput(MenuCommand):
         super(MenuInput, self).__init__(manager, config)
         self._reverse = manager.asbool(config.get('reverse', 'false'))
         self._fall_into = manager.asbool(config.get('fall_into', 'false'))
-        self._manage_editing = manager.asbool(
-            config.get('manage_editing', 'false'))
+        self._automated = manager.asbool(
+            config.get('automated', 'true'))
         self._input_tpl = manager.gcode_macro.load_template(config, 'input')
         self._input_min_tpl = manager.gcode_macro.load_template(
             config, 'input_min', '-999999.0')
@@ -714,8 +712,8 @@ class MenuInput(MenuCommand):
         self.stop_editing()
 
     @property
-    def manage_editing(self):
-        return self._manage_editing
+    def automated(self):
+        return self._automated
 
 
 # Experimental
@@ -824,7 +822,7 @@ class MenuView(MenuSelector):
                 'type': 'command',
                 'name': self.manager.asliteral(name),
                 'cursor': '>',
-                'press_script': '{action.back()}'
+                'press_script': '{action.menu.back()}'
             })
             # add item from content to immutable list of items
             self.immutable_items.append(item)
@@ -1375,11 +1373,13 @@ class MenuManager:
                     self.top_row -= 1
             else:
                 self.top_row = 0
-            for row, text in enumerate(
-                    self.aslatin(content).splitlines()):
-                if self.top_row <= row < self.top_row + self.rows:
-                    text = self.astext(text)
-                    lines.append(text.ljust(self.cols))
+            rows = self.aslatin(content).splitlines()
+            for row in range(0, self.rows):
+                try:
+                    text = self.stripliterals(rows[self.top_row + row])
+                except IndexError:
+                    text = ""
+                lines.append(text.ljust(self.cols))
         return lines
 
     def screen_update_event(self, eventtime):
@@ -1490,7 +1490,7 @@ class MenuManager:
                     gcode = current.get_press_script(context)
                     self.queue_gcode(gcode)
                     if isinstance(current, MenuInput):
-                        if not current.manage_editing:
+                        if current.automated:
                             if not current.is_editing() and event == 'short':
                                 current.start_editing()
                             elif current.is_editing() and event == 'short':
@@ -1620,9 +1620,16 @@ class MenuManager:
             # Emergency Stop
             self.printer.invoke_shutdown("Shutdown due to kill button!")
 
+    # actions
+    def handle_action_back(self, force=False):
+        self.manager.back(force)
+
+    def handle_action_exit(self, force=False):
+        self.manager.exit(force)
+
     # manager helper methods
     @classmethod
-    def astext(cls, s):
+    def stripliterals(cls, s):
         """Literals are beginning or ending by the back-tick '`' (grave accent)
         character instead of double or single quotes. To escape a back-tick use
         a double back-tick."""
