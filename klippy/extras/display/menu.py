@@ -221,11 +221,9 @@ class MenuItem(object):
         def _blinking(_text, _bstate):
             if (self._use_blinking or not self._use_cursor) and not _bstate:
                 s = ""
-                for i in range(0, len(_text)):
-                    try:
-                        s += _text[i] if self._blinking_mask[i] == '+' else ' '
-                    except IndexError:
-                        s += ' '
+                for i, t in enumerate(_text):
+                    s += (t if i < len(self._blinking_mask)
+                          and self._blinking_mask[i] == '+' else ' ')
                 return s
             return _text
         s = str(self._name())
