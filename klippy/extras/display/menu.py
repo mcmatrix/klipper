@@ -1236,14 +1236,11 @@ class MenuManager:
     def after(self, starttime, callback, *args):
         """Helper method for reactor.register_callback.
         The callback will be executed once after the start time elapses.
-        Starttime values less than 3600 are considered as timeout/delay seconds
-        from current reactor time."""
+        """
         def callit(eventtime):
             callback(eventtime, *args)
         reactor = self.printer.get_reactor()
         starttime = max(0., float(starttime))
-        if starttime < 3600.0:  # 1h
-            starttime = reactor.monotonic() + starttime
         reactor.register_callback(callit, starttime)
 
     def send_event(self, event, *args):
