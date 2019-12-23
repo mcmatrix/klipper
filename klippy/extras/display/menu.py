@@ -91,12 +91,7 @@ class _MenuConfig(dict):
 
 
 class MenuItem(object):
-    """Menu item abstract class.
-    """
     def __init__(self, manager, config):
-        if type(self) is MenuItem:
-            raise Exception(
-                'Abstract MenuItem cannot be instantiated directly')
         self._manager = manager
         self._use_blinking = manager.asbool(
             config.get('use_blinking', 'False'))
@@ -109,6 +104,9 @@ class MenuItem(object):
             config, 'enable', 'True')
         self._name_tpl = manager.gcode_macro.load_template(
             config, 'name')
+        prfx = 'script_'
+        self._script_tpls = {o[len(prfx):]: manager.gcode_macro.load_template(
+            config, o, '') for o in config.get_prefix_options(prfx)}
         self._last_heartbeat = None
         self.__scroll_offs = 0
         self.__scroll_diff = 0
@@ -181,6 +179,7 @@ class MenuItem(object):
     # Called when a item is selected
     def select(self):
         self.__clear_scroll()
+        self.run_script("select")
 
     def heartbeat(self, eventtime):
         self._last_heartbeat = eventtime
@@ -259,6 +258,26 @@ class MenuItem(object):
         return self.manager.send_event(
             "item:%s:%s" % (self.ns, str(event)), *args)
 
+    def run_script(self, name, cxt=None):
+        if name in self._script_tpls:
+            _prevent = type('Mutable', (object,), {'__slots__': ('state',)})()
+            context = self.get_context(cxt)
+            context.update({
+                'script': {
+                    'name': name,
+                    'prevent_default': _prevent
+                }
+            })
+            gcode = self._script_tpls[name].render(context)
+            self.manager.queue_gcode(gcode)
+            # default behaviour
+            if not getattr(_prevent, 'state', False):
+                _handle = getattr(self, "handle_script_" + name, None)
+                if callable(_handle):
+                    _handle()
+            # handle actions
+            self.handle_actions()
+
     def handle_actions(self, **kwargs):
         for name, scope, args in self.actions_queue_iter():
             _handle = None
@@ -267,6 +286,16 @@ class MenuItem(object):
             elif scope == 'parent':
                 container = self.manager.stack_peek()
                 _handle = getattr(container, "handle_action_" + name, None)
+            elif scope == 'selected':
+                container = self.manager.stack_peek()
+                if isinstance(container, MenuSelector):
+                    current = container.selected_item()
+                    if current is not None:
+                        _handle = getattr(
+                            current, "handle_action_" + name, None)
+                    else:
+                        self.action_error(
+                            name, scope, "no selected item", *args)
             elif scope == 'menu':
                 _handle = getattr(self.manager, "handle_action_" + name, None)
             else:
@@ -305,6 +334,8 @@ class MenuItem(object):
 
                 if me.scope == "self" and name == "parent":
                     return __Action__('parent')
+                if me.scope == "self" and name == "selected":
+                    return __Action__('selected')
                 elif me.scope == "self" and name == "menu":
                     return __Action__('menu')
                 else:
@@ -548,6 +579,9 @@ class MenuSelector(MenuContainer):
         self.stop_editing()
         self.init_selection()
 
+    def handle_action_select(self, index):
+        self.select_at(index)
+
     @property
     def initial(self):
         return self.__initial
@@ -557,24 +591,10 @@ class MenuSelector(MenuContainer):
         return self.__selected
 
 
-class MenuCommand(MenuItem):
-    def __init__(self, manager, config):
-        super(MenuCommand, self).__init__(manager, config)
-        self._press_script_tpl = manager.gcode_macro.load_template(
-            config, 'press_script', '')
-
-    def get_press_script(self, cxt=None):
-        context = self.get_context(cxt)
-        return self._press_script_tpl.render(context)
-
-
-class MenuInput(MenuCommand):
+class MenuInput(MenuItem):
     def __init__(self, manager, config,):
         super(MenuInput, self).__init__(manager, config)
         self._reverse = manager.asbool(config.get('reverse', 'false'))
-        self._fall_into = manager.asbool(config.get('fall_into', 'false'))
-        self._automated = manager.asbool(
-            config.get('automated', 'true'))
         self._input_tpl = manager.gcode_macro.load_template(config, 'input')
         self._input_min_tpl = manager.gcode_macro.load_template(
             config, 'input_min', '-999999.0')
@@ -582,8 +602,6 @@ class MenuInput(MenuCommand):
             config, 'input_max', '999999.0')
         self._input_step = config.getfloat('input_step', above=0.)
         self._input_step2 = config.getfloat('input_step2', 0, minval=0.)
-        self._input_script_tpl = manager.gcode_macro.load_template(
-            config, 'input_script', '')
 
     def init(self):
         super(MenuInput, self).init()
@@ -593,15 +611,6 @@ class MenuInput(MenuCommand):
 
     def is_scrollable(self):
         return False
-
-    def select(self):
-        super(MenuInput, self).select()
-        if self._fall_into is True:
-            self.start_editing()
-
-    def get_input_script(self, cxt=None):
-        context = self.get_context(cxt)
-        return self._input_script_tpl.render(context)
 
     def is_editing(self):
         return self._input_value is not None
@@ -625,7 +634,7 @@ class MenuInput(MenuCommand):
                 and self.__last_change is not None
                 and self._input_value is not None
                 and (eventtime - self.__last_change) > 0.250):
-            self.manager.queue_gcode(self.get_input_script())
+            self.run_script('change')
             self._is_dirty = False
 
     def eval_enable(self):
@@ -706,16 +715,19 @@ class MenuInput(MenuCommand):
         if last_value != self._input_value:
             self._value_changed()
 
+    # default behaviour for shortpress
+    def handle_script_shortpress(self):
+        if not self.is_editing():
+            self.start_editing()
+        elif self.is_editing():
+            self.stop_editing()
+
     # actions
     def handle_action_start_editing(self):
         self.start_editing()
 
     def handle_action_stop_editing(self):
         self.stop_editing()
-
-    @property
-    def automated(self):
-        return self._automated
 
 
 # Experimental
@@ -795,10 +807,6 @@ class MenuCallback(MenuContainer):
 class MenuView(MenuSelector):
     def __init__(self, manager, config):
         super(MenuView, self).__init__(manager, config)
-        self._enter_gcode = config.get('enter_gcode', None)
-        self._leave_gcode = config.get('leave_gcode', None)
-        self._press_script_tpl = manager.gcode_macro.load_template(
-            config, 'press_script', '')
         prfx = 'popup_'
         self.popup_menus = {o[len(prfx):]: config.get(o)
                             for o in config.get_prefix_options(prfx)}
@@ -821,10 +829,10 @@ class MenuView(MenuSelector):
         name = matched.group(2)
         if m == "back":
             item = self.manager.menuitem_from({
-                'type': 'command',
+                'type': 'item',
                 'name': self.manager.asliteral(name),
                 'cursor': '>',
-                'press_script': '{action.menu.back()}'
+                'script_shortpress': '{action.menu.back()}'
             })
             # add item from content to immutable list of items
             self.immutable_items.append(item)
@@ -917,16 +925,6 @@ class MenuView(MenuSelector):
             logging.exception('View rendering error')
         return ("\n".join(rows), selected_row)
 
-    def run_enter_gcode(self):
-        self.manager.queue_gcode(self._enter_gcode)
-
-    def run_leave_gcode(self):
-        self.manager.queue_gcode(self._leave_gcode)
-
-    def get_press_script(self, cxt=None):
-        context = self.get_context(cxt)
-        return self._press_script_tpl.render(context)
-
     # actions
     def handle_action_popup(self, name):
         if name in self._popup_menus:
@@ -949,19 +947,19 @@ class MenuVSDView(MenuView):
                     'M23 /%s' % str(fname)
                 ]
                 self.insert_item(self.manager.menuitem_from({
-                    'type': 'command',
+                    'type': 'item',
                     'name': self.manager.asliteral(fname),
                     'cursor': '+',
-                    'press_script': "\n".join(gcode),
+                    'script_shortpress': "\n".join(gcode),
                     'scroll': True
                 }))
 
 
 menu_items = {
-    'command': MenuCommand,
+    'item': MenuItem,
     'input': MenuInput,
-    'callback': MenuCallback,
     'view': MenuView,
+    'callback': MenuCallback,
     'vsdview': MenuVSDView
 }
 
@@ -1153,17 +1151,17 @@ class MenuManager:
                 # dbl click
                 self._last_click_press = 0
                 self._click_counter = 0
-                self._click_callback(eventtime, 'double')
+                self._click_callback(eventtime, 'dblpress')
             elif self._click_counter == 0 and diff >= LONG_PRESS_DURATION:
                 # long click
                 self._last_click_press = 0
                 self._click_counter = 0
-                self._click_callback(eventtime, 'long')
+                self._click_callback(eventtime, 'longpress')
             elif self._click_counter == 1 and diff >= DBL_PRESS_DURATION:
                 # short click
                 self._last_click_press = 0
                 self._click_counter = 0
-                self._click_callback(eventtime, 'short')
+                self._click_callback(eventtime, 'shortpress')
         return eventtime + TIMER_DELAY
 
     def timeout_check(self, eventtime):
@@ -1310,11 +1308,11 @@ class MenuManager:
         top = self.stack_peek()
         if top is not None:
             if isinstance(top, MenuView):
-                top.run_leave_gcode()
+                top.run_script('leave')
             elif isinstance(top, MenuCallback):
                 top.handle_leave()
         if isinstance(container, MenuView):
-            container.run_enter_gcode()
+            container.run_script('enter')
         elif isinstance(container, MenuCallback):
             container.handle_enter()
         if not container.is_editing():
@@ -1338,16 +1336,16 @@ class MenuManager:
                     if isinstance(top, MenuSelector):
                         top.init_selection()
                 if isinstance(container, MenuView):
-                    container.run_leave_gcode()
+                    container.run_script('leave')
                 elif isinstance(container, MenuCallback):
                     container.handle_leave()
                 if isinstance(top, MenuView):
-                    top.run_enter_gcode()
+                    top.run_script('enter')
                 elif isinstance(top, MenuCallback):
                     top.handle_enter()
             else:
                 if isinstance(container, MenuView):
-                    container.run_leave_gcode()
+                    container.run_script('leave')
                 elif isinstance(container, MenuCallback):
                     container.handle_leave()
         return container
@@ -1458,7 +1456,7 @@ class MenuManager:
                         and current.is_editing()):
                     return
             if isinstance(container, MenuView):
-                container.run_leave_gcode()
+                container.run_script('leave')
             elif isinstance(container, MenuCallback):
                 container.handle_leave()
             self.send_event('exit', self)
@@ -1474,13 +1472,7 @@ class MenuManager:
                 return True
         return False
 
-    def press(self, event='short'):
-        # action context
-        context = {
-            'menu': {
-                'press_event': event
-            }
-        }
+    def press(self, event='shortpress'):
         container = self.stack_peek()
         if self.running and isinstance(container, MenuContainer):
             self.timer = 0
@@ -1488,23 +1480,11 @@ class MenuManager:
                 current = container.selected_item()
                 if isinstance(current, MenuContainer):
                     self.stack_push(current)
-                elif isinstance(current, (MenuInput, MenuCommand)):
-                    gcode = current.get_press_script(context)
-                    self.queue_gcode(gcode)
-                    if isinstance(current, MenuInput):
-                        if current.automated:
-                            if not current.is_editing() and event == 'short':
-                                current.start_editing()
-                            elif current.is_editing() and event == 'short':
-                                current.stop_editing()
-                # process general item actions
-                if isinstance(current, MenuItem):
-                    current.handle_actions()
-                else:  # current is None, no selection. pass click to container
-                    if isinstance(container, MenuView):
-                        gcode = container.get_press_script(context)
-                        self.queue_gcode(gcode)
-                        container.handle_actions()
+                elif isinstance(current, MenuItem):
+                    current.run_script(event)
+                else:
+                    # current is None, no selection. passthru to container
+                    container.run_script(event)
             elif isinstance(container, MenuCallback):
                 container.handle_press(event)
 
