@@ -52,6 +52,7 @@ class PrinterLCD:
         self.reactor.update_timer(self.screen_update_timer, self.reactor.NOW)
     def get_status(self, eventtime):
         return {
+            'lcd_type': self.lcd_type,
             'progress': self.progress or 0,
             'message': self.message or ''
         }
