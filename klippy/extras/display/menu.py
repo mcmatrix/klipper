@@ -1131,7 +1131,10 @@ class MenuManager:
         reactor = self.printer.get_reactor()
         reactor.register_timer(self.timer_event, reactor.NOW)
         # Load menu root
+        eventtime = reactor.monotonic()
+        self.update_context(eventtime)
         self.load_root()
+        self.send_event('ready', self)
 
     def timer_event(self, eventtime):
         self._last_eventtime = eventtime
@@ -1204,7 +1207,6 @@ class MenuManager:
             # find first enabled root from list
             for name in self.lines_aslist(self.root_names):
                 item = self.lookup_menuitem(name)
-                self.update_context()
                 if item.is_enabled():
                     self.root = item
                     break
@@ -1286,10 +1288,7 @@ class MenuManager:
             context.update(cxt)
         return context
 
-    def update_context(self, eventtime=None):
-        if eventtime is None:
-            reactor = self.printer.get_reactor()
-            eventtime = reactor.monotonic()
+    def update_context(self, eventtime):
         # iterate menu objects
         objs = dict(self.objs)
         parameter = {}
