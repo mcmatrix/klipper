@@ -1123,8 +1123,6 @@ class MenuManager:
         self.load_config(os.path.dirname(__file__), 'menu.cfg')
         # Load items from main config
         self.load_menuitems(config)
-        # Load menu root
-        self.load_root()
         # send init event
         self.send_event('init', self)
 
@@ -1132,6 +1130,8 @@ class MenuManager:
         # start timer
         reactor = self.printer.get_reactor()
         reactor.register_timer(self.timer_event, reactor.NOW)
+        # Load menu root
+        self.load_root()
 
     def timer_event(self, eventtime):
         self._last_eventtime = eventtime
