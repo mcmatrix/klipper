@@ -1204,6 +1204,7 @@ class MenuManager:
             # find first enabled root from list
             for name in self.lines_aslist(self.root_names):
                 item = self.lookup_menuitem(name)
+                self.update_context()
                 if item.is_enabled():
                     self.root = item
                     break
@@ -1285,7 +1286,10 @@ class MenuManager:
             context.update(cxt)
         return context
 
-    def update_context(self, eventtime):
+    def update_context(self, eventtime=None):
+        if eventtime is None:
+            reactor = self.printer.get_reactor()
+            eventtime = reactor.monotonic()
         # iterate menu objects
         objs = dict(self.objs)
         parameter = {}
