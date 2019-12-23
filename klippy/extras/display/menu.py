@@ -1388,6 +1388,7 @@ class MenuManager:
     def screen_update_event(self, eventtime):
         # check first run and load root if needed
         if self._first_run and self.root is None:
+            self.update_context(eventtime)
             self.load_root()
         self._first_run = False
         # screen update
