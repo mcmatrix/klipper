@@ -985,6 +985,7 @@ class MenuManager:
         self.menuitems = {}
         self.menustack = []
         self._autorun = False
+        self._first_run = True
         self.top_row = 0
         self.blinking_fast_state = True
         self.blinking_slow_state = True
@@ -1130,12 +1131,6 @@ class MenuManager:
         # start timer
         reactor = self.printer.get_reactor()
         reactor.register_timer(self.timer_event, reactor.NOW)
-        # Load menu root
-        eventtime = reactor.monotonic()
-        self.update_context(eventtime)
-        logging.info(self.context)
-        self.load_root()
-        self.send_event('ready', self)
 
     def timer_event(self, eventtime):
         self._last_eventtime = eventtime
@@ -1391,6 +1386,11 @@ class MenuManager:
         return lines
 
     def screen_update_event(self, eventtime):
+        # check first run and load root if needed
+        if self._first_run and self.root is None:
+            self.load_root()
+        self._first_run = False
+        # screen update
         if self.is_running():
             self.lcd_chip.clear()
             for y, line in enumerate(self.render(eventtime)):
