@@ -259,19 +259,23 @@ class MenuItem(object):
             "item:%s:%s" % (self.ns, str(event)), *args)
 
     def run_script(self, name, cxt=None):
+        def _prevent():
+            _prevent.state = True
+            return ''
+
         if name in self._script_tpls:
-            _prevent = type('Mutable', (object,), {'__slots__': ('state',)})()
+            _prevent.state = False
             context = self.get_context(cxt)
             context.update({
                 'script': {
                     'name': name,
-                    'prevent_default': _prevent
+                    'prevent_default': lambda: _prevent()
                 }
             })
             gcode = self._script_tpls[name].render(context)
             self.manager.queue_gcode(gcode)
             # default behaviour
-            if not getattr(_prevent, 'state', False):
+            if not _prevent.state:
                 _handle = getattr(self, "handle_script_" + name, None)
                 if callable(_handle):
                     _handle()
