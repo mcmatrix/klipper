@@ -89,6 +89,9 @@ class _MenuConfig(dict):
         return Template('menu ' + self.get(
             '__ns', __id)).safe_substitute(__id=__id)
 
+    def get_prefix_options(self, prefix):
+        return [o for o in self.keys() if o.startswith(prefix)]
+
 
 class MenuItem(object):
     def __init__(self, manager, config):
