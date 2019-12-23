@@ -1133,6 +1133,7 @@ class MenuManager:
         # Load menu root
         eventtime = reactor.monotonic()
         self.update_context(eventtime)
+        logging.info(self.context)
         self.load_root()
         self.send_event('ready', self)
 
