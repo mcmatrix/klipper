@@ -1387,10 +1387,11 @@ class MenuManager:
 
     def screen_update_event(self, eventtime):
         # check first run and load root if needed
-        if self._first_run and self.root is None:
+        if self._first_run:
             self.update_context(eventtime)
-            self.load_root()
-        self._first_run = False
+            if self.root is None:
+                self.load_root()
+            self._first_run = False
         # screen update
         if self.is_running():
             self.lcd_chip.clear()
