@@ -133,6 +133,7 @@ class MenuItem(object):
                 script = _handle(script)
             self._script_tpls[name] = manager.gcode_macro.create_template(
                 '%s:%s' % (self.ns, o), script)
+        # init
         self.init()
 
     # override
@@ -834,7 +835,8 @@ class MenuCallback(MenuContainer):
 
 class MenuView(MenuSelector):
     def __init__(self, manager, config):
-        self.immutable_items = []  # immutable list of items
+        # immutable list of items, must be defined before super
+        self.immutable_items = []
         super(MenuView, self).__init__(manager, config)
         prfx = 'popup_'
         self.popup_menus = {o[len(prfx):]: config.get(o)
@@ -864,7 +866,7 @@ class MenuView(MenuSelector):
                 return self._placeholder(name)
             else:
                 logging.error(
-                    "Unknown placeholder {} in {}:content".format(
+                    "Unknown placeholder {} in {}:script_render".format(
                         full, self.ns))
                 return ""
         return re.sub(r"<\?(\w*):\s*([a-zA-Z0-9_. ]+?)\s*\?>",
