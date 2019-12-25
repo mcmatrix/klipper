@@ -107,6 +107,21 @@ class MenuItem(object):
             config, 'enable', 'True')
         self._name_tpl = manager.gcode_macro.load_template(
             config, 'name')
+        # item namespace - used in item relative paths
+        self._ns = " ".join(config.get_name().split()[1:])
+        self._last_heartbeat = None
+        self.__scroll_offs = 0
+        self.__scroll_diff = 0
+        self.__scroll_dir = None
+        self.__last_state = True
+        self._action_queue = []
+        # if scroll is enabled and width is not specified then
+        # display width is used and adjusted by cursor size
+        if self._scroll and not self._width:
+            self._width = self.manager.cols - len(self._cursor)
+        # clamp width
+        self._width = min(
+            self.manager.cols - len(self._cursor), max(0, self._width))
         # load scripts
         self._script_tpls = {}
         prfx = 'script_'
@@ -118,21 +133,6 @@ class MenuItem(object):
                 script = _handle(script)
             self._script_tpls[name] = manager.gcode_macro.create_template(
                 '%s:%s' % (self.ns, o), script)
-        self._last_heartbeat = None
-        self.__scroll_offs = 0
-        self.__scroll_diff = 0
-        self.__scroll_dir = None
-        self.__last_state = True
-        self._action_queue = []
-        # item namespace - used in item relative paths
-        self._ns = " ".join(config.get_name().split()[1:])
-        # if scroll is enabled and width is not specified then
-        # display width is used and adjusted by cursor size
-        if self._scroll and not self._width:
-            self._width = self.manager.cols - len(self._cursor)
-        # clamp width
-        self._width = min(
-            self.manager.cols - len(self._cursor), max(0, self._width))
         self.init()
 
     # override
