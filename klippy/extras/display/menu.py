@@ -107,9 +107,17 @@ class MenuItem(object):
             config, 'enable', 'True')
         self._name_tpl = manager.gcode_macro.load_template(
             config, 'name')
+        # load scripts
+        self._script_tpls = {}
         prfx = 'script_'
-        self._script_tpls = {o[len(prfx):]: manager.gcode_macro.load_template(
-            config, o, '') for o in config.get_prefix_options(prfx)}
+        for o in config.get_prefix_options(prfx):
+            script = config.get(o, '')
+            name = o[len(prfx):]
+            _handle = getattr(self, "preprocess_script_" + name, None)
+            if callable(_handle):
+                script = _handle(script)
+            self._script_tpls[name] = manager.gcode_macro.create_template(
+                '%s:%s' % (self.ns, o), script)
         self._last_heartbeat = None
         self.__scroll_offs = 0
         self.__scroll_diff = 0
@@ -261,7 +269,7 @@ class MenuItem(object):
         return self.manager.send_event(
             "item:%s:%s" % (self.ns, str(event)), *args)
 
-    def run_script(self, name, cxt=None):
+    def run_script(self, name, cxt=None, skip_processing=False):
         def _prevent():
             _prevent.state = True
             return ''
@@ -275,7 +283,7 @@ class MenuItem(object):
             else:
                 raise error("{}: script '{}' not found".format(
                             self.ns, str(n)))
-
+        result = ""
         if name in self._script_tpls:
             _prevent.state = False
             context = self.get_context(cxt)
@@ -286,15 +294,17 @@ class MenuItem(object):
                     'prevent_default': lambda: _prevent()
                 }
             })
-            gcode = self._script_tpls[name].render(context)
-            self.manager.queue_gcode(gcode)
-            # default behaviour
-            if not _prevent.state:
-                _handle = getattr(self, "handle_script_" + name, None)
-                if callable(_handle):
-                    _handle()
-            # handle actions
-            self.handle_actions()
+            result = self._script_tpls[name].render(context)
+            if not skip_processing:
+                self.manager.queue_gcode(result)
+                # default behaviour
+                if not _prevent.state:
+                    _handle = getattr(self, "handle_script_" + name, None)
+                    if callable(_handle):
+                        _handle()
+                # handle actions
+                self.handle_actions()
+        return result
 
     def handle_actions(self, **kwargs):
         for name, scope, args in self.actions_queue_iter():
@@ -832,37 +842,36 @@ class MenuView(MenuSelector):
         self.runtime_items = config.get('items', '')  # mutable list of items
         self.immutable_items = []  # immutable list of items
         self._runtime_index_start = 0
-        self.content = re.sub(
-            r"<\?(\w*):\s*([a-zA-Z0-9_. ]+?)\s*\?>", self._preproc_content,
-            config.get('content'), 0, re.MULTILINE)
-        self._content_tpl = manager.gcode_macro.create_template(
-            '%s:content' % (self.ns,), self.content)
+
+    def preprocess_script_render(self, script):
+        def _preprocess(matched):
+            full = matched.group(0)  # The entire match
+            m = matched.group(1)
+            name = matched.group(2)
+            if m == "back":
+                item = self.manager.menuitem_from({
+                    'type': 'item',
+                    'name': self.manager.asliteral(name),
+                    'cursor': '>',
+                    'script_shortpress': '{action.menu.back()}'
+                })
+                # add item from content to immutable list of items
+                self.immutable_items.append(item)
+                return self._placeholder(item.ns)
+            elif m == "item":
+                # add item from content to immutable list of items
+                self.immutable_items.append(name)
+                return self._placeholder(name)
+            else:
+                logging.error(
+                    "Unknown placeholder {} in {}:content".format(
+                        full, self.ns))
+                return ""
+        return re.sub(r"<\?(\w*):\s*([a-zA-Z0-9_. ]+?)\s*\?>",
+                      _preprocess, script, 0, re.MULTILINE)
 
     def _placeholder(self, s):
         return "<?name:{}?>".format(s)
-
-    def _preproc_content(self, matched):
-        full = matched.group(0)  # The entire match
-        m = matched.group(1)
-        name = matched.group(2)
-        if m == "back":
-            item = self.manager.menuitem_from({
-                'type': 'item',
-                'name': self.manager.asliteral(name),
-                'cursor': '>',
-                'script_shortpress': '{action.menu.back()}'
-            })
-            # add item from content to immutable list of items
-            self.immutable_items.append(item)
-            return self._placeholder(item.ns)
-        elif m == "item":
-            # add item from content to immutable list of items
-            self.immutable_items.append(name)
-            return self._placeholder(name)
-        else:
-            logging.error(
-                "Unknown placeholder {} in {}:content".format(full, self.ns))
-            return ""
 
     def _names_aslist(self):
         return self.immutable_items
@@ -903,7 +912,11 @@ class MenuView(MenuSelector):
     def get_context(self, cxt=None):
         context = super(MenuView, self).get_context(cxt)
         context['me'].update({
-            'popup_names': self._popup_menus.keys()
+            'popup_names': self._popup_menus.keys(),
+            'runtime_items': [
+                self._placeholder(n) for i, n in self._allitems[
+                    self._runtime_index_start:] if i.is_enabled()
+            ]
         })
         return context
 
@@ -912,14 +925,7 @@ class MenuView(MenuSelector):
         rows = []
         selected_row = None
         try:
-            context = self.get_context()
-            context['me'].update({
-                'runtime_items': [
-                    self._placeholder(n) for i, n in self._allitems[
-                        self._runtime_index_start:] if i.is_enabled()
-                ]
-            })
-            content = self._content_tpl.render(context)
+            content = self.run_script("render", skip_processing=True)
             # postprocess content
             for line in self.manager.lines_aslist(content):
                 s = ""
