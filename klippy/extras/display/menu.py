@@ -834,13 +834,13 @@ class MenuCallback(MenuContainer):
 
 class MenuView(MenuSelector):
     def __init__(self, manager, config):
+        self.immutable_items = []  # immutable list of items
         super(MenuView, self).__init__(manager, config)
         prfx = 'popup_'
         self.popup_menus = {o[len(prfx):]: config.get(o)
                             for o in config.get_prefix_options(prfx)}
         self._popup_menus = {}
         self.runtime_items = config.get('items', '')  # mutable list of items
-        self.immutable_items = []  # immutable list of items
         self._runtime_index_start = 0
 
     def preprocess_script_render(self, script):
