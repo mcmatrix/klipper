@@ -4,7 +4,7 @@
 # Copyright (C) 2019 Janar Sööt <janar.soot@gmail.com>
 #
 # This file may be distributed under the terms of the GNU GPLv3 license.
-import os, logging, re
+import os, logging, re, ast
 from string import Template
 
 
@@ -266,12 +266,23 @@ class MenuItem(object):
             _prevent.state = True
             return ''
 
+        def _template(n):
+            if n in self._script_tpls:
+                if n == name:
+                    raise error("{}: circular reference in script '{}'".format(
+                                self.ns, str(n)))
+                return self._script_tpls[n]
+            else:
+                raise error("{}: script '{}' not found".format(
+                            self.ns, str(n)))
+
         if name in self._script_tpls:
             _prevent.state = False
             context = self.get_context(cxt)
             context.update({
                 'script': {
                     'name': name,
+                    'from': lambda n: _template(n),
                     'prevent_default': lambda: _prevent()
                 }
             })
@@ -387,7 +398,7 @@ class MenuContainer(MenuItem):
     """
     def __init__(self, manager, config):
         if type(self) is MenuContainer:
-            raise Exception(
+            raise error(
                 'Abstract MenuContainer cannot be instantiated directly')
         super(MenuContainer, self).__init__(manager, config)
         self.cursor = config.get('cursor', '>')
@@ -526,7 +537,7 @@ class MenuSelector(MenuContainer):
     """
     def __init__(self, manager, config):
         if type(self) is MenuSelector:
-            raise Exception(
+            raise error(
                 'Abstract MenuSelector cannot be instantiated directly')
         super(MenuSelector, self).__init__(manager, config)
         self.__initial = manager.asint(config.get('initial', 0), None)
@@ -937,7 +948,7 @@ class MenuView(MenuSelector):
         if name in self._popup_menus:
             self.manager.push_container(self._popup_menus[name])
         else:
-            raise Exception("menu '{}' not found".format(name))
+            raise error("{}: menu '{}' not found".format(self.ns, name))
 
 
 class MenuVSDView(MenuView):
@@ -1000,6 +1011,7 @@ class MenuManager:
         self.gcode = self.printer.lookup_object('gcode')
         self.gcode_queue = []
         self.context = {}
+        self.default = {}
         self.objs = {}
         self.root = None
         self.root_names = config.get('menu_root', '__main')
@@ -1124,6 +1136,8 @@ class MenuManager:
         self.load_config(os.path.dirname(__file__), 'menu.cfg')
         # Load items from main config
         self.load_menuitems(config)
+        # Load defaults from main config
+        self.load_defaults(config)
         # send init event
         self.send_event('init', self)
 
@@ -1275,7 +1289,8 @@ class MenuManager:
             'blinking_fast': self.blinking_fast_state,
             'blinking_slow': self.blinking_slow_state,
             'rows': self.rows,
-            'cols': self.cols
+            'cols': self.cols,
+            'default': dict(self.default)
         }
 
     def get_context(self, cxt=None):
@@ -1557,12 +1572,26 @@ class MenuManager:
                 "Cannot load config '%s'" % (filename,))
         if cfg:
             self.load_menuitems(cfg)
+            self.load_defaults(cfg)
         return cfg
 
     def load_menuitems(self, config):
         for cfg in config.get_prefix_sections('menu '):
             item = self.menuitem_from(cfg)
             self.add_menuitem(item.ns, item)
+
+    def load_defaults(self, config):
+        if config.has_section('menu'):
+            cfg = config.getsection('menu')
+            prefix = 'default_'
+            for option in cfg.get_prefix_options(prefix):
+                try:
+                    self.default[option[len(prefix):]] = ast.literal_eval(
+                        cfg.get(option))
+                except ValueError:
+                    raise cfg.error(
+                        "Option '%s' in '%s' is not a valid literal" % (
+                            option, cfg.get_name()))
 
     # buttons & encoder callbacks
     def encoder_cw_callback(self, eventtime):
