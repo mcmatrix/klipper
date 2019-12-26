@@ -277,9 +277,6 @@ class MenuItem(object):
 
         def _template(n):
             if n in self._script_tpls:
-                if n == name:
-                    raise error("{}: circular reference in script '{}'".format(
-                                self.ns, str(n)))
                 return self._script_tpls[n]
             else:
                 raise error("{}: script '{}' not found".format(
@@ -847,7 +844,7 @@ class MenuView(MenuSelector):
 
     def preprocess_script_render(self, script):
         def _preprocess(matched):
-            full = matched.group(0)  # The entire match
+            fullmatch = matched.group(0)  # The entire match
             m = matched.group(1)
             name = matched.group(2)
             if m == "back":
@@ -867,9 +864,9 @@ class MenuView(MenuSelector):
             else:
                 logging.error(
                     "Unknown placeholder {} in {}:script_render".format(
-                        full, self.ns))
+                        fullmatch, self.ns))
                 return ""
-        return re.sub(r"<\?(\w*):\s*([a-zA-Z0-9_. ]+?)\s*\?>",
+        return re.sub(r"<\?(item|back):\s*(\S.*?)\s*\?>",
                       _preprocess, script, 0, re.MULTILINE)
 
     def _placeholder(self, s):
@@ -915,9 +912,9 @@ class MenuView(MenuSelector):
         context = super(MenuView, self).get_context(cxt)
         context['me'].update({
             'popup_names': self._popup_menus.keys(),
-            'runtime_items': [
-                self._placeholder(n) for i, n in self._allitems[
-                    self._runtime_index_start:] if i.is_enabled()
+            'runtime_names': [
+                n for i, n in self._allitems[
+                    self._runtime_index_start:] if n in self._names
             ]
         })
         return context
@@ -932,7 +929,7 @@ class MenuView(MenuSelector):
             for line in self.manager.lines_aslist(content):
                 s = ""
                 for i, text in enumerate(re.split(
-                        r"<\?name:\s*([a-zA-Z0-9_. ]+?)\s*\?>", line)):
+                        r"<\?name:\s*(\S.*?)\s*\?>", line)):
                     if i & 1 == 0:
                         s += text
                     else:
