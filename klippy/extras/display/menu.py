@@ -288,12 +288,14 @@ class MenuItem(object):
             context.update({
                 'script': {
                     'name': name,
-                    'from': lambda n: _template(n),
+                    'named': lambda n: _template(n),
                     'prevent_default': lambda: _prevent()
                 }
             })
             result = self._script_tpls[name].render(context)
+            # process result
             if not skip_processing:
+                # run result as gcode
                 self.manager.queue_gcode(result)
                 # default behaviour
                 if not _prevent.state:
@@ -306,28 +308,22 @@ class MenuItem(object):
 
     def handle_actions(self, **kwargs):
         for name, scope, args in self.actions_queue_iter():
-            _handle = None
+            _source = None
             if scope == 'self':
-                _handle = getattr(self, "handle_action_" + name, None)
+                _source = self
             elif scope == 'parent':
-                container = self.manager.stack_peek()
-                _handle = getattr(container, "handle_action_" + name, None)
+                _source = self.manager.stack_peek()
             elif scope == 'selected':
                 container = self.manager.stack_peek()
                 if isinstance(container, MenuSelector):
-                    current = container.selected_item()
-                    if current is not None:
-                        _handle = getattr(
-                            current, "handle_action_" + name, None)
-                    else:
-                        self.action_error(
-                            name, scope, "no selected item", *args)
+                    _source = container.selected_item()
             elif scope == 'menu':
-                _handle = getattr(self.manager, "handle_action_" + name, None)
-            else:
+                _source = self.manager
+            if not _source:
                 self.action_error(
                     name, None, "unknown action scope '%s'" % (scope,), *args)
                 continue
+            _handle = getattr(_source, "handle_action_" + name, None)
             if callable(_handle):
                 try:
                     _handle(*args, **kwargs)
@@ -435,10 +431,10 @@ class MenuContainer(MenuItem):
     def is_editing(self):
         return any([item.is_editing() for item in self._items])
 
-    def stop_editing(self, run_script=True):
+    def stop_editing(self):
         for item in self._items:
             if item.is_editing():
-                item.stop_editing(run_script)
+                item.stop_editing()
 
     def lookup_item(self, item):
         if isinstance(item, str):
@@ -1016,7 +1012,7 @@ class MenuManager:
         self.gcode = self.printer.lookup_object('gcode')
         self.gcode_queue = []
         self.context = {}
-        self.default = {}
+        self.defaults = {}
         self.objs = {}
         self.root = None
         self.root_names = config.get('menu_root', '__main')
@@ -1295,7 +1291,8 @@ class MenuManager:
             'blinking_slow': self.blinking_slow_state,
             'rows': self.rows,
             'cols': self.cols,
-            'default': dict(self.default)
+            'default': dict(self.defaults),
+            'action_set_default': self._action_set_default
         }
 
     def get_context(self, cxt=None):
@@ -1591,7 +1588,7 @@ class MenuManager:
             prefix = 'default_'
             for option in cfg.get_prefix_options(prefix):
                 try:
-                    self.default[option[len(prefix):]] = ast.literal_eval(
+                    self.defaults[option[len(prefix):]] = ast.literal_eval(
                         cfg.get(option))
                 except ValueError:
                     raise cfg.error(
@@ -1645,6 +1642,16 @@ class MenuManager:
         if self.kill_pin:
             # Emergency Stop
             self.printer.invoke_shutdown("Shutdown due to kill button!")
+
+    # get_status action
+    def _action_set_default(self, name, value):
+        if name in self.defaults:
+            configfile = self.printer.lookup_object('configfile')
+            self.defaults[name] = value
+            configfile.set('menu', 'default_' + str(name), value)
+        else:
+            logging.error("Unknown menu default: '%s'" % str(name))
+        return ""
 
     # actions
     def handle_action_back(self, force=False):
