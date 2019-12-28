@@ -1293,7 +1293,8 @@ class MenuManager:
             'rows': self.rows,
             'cols': self.cols,
             'default': dict(self.defaults),
-            'action_set_default': self._action_set_default
+            'action_set_default': self._action_set_default,
+            'action_reset_defaults': self._action_reset_defaults
         }
 
     def get_context(self, cxt=None):
@@ -1646,7 +1647,7 @@ class MenuManager:
             # Emergency Stop
             self.printer.invoke_shutdown("Shutdown due to kill button!")
 
-    # get_status action
+    # get_status actions
     def _action_set_default(self, name, value):
         if name in self.defaults:
             configfile = self.printer.lookup_object('configfile')
@@ -1654,6 +1655,11 @@ class MenuManager:
             configfile.set('menu', 'default_' + str(name), value)
         else:
             logging.error("Unknown menu default: '%s'" % str(name))
+        return ""
+
+    def _action_reset_defaults(self):
+        configfile = self.printer.lookup_object('configfile')
+        configfile.remove_section('menu')
         return ""
 
     # commands
