@@ -319,7 +319,8 @@ class MenuItem(object):
                     _source = container.selected_item()
             elif scope == 'menu':
                 _source = self.manager
-            if not _source:
+
+            if _source is None:
                 self.command_error(
                     name, None, "unknown command scope '%s'" % (scope,), *args)
                 continue
