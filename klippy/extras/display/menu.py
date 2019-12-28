@@ -43,7 +43,7 @@ class MenuRenderBuffer(object):
     def get_pos(self):
         return self.position
 
-    def limit_pos(self):
+    def within_limits_pos(self):
         if self.position['col'] >= self.cols:
             self.position['col'] = 0
             self.position['row'] += 1
@@ -79,7 +79,7 @@ class MenuRenderBuffer(object):
         return list(self.buffer)
 
 
-class _MenuConfig(dict):
+class MenuConfig(dict):
     """Wrapper for dict to emulate configfile get_name for namespace.
         __ns - item namespace key, used in item relative paths
         $__id - generated id text variable
@@ -114,7 +114,7 @@ class MenuItem(object):
         self.__scroll_diff = 0
         self.__scroll_dir = None
         self.__last_state = True
-        self._action_queue = []
+        self._command_queue = []
         # if scroll is enabled and width is not specified then
         # display width is used and adjusted by cursor size
         if self._scroll and not self._width:
@@ -180,7 +180,7 @@ class MenuItem(object):
                 'width': self._width,
                 'ns': self.ns
             },
-            'action': self.actions_queue_wrapper()
+            'run': self._command_wrapper()
         })
         return context
 
@@ -270,7 +270,7 @@ class MenuItem(object):
         return self.manager.send_event(
             "item:%s:%s" % (self.ns, str(event)), *args)
 
-    def run_script(self, name, cxt=None, skip_processing=False):
+    def run_script(self, name, cxt=None, skip_processing=False, event=None):
         def _prevent():
             _prevent.state = True
             return ''
@@ -287,7 +287,7 @@ class MenuItem(object):
             context = self.get_context(cxt)
             context.update({
                 'script': {
-                    'name': name,
+                    'name': event if event is not None else name,
                     'named': lambda n: _template(n),
                     'prevent_default': lambda: _prevent()
                 }
@@ -302,12 +302,12 @@ class MenuItem(object):
                     _handle = getattr(self, "handle_script_" + name, None)
                     if callable(_handle):
                         _handle()
-                # handle actions
-                self.handle_actions()
+                # handle queued commands
+                self.handle_commands()
         return result
 
-    def handle_actions(self, **kwargs):
-        for name, scope, args in self.actions_queue_iter():
+    def handle_commands(self, **kwargs):
+        for name, scope, args in self.command_queue_iter():
             _source = None
             if scope == 'self':
                 _source = self
@@ -320,19 +320,19 @@ class MenuItem(object):
             elif scope == 'menu':
                 _source = self.manager
             if not _source:
-                self.action_error(
-                    name, None, "unknown action scope '%s'" % (scope,), *args)
+                self.command_error(
+                    name, None, "unknown command scope '%s'" % (scope,), *args)
                 continue
-            _handle = getattr(_source, "handle_action_" + name, None)
+            _handle = getattr(_source, "handle_command_" + name, None)
             if callable(_handle):
                 try:
                     _handle(*args, **kwargs)
                 except Exception as e:
-                    self.action_error(name, scope, e, *args)
+                    self.command_error(name, scope, e, *args)
             else:
-                self.action_error(name, scope, "unknown action", *args)
+                self.command_error(name, scope, "unknown command", *args)
 
-    def action_error(self, name, scope, msg, *args):
+    def command_error(self, name, scope, msg, *args):
         if scope is None:
             logging.error("'{}' -> {}({}): {}".format(
                 self.ns, name, ','.join(map(str, args[0:])), msg))
@@ -340,44 +340,44 @@ class MenuItem(object):
             logging.error("'{}' [{}] -> {}({}): {}".format(
                 self.ns, scope, name, ','.join(map(str, args[0:])), msg))
 
-    def actions_queue_wrapper(self):
-        self._action_queue = []
+    def _command_wrapper(self):
+        self._command_queue = []
 
-        # queue wrapper for action call, encapsulate __getattr__
-        class __Action__(object):
+        # queue wrapper for command call, encapsulate __getattr__
+        class __Command__(object):
             def __init__(me, scope):
                 me.scope = scope
 
             def __getattr__(me, name):
                 def _append(*args):
-                    self._action_queue.append(
-                        (len(self._action_queue), me.scope, name, list(args)))
+                    self._command_queue.append(
+                        (len(self._command_queue), me.scope, name, list(args)))
                     return ''
 
                 if me.scope == "self" and name == "parent":
-                    return __Action__('parent')
+                    return __Command__('parent')
                 if me.scope == "self" and name == "selected":
-                    return __Action__('selected')
+                    return __Command__('selected')
                 elif me.scope == "self" and name == "menu":
-                    return __Action__('menu')
+                    return __Command__('menu')
                 else:
                     return _append
-        return __Action__('self')
+        return __Command__('self')
 
-    def actions_queue_iter(self):
-        for action in self._action_queue:
-            i, scope, name, args = action
-            # remove from action list
-            self._action_queue.remove(action)
+    def command_queue_iter(self):
+        for cmd in self._command_queue:
+            i, scope, name, args = cmd
+            # remove from command list
+            self._command_queue.remove(cmd)
             yield (name, scope, args)
         else:
             raise StopIteration
 
-    # actions
-    def handle_action_emit(self, name, *args):
-        self.manager.send_event("action:" + str(name), self, *args)
+    # commands
+    def handle_command_emit(self, name, *args):
+        self.manager.send_event("command:" + str(name), self, *args)
 
-    def handle_action_log(self, msg):
+    def handle_command_log(self, msg):
         logging.info("item:{} -> {}".format(self.ns, msg))
 
     @property
@@ -596,12 +596,12 @@ class MenuSelector(MenuContainer):
     def is_homed(self):
         return self.initial == self.selected
 
-    # actions
-    def handle_action_reset(self):
+    # commands
+    def handle_command_reset(self):
         self.stop_editing()
         self.init_selection()
 
-    def handle_action_select(self, index):
+    def handle_command_select(self, index):
         self.select_at(index)
 
     @property
@@ -744,11 +744,11 @@ class MenuInput(MenuItem):
         elif self.is_editing():
             self.stop_editing()
 
-    # actions
-    def handle_action_start_editing(self):
+    # commands
+    def handle_command_start_editing(self):
         self.start_editing()
 
-    def handle_action_stop_editing(self):
+    def handle_command_stop_editing(self):
         self.stop_editing()
 
 
@@ -848,7 +848,7 @@ class MenuView(MenuSelector):
                     'type': 'item',
                     'name': self.manager.asliteral(name),
                     'cursor': '>',
-                    'script_shortpress': '{action.menu.back()}'
+                    'script_shortpress': '{run.menu.back()}'
                 })
                 # add item from content to immutable list of items
                 self.immutable_items.append(item)
@@ -944,8 +944,8 @@ class MenuView(MenuSelector):
             logging.exception('View rendering error')
         return ("\n".join(rows), selected_row)
 
-    # actions
-    def handle_action_popup(self, name):
+    # commands
+    def handle_command_popup(self, name):
         if name in self._popup_menus:
             self.manager.push_container(self._popup_menus[name])
         else:
@@ -1509,9 +1509,11 @@ class MenuManager:
                     self.stack_push(current)
                 elif isinstance(current, MenuItem):
                     current.run_script(event)
+                    current.run_script('press', event=event)
                 else:
                     # current is None, no selection. passthru to container
                     container.run_script(event)
+                    container.run_script('press', event=event)
             elif isinstance(container, MenuCallback):
                 container.handle_press(event)
 
@@ -1534,7 +1536,7 @@ class MenuManager:
 
     def menuitem_from(self, config):
         if isinstance(config, dict):
-            config = _MenuConfig(dict(config))
+            config = MenuConfig(dict(config))
         return self.aschoice(
             config, 'type', menu_items)(self, config)
 
@@ -1653,11 +1655,11 @@ class MenuManager:
             logging.error("Unknown menu default: '%s'" % str(name))
         return ""
 
-    # actions
-    def handle_action_back(self, force=False):
+    # commands
+    def handle_command_back(self, force=False):
         self.back(force)
 
-    def handle_action_exit(self, force=False):
+    def handle_command_exit(self, force=False):
         self.exit(force)
 
     # manager helper methods
