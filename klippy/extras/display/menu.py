@@ -1653,6 +1653,8 @@ class MenuManager:
             configfile = self.printer.lookup_object('configfile')
             self.defaults[name] = value
             configfile.set('menu', 'default_' + str(name), value)
+            configfile.set('menu', 'default_last_modified',
+                           self._last_eventtime)
         else:
             logging.error("Unknown menu default: '%s'" % str(name))
         return ""
@@ -1660,6 +1662,7 @@ class MenuManager:
     def _action_reset_defaults(self):
         configfile = self.printer.lookup_object('configfile')
         configfile.remove_section('menu')
+        configfile.set('menu', 'default_last_modified', self._last_eventtime)
         return ""
 
     # commands
