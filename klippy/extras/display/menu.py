@@ -1519,7 +1519,7 @@ class MenuManager:
                     self.stack_push(current)
                 elif isinstance(current, MenuItem):
                     current.run_script(event)
-                    current.run_script('press', event=event)
+                    current.run_script('press', event_name=event)
                 else:
                     # current is None, no selection. passthru to container
                     container.run_script(event)
