@@ -280,7 +280,7 @@ class MenuItem(object):
             _prevent.state = True
             return ''
 
-        def _get_script(n, con=False):
+        def _get_template(n, con=False):
             _source = self
             if con is True:
                 _source = self.manager.stack_peek()
@@ -288,7 +288,7 @@ class MenuItem(object):
             if script is None:
                 raise error(
                     "{}: script '{}' not found".format(_source.ns, str(n)))
-            return script
+            return script.template
         result = ""
         if name in self._script_tpls:
             _prevent.state = False
@@ -297,7 +297,7 @@ class MenuItem(object):
                 'script': {
                     'name': event_name if event_name is not None else name,
                     'prevent_default': _prevent,
-                    'by_name': _get_script
+                    'by_name': _get_template
                 }
             })
             result = self._script_tpls[name].render(context)
