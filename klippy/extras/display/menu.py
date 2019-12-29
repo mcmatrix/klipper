@@ -280,10 +280,8 @@ class MenuItem(object):
             _prevent.state = True
             return ''
 
-        def _get_template(n, con=False):
-            _source = self
-            if con is True:
-                _source = self.manager.stack_peek()
+        def _get_template(n, from_con=False):
+            _source = self.manager.stack_peek() if from_con is True else self
             script = _source.get_script(n)
             if script is None:
                 raise error(
