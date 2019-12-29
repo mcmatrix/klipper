@@ -284,7 +284,7 @@ class MenuItem(object):
             _source = self
             if con is True:
                 _source = self.manager.stack_peek()
-            script = _source.get_script(str(n))
+            script = _source.get_script(n)
             if script is None:
                 raise error(
                     "{}: script '{}' not found".format(_source.ns, str(n)))
@@ -296,8 +296,8 @@ class MenuItem(object):
             context.update({
                 'script': {
                     'name': event_name if event_name is not None else name,
-                    'prevent_default': lambda: _prevent(),
-                    'by_name': lambda n, c=False: _get_script(n, c),
+                    'prevent_default': _prevent,
+                    'by_name': _get_script
                 }
             })
             result = self._script_tpls[name].render(context)
