@@ -52,6 +52,8 @@ class TemplateWrapper:
                  name, traceback.format_exception_only(type(e), e)[-1])
             logging.exception(msg)
             raise printer.config_error(msg)
+    def get_template_object(self):
+        return self.template
     def create_status_wrapper(self, eventtime=None):
         return GetStatusWrapper(self.printer, eventtime)
     def render(self, context=None):
