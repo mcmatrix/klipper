@@ -280,6 +280,15 @@ class MenuItem(object):
             _prevent.state = True
             return ''
 
+        def _get_script(n, con=False):
+            _source = self
+            if con is True:
+                _source = self.manager.stack_peek()
+            script = _source.get_script(str(n))
+            if script is None:
+                raise error(
+                    "{}: script '{}' not found".format(_source.ns, str(n)))
+            return script
         result = ""
         if name in self._script_tpls:
             _prevent.state = False
@@ -287,7 +296,8 @@ class MenuItem(object):
             context.update({
                 'script': {
                     'name': event_name if event_name is not None else name,
-                    'prevent_default': lambda: _prevent()
+                    'prevent_default': lambda: _prevent(),
+                    'by_name': lambda n, c=False: _get_script(n, c),
                 }
             })
             result = self._script_tpls[name].render(context)
@@ -373,12 +383,6 @@ class MenuItem(object):
             raise StopIteration
 
     # commands
-    def handle_command_get_script(self, name):
-        script = self.get_script(name)
-        if script is None:
-            raise error("{}: script '{}' not found".format(self.ns, str(name)))
-        return script
-
     def handle_command_emit(self, name, *args):
         self.manager.send_event("command:" + str(name), self, *args)
 
