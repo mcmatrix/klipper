@@ -270,31 +270,29 @@ class MenuItem(object):
         return self.manager.send_event(
             "item:%s:%s" % (self.ns, str(event)), *args)
 
-    def run_script(self, name, cxt=None, skip_processing=False, event=None):
+    def get_script(self, name):
+        if name in self._script_tpls:
+            return self._script_tpls[name]
+        return None
+
+    def run_script(self, name, cxt=None, render_only=False, event_name=None):
         def _prevent():
             _prevent.state = True
             return ''
 
-        def _template(n):
-            if n in self._script_tpls:
-                return self._script_tpls[n]
-            else:
-                raise error("{}: script '{}' not found".format(
-                            self.ns, str(n)))
         result = ""
         if name in self._script_tpls:
             _prevent.state = False
             context = self.get_context(cxt)
             context.update({
                 'script': {
-                    'name': event if event is not None else name,
-                    'named': lambda n: _template(n),
+                    'name': event_name if event_name is not None else name,
                     'prevent_default': lambda: _prevent()
                 }
             })
             result = self._script_tpls[name].render(context)
             # process result
-            if not skip_processing:
+            if not render_only:
                 # run result as gcode
                 self.manager.queue_gcode(result)
                 # default behaviour
@@ -309,9 +307,9 @@ class MenuItem(object):
     def handle_commands(self, **kwargs):
         for name, scope, args in self.command_queue_iter():
             _source = None
-            if scope == 'self':
+            if scope == 'me':
                 _source = self
-            elif scope == 'parent':
+            elif scope == 'container':
                 _source = self.manager.stack_peek()
             elif scope == 'selected':
                 container = self.manager.stack_peek()
@@ -355,15 +353,15 @@ class MenuItem(object):
                         (len(self._command_queue), me.scope, name, list(args)))
                     return ''
 
-                if me.scope == "self" and name == "parent":
-                    return __Command__('parent')
-                if me.scope == "self" and name == "selected":
+                if me.scope == "me" and name == "container":
+                    return __Command__('container')
+                if me.scope == "me" and name == "selected":
                     return __Command__('selected')
-                elif me.scope == "self" and name == "menu":
+                elif me.scope == "me" and name == "menu":
                     return __Command__('menu')
                 else:
                     return _append
-        return __Command__('self')
+        return __Command__('me')
 
     def command_queue_iter(self):
         for cmd in self._command_queue:
@@ -375,6 +373,12 @@ class MenuItem(object):
             raise StopIteration
 
     # commands
+    def handle_command_get_script(self, name):
+        script = self.get_script(name)
+        if script is None:
+            raise error("{}: script '{}' not found".format(self.ns, str(name)))
+        return script
+
     def handle_command_emit(self, name, *args):
         self.manager.send_event("command:" + str(name), self, *args)
 
@@ -921,7 +925,7 @@ class MenuView(MenuSelector):
         rows = []
         selected_row = None
         try:
-            content = self.run_script("render", skip_processing=True)
+            content = self.run_script("render", render_only=True)
             # postprocess content
             for line in self.manager.lines_aslist(content):
                 s = ""
@@ -1515,7 +1519,7 @@ class MenuManager:
                 else:
                     # current is None, no selection. passthru to container
                     container.run_script(event)
-                    container.run_script('press', event=event)
+                    container.run_script('press', event_name=event)
             elif isinstance(container, MenuCallback):
                 container.handle_press(event)
 
