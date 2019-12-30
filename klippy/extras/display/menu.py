@@ -108,7 +108,7 @@ class MenuItem(object):
         self._name_tpl = manager.gcode_macro.load_template(
             config, 'name')
         # item namespace - used in item relative paths
-        self._ns = " ".join(config.get_name().split()[1:])
+        self._ns = " ".join(config.get_name().split(' ')[1:])
         self._last_heartbeat = None
         self.__scroll_offs = 0
         self.__scroll_diff = 0
@@ -262,9 +262,11 @@ class MenuItem(object):
 
     def ns_prefix(self, name):
         name = str(name).strip()
-        if name.startswith('.'):
+        if name.startswith('..'):
+            name = ' '.join([(' '.join(self.ns.split(' ')[:-1])), name[2:]])
+        elif name.startswith('.'):
             name = ' '.join([self.ns, name[1:]])
-        return name
+        return name.strip()
 
     def send_event(self, event, *args):
         return self.manager.send_event(
@@ -280,35 +282,46 @@ class MenuItem(object):
             _prevent.state = True
             return ''
 
-        def _get_template(n, from_con=False):
-            _source = self.manager.stack_peek() if from_con is True else self
+        def _before():
+            _before.state = True
+            return ''
+
+        def _get_template(n, from_ns='.'):
+            _source = self.manager.lookup_menuitem(self.ns_prefix(from_ns))
             script = _source.get_script(n)
             if script is None:
                 raise error(
                     "{}: script '{}' not found".format(_source.ns, str(n)))
             return script.template
         result = ""
+        # init context & commands queue
+        context = self.get_context(cxt)
+        _prevent.state = False
+        _before.state = False
         if name in self._script_tpls:
-            _prevent.state = False
-            context = self.get_context(cxt)
             context.update({
                 'script': {
                     'name': event_name if event_name is not None else name,
                     'prevent_default': _prevent,
+                    'run_before_gcode': _before,
                     'by_name': _get_template
                 }
             })
             result = self._script_tpls[name].render(context)
-            # process result
-            if not render_only:
-                # run result as gcode
-                self.manager.queue_gcode(result)
-                # default behaviour
-                if not _prevent.state:
-                    _handle = getattr(self, "handle_script_" + name, None)
-                    if callable(_handle):
-                        _handle()
-                # handle queued commands
+        # process result
+        if not render_only:
+            if _before.state is True:
+                # handle queued commands before gcode
+                self.handle_commands()
+            # run result as gcode
+            self.manager.queue_gcode(result)
+            # default behaviour
+            if not _prevent.state:
+                _handle = getattr(self, "handle_script_" + name, None)
+                if callable(_handle):
+                    _handle()
+            if _before.state is False:
+                # handle queued commands after gcode
                 self.handle_commands()
         return result
 
@@ -414,6 +427,8 @@ class MenuContainer(MenuItem):
         super(MenuContainer, self).__init__(manager, config)
         self.cursor = config.get('cursor', '>')
         self._autorun = manager.asbool(config.get('autorun', 'False'))
+        self._permit_timeout = manager.asbool(
+            config.get('permit_timeout', 'True'))
         self._allitems = []
         self._names = []
         self._items = []
@@ -434,6 +449,9 @@ class MenuContainer(MenuItem):
     # overload
     def is_accepted(self, item):
         return isinstance(item, MenuItem)
+
+    def is_timeout_permitted(self):
+        return self._permit_timeout
 
     def is_editing(self):
         return any([item.is_editing() for item in self._items])
@@ -1194,17 +1212,18 @@ class MenuManager:
 
     def timeout_check(self, eventtime):
         permit_check = False
-        if (self.is_running()and self.timeout > 0
+        if (self.is_running() and self.timeout > 0
                 and isinstance(self.root, MenuContainer)):
             container = self.stack_peek()
-            if container is self.root:
-                if not container.is_homed():
+            if (isinstance(container, MenuContainer)
+                    and container.is_timeout_permitted() is True):
+                if container is self.root:
+                    if not container.is_homed():
+                        permit_check = True
+                    elif not self._autorun:
+                        permit_check = True
+                else:
                     permit_check = True
-                elif not self._autorun:
-                    permit_check = True
-            else:
-                permit_check = True
-
         # check timeout
         if permit_check is True:
             if self.timer >= self.timeout:
