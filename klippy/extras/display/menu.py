@@ -328,7 +328,7 @@ class MenuItem(object):
     def handle_commands(self, **kwargs):
         for name, scope, args in self.command_queue_iter():
             _source = None
-            if scope == 'me':
+            if scope == 'me' or scope == 'self':
                 _source = self
             elif scope == 'container':
                 _source = self.manager.stack_peek()
@@ -374,15 +374,17 @@ class MenuItem(object):
                         (len(self._command_queue), me.scope, name, list(args)))
                     return ''
 
-                if me.scope == "me" and name == "container":
+                if me.scope == "self" and name == "me":
+                    return __Command__('me')
+                elif me.scope == "self" and name == "container":
                     return __Command__('container')
-                if me.scope == "me" and name == "selected":
+                elif me.scope == "self" and name == "selected":
                     return __Command__('selected')
-                elif me.scope == "me" and name == "menu":
+                elif me.scope == "self" and name == "menu":
                     return __Command__('menu')
                 else:
                     return _append
-        return __Command__('me')
+        return __Command__('self')
 
     def command_queue_iter(self):
         for cmd in self._command_queue:
