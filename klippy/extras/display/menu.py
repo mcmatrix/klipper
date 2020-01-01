@@ -1028,7 +1028,7 @@ class MenuManager:
         self.top_row = 0
         self.blinking_fast_state = True
         self.blinking_slow_state = True
-        self._last_eventtime = 0
+        self._defaults_revision = 0
         self.blinking_fast_idx = 0
         self.blinking_slow_idx = 0
         self.timeout_idx = 0
@@ -1175,7 +1175,6 @@ class MenuManager:
         reactor.register_timer(self.timer_event, reactor.NOW)
 
     def timer_event(self, eventtime):
-        self._last_eventtime = eventtime
         # take next from sequence
         self.blinking_fast_idx = (
             (self.blinking_fast_idx + 1) % len(BLINKING_FAST_SEQUENCE)
@@ -1616,6 +1615,10 @@ class MenuManager:
     def load_defaults(self, config):
         if config.has_section('menu'):
             cfg = config.getsection('menu')
+            # load revision
+            self._defaults_revision = self.asint(
+                cfg.get('defaults_revision', '0'), 0)
+            # load default records
             prefix = 'default_'
             for option in cfg.get_prefix_options(prefix):
                 try:
@@ -1679,9 +1682,10 @@ class MenuManager:
         if name in self.defaults:
             configfile = self.printer.lookup_object('configfile')
             self.defaults[name] = value
+            self._defaults_revision += 1
             configfile.set('menu', 'default_' + str(name), value)
-            configfile.set('menu', 'default_last_modified',
-                           self._last_eventtime)
+            configfile.set(
+                'menu', 'defaults_revision', self._defaults_revision)
         else:
             logging.error("Unknown menu default: '%s'" % str(name))
         return ""
@@ -1689,7 +1693,9 @@ class MenuManager:
     def _action_reset_defaults(self):
         configfile = self.printer.lookup_object('configfile')
         configfile.remove_section('menu')
-        configfile.set('menu', 'default_last_modified', self._last_eventtime)
+        self._defaults_revision += 1
+        configfile.set(
+            'menu', 'defaults_revision', self._defaults_revision)
         return ""
 
     # commands
