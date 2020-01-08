@@ -286,6 +286,10 @@ class MenuItem(object):
             _before.state = True
             return ''
 
+        def _log():
+            _log.state = True
+            return ''
+
         def _get_template(n, from_ns='.'):
             _source = self.manager.lookup_menuitem(self.ns_prefix(from_ns))
             script = _source.get_script(n)
@@ -298,12 +302,14 @@ class MenuItem(object):
         context = self.get_context(cxt)
         _prevent.state = False
         _before.state = False
+        _log.state = False
         if name in self._script_tpls:
             context.update({
                 'script': {
                     'name': event_name if event_name is not None else name,
                     'prevent_default': _prevent,
                     'run_before_gcode': _before,
+                    'log_gcode': _log,
                     'by_name': _get_template
                 }
             })
@@ -313,6 +319,9 @@ class MenuItem(object):
             if _before.state is True:
                 # handle queued commands before gcode
                 self.handle_commands()
+            if _log.state is True:
+                # log result gcode
+                logging.info("item:{} -> gcode: {}".format(self.ns, result))
             # run result as gcode
             self.manager.queue_gcode(result)
             # default behaviour
