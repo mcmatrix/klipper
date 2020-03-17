@@ -79,6 +79,8 @@ class PrinterGCodeMacro:
         else:
             script = config.get(option, default)
         return TemplateWrapper(self.printer, self.env, name, script)
+    def create_template(self, name, script):
+        return TemplateWrapper(self.printer, self.env, name, script)
 
 def load_config(config):
     return PrinterGCodeMacro(config)
