@@ -950,7 +950,7 @@ class MenuManager:
         if self.is_running():
             self.lcd_chip.clear()
             for y, line in enumerate(self.render(eventtime)):
-                self.display.draw_text(0, y, line)
+                self.display.draw_text(0, y, line, eventtime)
             self.lcd_chip.flush()
             return eventtime + MENU_UPDATE_DELAY
         else:
