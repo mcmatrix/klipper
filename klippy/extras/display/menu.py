@@ -533,8 +533,8 @@ class MenuInput(MenuCommand):
         if last_value != self._input_value:
             self._value_changed()
 
-    # default behaviour for shortpress
-    def handle_script_shortpress(self):
+    # default behaviour for press
+    def handle_script_press(self):
         if not self.is_editing():
             self.start_editing()
         elif self.is_editing():
@@ -547,14 +547,14 @@ class MenuList(MenuContainer):
         self._show_title = manager.asbool(config.get('show_title', 'True'))
 
     def _names_aslist(self):
-        return self.manager.lookup_names(self.ns)
+        return self.manager.lookup_children(self.ns)
 
     def _populate(self):
         super(MenuList, self)._populate()
         #  add back as first item
         name = '..'
         if self._show_title:
-            name += ' [%s]' % str(self._name())
+            name += ' %s' % str(self._name())
         item = self.manager.menuitem_from({
             'type': 'command',
             'name': self.manager.asliteral(name),
@@ -625,8 +625,8 @@ class MenuManager:
         self.running = False
         self.menuitems = {}
         self.menustack = []
+        self.__children = {}
         self.top_row = 0
-        self._defaults_revision = 0
         self.timeout_idx = 0
         self.display = display
         self.lcd_chip = display.get_lcd_chip()
@@ -642,6 +642,7 @@ class MenuManager:
         self.cols, self.rows = self.lcd_chip.get_dimensions()
         self.timeout = config.getint('menu_timeout', 0)
         self.timer = 0
+        self.eventtime = 0
         # buttons
         self.encoder_pins = config.get('encoder_pins', None)
         self.click_pin = config.get('click_pin', None)
@@ -766,6 +767,7 @@ class MenuManager:
         self.root = self.lookup_menuitem(self._root)
         # send init event
         self.send_event('init', self)
+        #logging.info("{}".format(self._children))
 
     def handle_ready(self):
         # start timer
@@ -773,6 +775,7 @@ class MenuManager:
         reactor.register_timer(self.timer_event, reactor.NOW)
 
     def timer_event(self, eventtime):
+        self.eventtime = eventtime
         self.timeout_idx = (self.timeout_idx + 1) % 10  # 0.1*10 = 1s
         if self.timeout_idx == 0:
             self.timeout_check(eventtime)
@@ -784,7 +787,7 @@ class MenuManager:
                 self._last_click_press = 0
                 self._last_click_state = 0
                 self._click_callback(eventtime, 'longpress')
-            elif self._last_click_state == 1 and diff <= LONG_PRESS_DURATION:
+            elif self._last_click_state == 1 and diff < LONG_PRESS_DURATION:
                 # short click
                 self._last_click_press = 0
                 self._last_click_state = 0
@@ -863,10 +866,8 @@ class MenuManager:
         if name in self.defaults:
             configfile = self.printer.lookup_object('configfile')
             self.defaults[name] = value
-            self._defaults_revision += 1
             configfile.set('menu', 'default_' + str(name), value)
-            configfile.set(
-                'menu', 'defaults_revision', self._defaults_revision)
+            configfile.set('menu', 'default_eventtime', self.eventtime)
         else:
             logging.error("Unknown menu default: '%s'" % str(name))
         return ""
@@ -874,9 +875,7 @@ class MenuManager:
     def _action_reset_defaults(self):
         configfile = self.printer.lookup_object('configfile')
         configfile.remove_section('menu')
-        self._defaults_revision += 1
-        configfile.set(
-            'menu', 'defaults_revision', self._defaults_revision)
+        configfile.set('menu', 'default_eventtime', self.eventtime)
         return ""
 
     def stack_push(self, container):
@@ -1061,12 +1060,16 @@ class MenuManager:
         return self.aschoice(
             config, 'type', menu_items)(self, config)
 
-    def add_menuitem(self, name, menu):
+    def add_menuitem(self, name, item):
         if name in self.menuitems:
             logging.info(
                 "Declaration of '%s' hides "
                 "previous menuitem declaration" % (name,))
-        self.menuitems[name] = menu
+        self.menuitems[name] = item
+        if isinstance(item, MenuCommand):
+            parent = item.ns_prefix('..')
+            if parent:
+                self.__children.setdefault(parent, []).append(item.ns)
 
     def lookup_menuitem(self, name, default=sentinel):
         if name is None:
@@ -1078,12 +1081,10 @@ class MenuManager:
                 "Unknown menuitem '%s'" % (name,))
         return default
 
-    def lookup_names(self, prefix):
-        if prefix and not prefix.endswith(' '):
-            prefix = prefix + ' '
-        names = [n for n in self.menuitems
-                 if n.startswith(prefix) and ' ' not in n[len(prefix):]]
-        return names
+    def lookup_children(self, ns):
+        if ns in self.__children:
+            return list(self.__children[ns])
+        return list()
 
     def load_config(self, *args):
         cfg = None
@@ -1106,9 +1107,6 @@ class MenuManager:
     def load_defaults(self, config):
         if config.has_section('menu'):
             cfg = config.getsection('menu')
-            # load revision
-            self._defaults_revision = self.asint(
-                cfg.get('defaults_revision', '0'), 0)
             # load default records
             prefix = 'default_'
             for option in cfg.get_prefix_options(prefix):
