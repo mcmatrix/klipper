@@ -52,9 +52,10 @@ class MenuCommand(object):
         self._script_tpls = {}
         prfx = 'script_'
         for o in config.get_prefix_options(prfx):
+            script = config.get(o, '')
             name = o[len(prfx):]
-            self._script_tpls[name] = manager.gcode_macro.load_template(
-                config, o)
+            self._script_tpls[name] = manager.gcode_macro.create_template(
+                '%s:%s' % (self.ns, o), script)
         # init
         self.init()
 
@@ -168,15 +169,38 @@ class MenuCommand(object):
             s = ' ' + s
         return s
 
+    def ns_prefix(self, name):
+        name = str(name).strip()
+        if name.startswith('..'):
+            name = ' '.join([(' '.join(self.ns.split(' ')[:-1])), name[2:]])
+        elif name.startswith('.'):
+            name = ' '.join([self.ns, name[1:]])
+        return name.strip()
+
     def send_event(self, event, *args):
         return self.manager.send_event(
             "%s:%s" % (self.ns, str(event)), *args)
 
+    def get_script(self, name):
+        if name in self._script_tpls:
+            return self._script_tpls[name]
+        return None
+
     def run_script(self, name, cxt=None):
+        def _get_template(n, from_ns='.'):
+            _source = self.manager.lookup_menuitem(self.ns_prefix(from_ns))
+            script = _source.get_script(n)
+            if script is None:
+                raise error(
+                    "{}: script '{}' not found".format(_source.ns, str(n)))
+            return script.template
         result = ""
         # init context
         context = self.get_context(cxt)
         if name in self._script_tpls:
+            context['menu'].update({
+                'script_by_name': _get_template
+            })
             result = self._script_tpls[name].render(context)
         # run result as gcode
         self.manager.queue_gcode(result)
