@@ -110,7 +110,6 @@ class MenuCommand(object):
     # Called when a item is selected
     def select(self):
         self.__clear_scroll()
-        self.run_script("select")
 
     def heartbeat(self, eventtime):
         self._last_heartbeat = eventtime
