@@ -582,6 +582,7 @@ class MenuList(MenuContainer):
                 rows.append(s)
         except Exception:
             logging.exception('List rendering error')
+        # logging.info("{}".format(rows))
         return ("\n".join(rows), selected_row)
 
 
@@ -1168,10 +1169,9 @@ class MenuManager:
     def stripliterals(cls, s):
         """Literals are beginning or ending by the double or single quotes"""
         s = str(s)
-        if s.startswith('"') or s.startswith("'"):
-            s = s[1:]
-        if s.endswith('"') or s.endswith("'"):
-            s = s[:-1]
+        if (s.startswith('"') and s.endswith('"')) or \
+                (s.startswith("'") and s.endswith("'")):
+            s = s[1:-1]
         return s
 
     @classmethod
