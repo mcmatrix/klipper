@@ -88,7 +88,7 @@ class PrinterLCD:
         name = config.get_name()
         if name == 'display':
             # only load menu for primary display
-            self.menu = menu.MenuManager(config, self.lcd_chip)
+            self.menu = menu.MenuManager(config, self)
         self.printer.try_load_module(config, "display_status")
         # Configurable display
         self.display_templates = {}
@@ -108,6 +108,8 @@ class PrinterLCD:
         self.printer.register_event_handler("klippy:ready", self.handle_ready)
         self.screen_update_timer = self.reactor.register_timer(
             self.screen_update_event)
+    def get_lcd_chip(self):
+        return self.lcd_chip
     # Configurable display
     def load_config(self, config):
         # Load default display config file
