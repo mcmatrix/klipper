@@ -641,6 +641,9 @@ class MenuManager:
         self.timeout = config.getint('menu_timeout', 0)
         self.timer = 0
         self.eventtime = 0
+        # reverse container navigation
+        self._reverse_navigation = config.getboolean(
+            'menu_reverse_navigation', False)
         # buttons
         self.encoder_pins = config.get('encoder_pins', None)
         self.click_pin = config.get('click_pin', None)
@@ -962,7 +965,10 @@ class MenuManager:
             if isinstance(current, MenuInput) and current.is_editing():
                 current.dec_value(fast_rate)
             else:
-                container.select_prev()
+                if self._reverse_navigation is True:
+                    container.select_next()  # reverse
+                else:
+                    container.select_prev()  # normal
 
     def down(self, fast_rate=False):
         container = self.stack_peek()
@@ -972,7 +978,10 @@ class MenuManager:
             if isinstance(current, MenuInput) and current.is_editing():
                 current.inc_value(fast_rate)
             else:
-                container.select_next()
+                if self._reverse_navigation is True:
+                    container.select_prev()  # reverse
+                else:
+                    container.select_next()  # normal
 
     def _action_back(self, force=False):
         self.back(force)
