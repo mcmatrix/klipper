@@ -232,8 +232,7 @@ class MenuCommand(object):
 
 
 class MenuContainer(MenuCommand):
-    """Menu container abstract class.
-    """
+    """Menu container abstract class"""
     def __init__(self, manager, config):
         if type(self) is MenuContainer:
             raise error(
@@ -582,7 +581,6 @@ class MenuList(MenuContainer):
                 rows.append(s)
         except Exception:
             logging.exception('List rendering error')
-        # logging.info("{}".format(rows))
         return ("\n".join(rows), selected_row)
 
 
@@ -766,7 +764,6 @@ class MenuManager:
         self.root = self.lookup_menuitem(self._root)
         # send init event
         self.send_event('init', self)
-        #logging.info("{}".format(self._children))
 
     def handle_ready(self):
         # start timer
