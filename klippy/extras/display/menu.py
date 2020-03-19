@@ -35,6 +35,7 @@ class MenuCommand(object):
         self._manager = manager
         self.cursor = config.get('cursor', '>')
         self._scroll = manager.asbool(config.get('scroll', 'False'))
+        self._index = manager.asint(config.get('index', ''), None)
         self._enable_tpl = manager.gcode_macro.load_template(
             config, 'enable', 'True')
         self._name_tpl = manager.gcode_macro.load_template(
@@ -168,7 +169,7 @@ class MenuCommand(object):
             s = ' ' + s
         return s
 
-    def ns_prefix(self, name):
+    def real_ns(self, name):
         name = str(name).strip()
         if name.startswith('..'):
             name = ' '.join([(' '.join(self.ns.split(' ')[:-1])), name[2:]])
@@ -187,7 +188,7 @@ class MenuCommand(object):
 
     def run_script(self, name, cxt=None):
         def _get_template(n, from_ns='.'):
-            _source = self.manager.lookup_menuitem(self.ns_prefix(from_ns))
+            _source = self.manager.lookup_menuitem(self.real_ns(from_ns))
             script = _source.get_script(n)
             if script is None:
                 raise error(
@@ -224,6 +225,10 @@ class MenuCommand(object):
     @property
     def width(self):
         return self._width
+
+    @property
+    def index(self):
+        return self._index
 
     @property
     def ns(self):
@@ -267,7 +272,7 @@ class MenuContainer(MenuCommand):
     def lookup_item(self, item):
         if isinstance(item, str):
             name = item.strip()
-            ns = self.ns_prefix(name)
+            ns = self.real_ns(name)
             return (self.manager.lookup_menuitem(ns), name)
         elif isinstance(item, MenuCommand):
             return (item, item.ns)
@@ -1072,9 +1077,14 @@ class MenuManager:
                 "previous menuitem declaration" % (name,))
         self.menuitems[name] = item
         if isinstance(item, MenuCommand):
-            parent = item.ns_prefix('..')
+            parent = item.real_ns('..')
             if parent:
-                self.__children.setdefault(parent, []).append(item.ns)
+                if item.index is not None:
+                    self.__children.setdefault(parent, []).insert(
+                        item.index, item.ns)
+                else:
+                    self.__children.setdefault(parent, []).append(
+                        item.ns)
 
     def lookup_menuitem(self, name, default=sentinel):
         if name is None:
