@@ -95,12 +95,21 @@ class MenuCommand(object):
 
     # override
     def get_context(self, cxt=None):
+        def _get_template(n, from_ns='.'):
+            _source = self.manager.lookup_menuitem(self.get_ns(from_ns))
+            script = _source.get_script(n)
+            if script is None:
+                raise error(
+                    "{}: script '{}' not found".format(
+                        _source.get_ns(), str(n)))
+            return script.template
         # get default menu context
         context = self.manager.get_context(cxt)
         context['menu'].update({
             'is_editing': self.is_editing(),
             'width': self._width,
-            'ns': self.get_ns()
+            'ns': self.get_ns(),
+            'script_by_name': _get_template
         })
         return context
 
@@ -188,21 +197,10 @@ class MenuCommand(object):
         return None
 
     def run_script(self, name, cxt=None, render_only=False):
-        def _get_template(n, from_ns='.'):
-            _source = self.manager.lookup_menuitem(self.get_ns(from_ns))
-            script = _source.get_script(n)
-            if script is None:
-                raise error(
-                    "{}: script '{}' not found".format(
-                        _source.get_ns(), str(n)))
-            return script.template
         result = ""
         # init context
         context = self.get_context(cxt)
         if name in self._script_tpls:
-            context['menu'].update({
-                'script_by_name': _get_template
-            })
             result = self._script_tpls[name].render(context)
         if not render_only:
             # run result as gcode
