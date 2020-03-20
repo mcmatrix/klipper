@@ -187,7 +187,7 @@ class MenuCommand(object):
             return self._script_tpls[name]
         return None
 
-    def run_script(self, name, cxt=None):
+    def run_script(self, name, cxt=None, render_only=False):
         def _get_template(n, from_ns='.'):
             _source = self.manager.lookup_menuitem(self.get_ns(from_ns))
             script = _source.get_script(n)
@@ -204,12 +204,13 @@ class MenuCommand(object):
                 'script_by_name': _get_template
             })
             result = self._script_tpls[name].render(context)
-        # run result as gcode
-        self.manager.queue_gcode(result)
-        # default behaviour
-        _handle = getattr(self, "handle_script_" + name, None)
-        if callable(_handle):
-            _handle()
+        if not render_only:
+            # run result as gcode
+            self.manager.queue_gcode(result)
+            # default behaviour
+            _handle = getattr(self, "handle_script_" + name, None)
+            if callable(_handle):
+                _handle()
         return result
 
     @property
@@ -582,6 +583,23 @@ class MenuList(MenuContainer):
         return ("\n".join(rows), selected_row)
 
 
+class MenuText(MenuContainer):
+    def __init__(self, manager, config):
+        super(MenuText, self).__init__(manager, config)
+
+    def render_container(self, eventtime):
+        selected_row = None
+        try:
+            content = self.run_script("render", render_only=True)
+        except Exception:
+            logging.exception('Text rendering error')
+        return (content, selected_row)
+
+    # default behaviour for press
+    def handle_script_press(self):
+        self.manager.back()
+
+
 class MenuVSDList(MenuList):
     def __init__(self, manager, config):
         super(MenuVSDList, self).__init__(manager, config)
@@ -608,6 +626,7 @@ menu_items = {
     'command': MenuCommand,
     'input': MenuInput,
     'list': MenuList,
+    'text': MenuText,
     'vsdlist': MenuVSDList
 }
 
@@ -1038,6 +1057,9 @@ class MenuManager:
                 self.stack_push(current)
             elif isinstance(current, MenuCommand):
                 current.run_script(event)
+            else:
+                # current is None, no selection. passthru to container
+                container.run_script(event)
 
     def queue_gcode(self, script):
         if not script:
