@@ -603,14 +603,15 @@ class MenuText(MenuContainer):
         rows = []
         try:
             content = self.run_script("render", render_only=True)
-            self.selected_row = max(0, min(self.selected_row, len(rows)))
-            for row, line in enumerate(self.manager.lines_aslist(content)):
+            lines = self.manager.lines_aslist(content)
+            self.selected_row = max(0, min(self.selected_row, len(lines)))
+            for row, line in enumerate(lines):
                 s = line[:self.manager.cols-1].ljust(self.manager.cols-1)
                 if row == self.selected_row:
                     s += '+'
                 elif row == 0:
                     s += '-'
-                elif row == len(rows) - 1:
+                elif row == len(lines) - 1:
                     s += '-'
                 else:
                     s += '|'
