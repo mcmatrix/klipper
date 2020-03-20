@@ -608,7 +608,7 @@ class MenuText(MenuContainer):
                 s = line[:self.manager.cols-1].ljust(self.manager.cols-1)
                 if row == self.selected_row:
                     s += '+'
-                elif row == 1:
+                elif row == 0:
                     s += '-'
                 elif row == len(rows) - 1:
                     s += '-'
