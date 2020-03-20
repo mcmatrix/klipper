@@ -586,29 +586,38 @@ class MenuList(MenuContainer):
 class MenuText(MenuContainer):
     def __init__(self, manager, config):
         super(MenuText, self).__init__(manager, config)
-        self._row = 0
+        self.selected_row = 0
 
     def select_next(self):
-        self._row += 1
+        self.selected_row += 1
         return None
 
     def select_prev(self):
-        if self._row > 0:
-            self._row -= 1
+        if self.selected_row > 0:
+            self.selected_row -= 1
         else:
-            self._row = 0
+            self.selected_row = 0
         return None
 
     def render_container(self, eventtime):
         rows = []
-        selected_row = None
         try:
             content = self.run_script("render", render_only=True)
-            rows = self.manager.lines_aslist(content)
-            selected_row = max(0, min(self._row, len(rows)))
+            self.selected_row = max(0, min(self.selected_row, len(rows)))
+            for row, line in enumerate(self.manager.lines_aslist(content)):
+                s = line[:self.manager.cols-1].ljust(self.manager.cols-1)
+                if row == self.selected_row:
+                    s += '+'
+                elif row == 1:
+                    s += '-'
+                elif row == len(rows) - 1:
+                    s += '-'
+                else:
+                    s += '|'
+                rows.append(s)
         except Exception:
             logging.exception('Text rendering error')
-        return ("\n".join(rows), selected_row)
+        return ("\n".join(rows), self.selected_row)
 
     # default behaviour for press
     def handle_script_press(self):
