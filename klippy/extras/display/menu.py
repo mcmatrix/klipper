@@ -611,13 +611,13 @@ class MenuText(MenuContainer):
             for row, line in enumerate(lines):
                 s = line[:self.manager.cols-1].ljust(self.manager.cols-1)
                 if row == self.selected_row:
-                    s += '+'
+                    s += '*'
                 elif row == 0:
-                    s += '#'
+                    s += '['
                 elif row == len(lines)-1:
-                    s += '#'
+                    s += ']'
                 else:
-                    s += '|'
+                    s += ':'
                 rows.append(s)
         except Exception:
             logging.exception('Text rendering error')
