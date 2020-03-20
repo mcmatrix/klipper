@@ -604,15 +604,18 @@ class MenuText(MenuContainer):
         try:
             content = self.run_script("render", render_only=True)
             lines = self.manager.lines_aslist(content)
-            self.selected_row = max(0, min(self.selected_row, len(lines)))
+            if len(lines):
+                self.selected_row = max(0, min(self.selected_row, len(lines)-1))
+            else:
+                self.selected_row = 0
             for row, line in enumerate(lines):
                 s = line[:self.manager.cols-1].ljust(self.manager.cols-1)
                 if row == self.selected_row:
                     s += '+'
                 elif row == 0:
-                    s += '-'
-                elif row == len(lines) - 1:
-                    s += '-'
+                    s += '#'
+                elif row == len(lines)-1:
+                    s += '#'
                 else:
                     s += '|'
                 rows.append(s)
