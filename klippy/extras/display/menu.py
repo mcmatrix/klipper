@@ -592,7 +592,7 @@ class MenuVSDList(MenuList):
 
     def _populate(self):
         super(MenuVSDList, self)._populate()
-        sdcard = self.manager.printer.lookup_object('virtual_sdcard')
+        sdcard = self.manager.printer.lookup_object('virtual_sdcard', None)
         if sdcard is not None:
             files = sdcard.get_file_list()
             for fname, fsize in files:
