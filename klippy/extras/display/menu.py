@@ -41,7 +41,7 @@ class MenuCommand(object):
         self._name_tpl = manager.gcode_macro.load_template(
             config, 'name')
         # item namespace - used in relative paths
-        self._ns = " ".join(config.get_name().split(' ')[1:])
+        self._ns = str(" ".join(config.get_name().split(' ')[1:])).strip()
         self._last_heartbeat = None
         self.__scroll_offs = 0
         self.__scroll_diff = 0
@@ -56,7 +56,7 @@ class MenuCommand(object):
             script = config.get(o, '')
             name = o[len(prfx):]
             self._script_tpls[name] = manager.gcode_macro.create_template(
-                '%s:%s' % (self.ns, o), script)
+                '%s:%s' % (self._ns, o), script)
         # init
         self.init()
 
@@ -99,8 +99,8 @@ class MenuCommand(object):
         context = self.manager.get_context(cxt)
         context['menu'].update({
             'is_editing': self.is_editing(),
-            'width': self._width,
-            'ns': self.ns
+            'width': self.width,
+            'ns': self.get_ns()
         })
         return context
 
@@ -169,17 +169,18 @@ class MenuCommand(object):
             s = ' ' + s
         return s
 
-    def real_ns(self, name):
+    def get_ns(self, name='.'):
         name = str(name).strip()
         if name.startswith('..'):
-            name = ' '.join([(' '.join(self.ns.split(' ')[:-1])), name[2:]])
+            name = ' '.join(
+                [(' '.join(str(self._ns).split(' ')[:-1])), name[2:]])
         elif name.startswith('.'):
-            name = ' '.join([self.ns, name[1:]])
+            name = ' '.join([str(self._ns), name[1:]])
         return name.strip()
 
     def send_event(self, event, *args):
         return self.manager.send_event(
-            "%s:%s" % (self.ns, str(event)), *args)
+            "%s:%s" % (self.get_ns(), str(event)), *args)
 
     def get_script(self, name):
         if name in self._script_tpls:
@@ -188,11 +189,12 @@ class MenuCommand(object):
 
     def run_script(self, name, cxt=None):
         def _get_template(n, from_ns='.'):
-            _source = self.manager.lookup_menuitem(self.real_ns(from_ns))
+            _source = self.manager.lookup_menuitem(self.get_ns(from_ns))
             script = _source.get_script(n)
             if script is None:
                 raise error(
-                    "{}: script '{}' not found".format(_source.ns, str(n)))
+                    "{}: script '{}' not found".format(
+                        _source.get_ns(), str(n)))
             return script.template
         result = ""
         # init context
@@ -229,10 +231,6 @@ class MenuCommand(object):
     @property
     def index(self):
         return self._index
-
-    @property
-    def ns(self):
-        return self._ns
 
 
 class MenuContainer(MenuCommand):
@@ -272,10 +270,10 @@ class MenuContainer(MenuCommand):
     def lookup_item(self, item):
         if isinstance(item, str):
             name = item.strip()
-            ns = self.real_ns(name)
+            ns = self.get_ns(name)
             return (self.manager.lookup_menuitem(ns), name)
         elif isinstance(item, MenuCommand):
-            return (item, item.ns)
+            return (item, item.get_ns())
         return (None, item)
 
     # overload
@@ -310,7 +308,7 @@ class MenuContainer(MenuCommand):
 
     def assert_recursive_relation(self, parents=None):
         assert self not in (parents or self._parents), \
-            "Recursive relation of '%s' container" % (self.ns,)
+            "Recursive relation of '%s' container" % (self.get_ns(),)
 
     def insert_item(self, s, index=None):
         self._insert_item(s, index)
@@ -550,7 +548,7 @@ class MenuList(MenuContainer):
         self._show_title = manager.asbool(config.get('show_title', 'True'))
 
     def _names_aslist(self):
-        return self.manager.lookup_children(self.ns)
+        return self.manager.lookup_children(self.get_ns())
 
     def _populate(self):
         super(MenuList, self)._populate()
@@ -594,7 +592,7 @@ class MenuVSDList(MenuList):
 
     def _populate(self):
         super(MenuVSDList, self)._populate()
-        sdcard = self.manager.objs.get('virtual_sdcard')
+        sdcard = self.manager.printer.lookup_object('virtual_sdcard')
         if sdcard is not None:
             files = sdcard.get_file_list()
             for fname, fsize in files:
@@ -627,7 +625,7 @@ class MenuManager:
         self.running = False
         self.menuitems = {}
         self.menustack = []
-        self.__children = {}
+        self.children = {}
         self.top_row = 0
         self.timeout_idx = 0
         self.display = display
@@ -638,7 +636,6 @@ class MenuManager:
         self.gcode_queue = []
         self.context = {}
         self.defaults = {}
-        self.objs = {}
         self.root = None
         self._root = config.get('menu_root', '__main')
         self.cols, self.rows = self.lcd_chip.get_dimensions()
@@ -1076,14 +1073,14 @@ class MenuManager:
                 "previous menuitem declaration" % (name,))
         self.menuitems[name] = item
         if isinstance(item, MenuCommand):
-            parent = item.real_ns('..')
+            parent = item.get_ns('..')
             if parent:
                 if item.index is not None:
-                    self.__children.setdefault(parent, []).insert(
-                        item.index, item.ns)
+                    self.children.setdefault(parent, []).insert(
+                        item.index, item.get_ns())
                 else:
-                    self.__children.setdefault(parent, []).append(
-                        item.ns)
+                    self.children.setdefault(parent, []).append(
+                        item.get_ns())
 
     def lookup_menuitem(self, name, default=sentinel):
         if name is None:
@@ -1096,8 +1093,8 @@ class MenuManager:
         return default
 
     def lookup_children(self, ns):
-        if ns in self.__children:
-            return list(self.__children[ns])
+        if ns in self.children:
+            return list(self.children[ns])
         return list()
 
     def load_config(self, *args):
@@ -1116,7 +1113,7 @@ class MenuManager:
     def load_menuitems(self, config):
         for cfg in config.get_prefix_sections('menu '):
             item = self.menuitem_from(cfg)
-            self.add_menuitem(item.ns, item)
+            self.add_menuitem(item.get_ns(), item)
 
     def load_defaults(self, config):
         if config.has_section('menu'):

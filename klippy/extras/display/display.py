@@ -106,6 +106,9 @@ class PrinterLCD:
         self.printer.register_event_handler("klippy:ready", self.handle_ready)
         self.screen_update_timer = self.reactor.register_timer(
             self.screen_update_event)
+    # Get menu instance
+    def get_menu(self):
+        return self.menu
     def get_lcd_chip(self):
         return self.lcd_chip
     # Configurable display
