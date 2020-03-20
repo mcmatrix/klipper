@@ -99,7 +99,7 @@ class MenuCommand(object):
         context = self.manager.get_context(cxt)
         context['menu'].update({
             'is_editing': self.is_editing(),
-            'width': self.width,
+            'width': self._width,
             'ns': self.get_ns()
         })
         return context
@@ -223,10 +223,6 @@ class MenuCommand(object):
     @property
     def manager(self):
         return self._manager
-
-    @property
-    def width(self):
-        return self._width
 
     @property
     def index(self):
@@ -576,10 +572,10 @@ class MenuList(MenuContainer):
                     selected_row = len(rows)
                 name = str(item.render_name(selected))
                 if isinstance(item, MenuList):
-                    s += name[:item.width-1].ljust(item.width-1)
+                    s += name[:self.manager.cols-1].ljust(self.manager.cols-1)
                     s += '>'
                 else:
-                    s += name[:item.width].ljust(item.width)
+                    s += name[:self.manager.cols].ljust(self.manager.cols)
                 rows.append(s)
         except Exception:
             logging.exception('List rendering error')
