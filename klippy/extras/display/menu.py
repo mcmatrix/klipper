@@ -900,6 +900,7 @@ class MenuManager:
     def cmd_RUN_SCRIPT(self, params):
         name = self.gcode.get_str('NAME', params)
         script = self.gcode.get_str('SCRIPT', params)
+        logging.info("{}:{}".format(name, script))
         if name and script:
             item = self.lookup_menuitem(name, None)
             if isinstance(item, MenuCommand):
