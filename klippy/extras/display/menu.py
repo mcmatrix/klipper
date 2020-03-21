@@ -905,7 +905,7 @@ class MenuManager:
         if name and script:
             item = self.lookup_menuitem(name, None)
             if isinstance(item, MenuCommand):
-                item.run_script(name)
+                item.run_script(script)
 
     def _action_send_event(self, name, event, *args):
         self.send_event("%s:%s" % (str(name), str(event)), *args)
