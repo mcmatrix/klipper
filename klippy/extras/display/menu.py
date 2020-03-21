@@ -240,13 +240,12 @@ class MenuCommand(object):
             if _wait.name is not None:
                 toolhead = self.manager.printer.lookup_object('toolhead')
                 popup = self.manager.lookup_menuitem(_wait.name)
+                popup.populate()
                 if isinstance(popup, MenuText):
-                    if self.manager.stack_peek() is not popup:
-                        popup.populate()
-                        self.manager.push_container(popup)
-                        last_printtime = toolhead.get_last_move_time()
-                        self.manager.after(
-                            last_printtime, popup.run_script_fn('callback'))
+                    self.manager.push_container(popup)
+#                    last_printtime = toolhead.get_last_move_time()
+#                    self.manager.after(
+#                        last_printtime, popup.run_script_fn('callback'))
                 else:
                     raise error("{}: wait_for_gcode: '{}' not found".format(
                                 self.get_ns(), name))
