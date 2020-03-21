@@ -666,7 +666,7 @@ class MenuText(MenuContainer):
                         s += '|'
                 else:
                     s = line[:self.manager.cols].ljust(self.manager.cols)
-                rows.append(s)
+                rows.append(s.strip())
         except Exception:
             logging.exception('Text rendering error')
         return ("\n".join(rows), self.selected_row)
