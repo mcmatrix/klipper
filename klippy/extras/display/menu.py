@@ -205,22 +205,22 @@ class MenuCommand(object):
             _log.state = True
             return ''
 
-        def _popup(name):
-            _popup.name = name
+        def _push(name):
+            _push.name = name
             return ''
         result = ""
         # init context
         context = self.get_context(cxt)
         _prevent.state = False
         _log.state = False
-        _popup.name = None
+        _push.name = None
         if name in self._script_tpls:
             context.update({
                 'script': {
                     'name': name,
                     'prevent_default': _prevent,
                     'log_gcode': _log,
-                    'popup': _popup
+                    'push': _push
                 }
             })
             result = self._script_tpls[name].render(context)
@@ -231,14 +231,14 @@ class MenuCommand(object):
                     "{} -> gcode: {}".format(self.get_ns(), result))
             # run result as gcode
             self.manager.queue_gcode(result)
-            # wait for last gcode
-            if _popup.name is not None:
-                popup = self.manager.lookup_menuitem(_popup.name)
+            # push new container
+            if _push.name is not None:
+                popup = self.manager.lookup_menuitem(_push.name)
                 popup.populate()
-                if isinstance(popup, MenuText):
+                if isinstance(popup, MenuContainer):
                     self.manager.push_container(popup)
                 else:
-                    raise error("{}: popup: '{}' not found".format(
+                    raise error("{}: container: '{}' not found".format(
                                 self.get_ns(), name))
             # default behaviour
             if not _prevent.state:
@@ -668,8 +668,7 @@ class MenuText(MenuContainer):
         self.manager.back()
 
     def handle_script_close(self):
-        if self is self.manager.stack_peek():
-            self.manager.back()
+        self.manager.back()
 
 
 class MenuVSDList(MenuList):
@@ -897,14 +896,14 @@ class MenuManager:
         else:
             self.timer = 0
 
-    cmd_RUN_SCRIPT_help = "Run menu item <NAME> script <SCRIPT>."
+    cmd_RUN_SCRIPT_help = "Run active container <NAME> script <SCRIPT>."
     def cmd_RUN_SCRIPT(self, params):
         name = self.gcode.get_str('NAME', params)
         script = self.gcode.get_str('SCRIPT', params)
-        logging.info("{}:{}".format(name, script))
         if name and script:
             item = self.lookup_menuitem(name, None)
-            if isinstance(item, MenuCommand):
+            if (isinstance(item, MenuContainer)
+                    and item is self.manager.stack_peek()):
                 item.run_script(script)
 
     def _action_send_event(self, name, event, *args):
