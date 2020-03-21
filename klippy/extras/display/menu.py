@@ -109,7 +109,8 @@ class MenuCommand(object):
             'is_editing': self.is_editing(),
             'width': self._width,
             'ns': self.get_ns(),
-            'script_by_name': _get_template
+            'script_by_name': _get_template,
+            'wait_last_move': self.wait_last_move
         })
         return context
 
@@ -196,20 +197,59 @@ class MenuCommand(object):
             return self._script_tpls[name]
         return None
 
+    def run_script_fn(self, name, cxt=None, render_only=False):
+        def script_fn():
+            self.run_script(name, cxt, render_only)
+        return script_fn
+
     def run_script(self, name, cxt=None, render_only=False):
+        def _prevent():
+            _prevent.state = True
+            return ''
+
+        def _log():
+            _log.state = True
+            return ''
         result = ""
         # init context
         context = self.get_context(cxt)
+        _prevent.state = False
+        _log.state = False
         if name in self._script_tpls:
+            context.update({
+                'script': {
+                    'name': name,
+                    'prevent_default': _prevent,
+                    'log_gcode': _log
+                }
+            })
             result = self._script_tpls[name].render(context)
         if not render_only:
+            if _log.state is True:
+                # log result gcode
+                logging.info(
+                    "{} -> gcode: {}".format(self.get_ns(), result))
             # run result as gcode
             self.manager.queue_gcode(result)
             # default behaviour
-            _handle = getattr(self, "handle_script_" + name, None)
-            if callable(_handle):
-                _handle()
+            if not _prevent.state:
+                _handle = getattr(self, "handle_script_" + name, None)
+                if callable(_handle):
+                    _handle()
         return result
+
+    def wait_last_move(self, name):
+        popup = self.manager.lookup_menuitem(name)
+        if isinstance(popup, MenuText):
+            top = self.manager.stack_peek()
+            if top is not popup:
+                self.manager.push_container(popup)
+                move_end_printtime = self.manager.toolhead.get_last_move_time()
+                self.manager.after(
+                    move_end_printtime, popup.run_script_fn('callback'))
+        else:
+            raise error("{}: wait_last_move: text '{}' not found".format(
+                        self.get_ns(), name))
 
     @property
     def cursor(self):
@@ -584,6 +624,7 @@ class MenuList(MenuContainer):
 class MenuText(MenuContainer):
     def __init__(self, manager, config):
         super(MenuText, self).__init__(manager, config)
+        self._scrollbar = manager.asbool(config.get('scrollbar', 'True'))
         self.selected_row = 0
 
     def select_next(self):
@@ -602,20 +643,24 @@ class MenuText(MenuContainer):
         try:
             content = self.run_script("render", render_only=True)
             lines = self.manager.lines_aslist(content)
-            if len(lines):
-                self.selected_row = max(0, min(self.selected_row, len(lines)-1))
+            if len(lines) and self._scrollbar:
+                self.selected_row = max(0, min(
+                    self.selected_row, len(lines)-1))
             else:
                 self.selected_row = 0
             for row, line in enumerate(lines):
-                s = line[:self.manager.cols-1].ljust(self.manager.cols-1)
-                if row == self.selected_row:
-                    s += '*'
-                elif row == 0:
-                    s += '+'
-                elif row == len(lines)-1:
-                    s += '+'
+                if self._scrollbar:
+                    s = line[:self.manager.cols-1].ljust(self.manager.cols-1)
+                    if row == self.selected_row:
+                        s += '*'
+                    elif row == 0:
+                        s += '+'
+                    elif row == len(lines)-1:
+                        s += '+'
+                    else:
+                        s += '|'
                 else:
-                    s += '|'
+                    s = line[:self.manager.cols].ljust(self.manager.cols)
                 rows.append(s)
         except Exception:
             logging.exception('Text rendering error')
@@ -624,6 +669,11 @@ class MenuText(MenuContainer):
     # default behaviour for press
     def handle_script_press(self):
         self.manager.back()
+
+    def handle_script_callback(self):
+        top = self.manager.stack_peek()
+        if self is top:
+            self.manager.back()
 
 
 class MenuVSDList(MenuList):
@@ -845,6 +895,16 @@ class MenuManager:
                 self.timer += 1
         else:
             self.timer = 0
+
+    def after(self, starttime, callback, *args):
+        """Helper method for reactor.register_callback.
+        The callback will be executed once after the start time elapses.
+        """
+        def callit(eventtime):
+            callback(eventtime, *args)
+        reactor = self.printer.get_reactor()
+        starttime = max(0., float(starttime))
+        reactor.register_callback(callit, starttime)
 
     def _action_send_event(self, name, event, *args):
         self.send_event("%s:%s" % (str(name), str(event)), *args)
