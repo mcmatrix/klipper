@@ -667,7 +667,7 @@ class MenuText(MenuContainer):
     def handle_script_press(self):
         self.manager.back()
 
-    def handle_script_event_leave(self):
+    def handle_script_close(self):
         if self is self.manager.stack_peek():
             self.manager.back()
 
@@ -763,7 +763,6 @@ class MenuManager:
         # register itself for printer callbacks
         self.printer.add_object('menu', self)
         self.printer.register_event_handler("klippy:ready", self.handle_ready)
-        self.printer.register_event_handler("menu:script", self.handle_script)
         # register buttons & encoder
         if self.buttons:
             # digital buttons
@@ -846,6 +845,11 @@ class MenuManager:
                     self.buttons.register_button_push(
                         self.kill_pin, self.kill_callback)
 
+        # Add MENU commands
+        self.gcode.register_mux_command(
+            "MENU", "RUN", 'script', self.cmd_RUN_SCRIPT,
+            desc=self.cmd_RUN_SCRIPT_help)
+
         # Load local config file in same directory as current module
         self.load_config(os.path.dirname(__file__), 'menu.cfg')
         # Load items from main config
@@ -861,12 +865,6 @@ class MenuManager:
         # start timer
         reactor = self.printer.get_reactor()
         reactor.register_timer(self.timer_event, reactor.NOW)
-
-    def handle_script(self, ns=None, name=None):
-        if ns and name:
-            item = self.lookup_menuitem(ns, None)
-            if isinstance(item, MenuCommand):
-                item.run_script('event_' + str(name))
 
     def timer_event(self, eventtime):
         self.eventtime = eventtime
@@ -897,6 +895,15 @@ class MenuManager:
                 self.timer += 1
         else:
             self.timer = 0
+
+    cmd_RUN_SCRIPT_help = "Run menu item <NAME> script <SCRIPT>."
+    def cmd_RUN_SCRIPT(self, params):
+        name = self.gcode.get_str('NAME', params)
+        script = self.gcode.get_str('SCRIPT', params)
+        if name and script:
+            item = self.lookup_menuitem(name, None)
+            if isinstance(item, MenuCommand):
+                item.run_script(name)
 
     def _action_send_event(self, name, event, *args):
         self.send_event("%s:%s" % (str(name), str(event)), *args)
