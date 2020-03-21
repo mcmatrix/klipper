@@ -196,11 +196,6 @@ class MenuCommand(object):
             return self._script_tpls[name]
         return None
 
-    def run_script_fn(self, name, cxt=None, render_only=False):
-        def script_fn(eventime):
-            self.run_script(name, cxt, render_only)
-        return script_fn
-
     def run_script(self, name, cxt=None, render_only=False):
         def _prevent():
             _prevent.state = True
@@ -210,22 +205,22 @@ class MenuCommand(object):
             _log.state = True
             return ''
 
-        def _wait(name):
-            _wait.name = name
+        def _popup(name):
+            _popup.name = name
             return ''
         result = ""
         # init context
         context = self.get_context(cxt)
         _prevent.state = False
         _log.state = False
-        _wait.name = None
+        _popup.name = None
         if name in self._script_tpls:
             context.update({
                 'script': {
                     'name': name,
                     'prevent_default': _prevent,
                     'log_gcode': _log,
-                    'wait_for_gcode': _wait
+                    'popup': _popup
                 }
             })
             result = self._script_tpls[name].render(context)
@@ -237,17 +232,13 @@ class MenuCommand(object):
             # run result as gcode
             self.manager.queue_gcode(result)
             # wait for last gcode
-            if _wait.name is not None:
-                toolhead = self.manager.printer.lookup_object('toolhead')
-                popup = self.manager.lookup_menuitem(_wait.name)
+            if _popup.name is not None:
+                popup = self.manager.lookup_menuitem(_popup.name)
                 popup.populate()
                 if isinstance(popup, MenuText):
                     self.manager.push_container(popup)
-#                    last_printtime = toolhead.get_last_move_time()
-#                    self.manager.after(
-#                        last_printtime, popup.run_script_fn('callback'))
                 else:
-                    raise error("{}: wait_for_gcode: '{}' not found".format(
+                    raise error("{}: popup: '{}' not found".format(
                                 self.get_ns(), name))
             # default behaviour
             if not _prevent.state:
@@ -654,6 +645,7 @@ class MenuText(MenuContainer):
             else:
                 self.selected_row = 0
             for row, line in enumerate(lines):
+                line = self.stripliterals(line)
                 if self._scrollbar:
                     s = line[:self.manager.cols-1].ljust(self.manager.cols-1)
                     if row == self.selected_row:
@@ -666,7 +658,7 @@ class MenuText(MenuContainer):
                         s += '|'
                 else:
                     s = line[:self.manager.cols].ljust(self.manager.cols)
-                rows.append(s.strip())
+                rows.append(s)
         except Exception:
             logging.exception('Text rendering error')
         return ("\n".join(rows), self.selected_row)
@@ -675,7 +667,7 @@ class MenuText(MenuContainer):
     def handle_script_press(self):
         self.manager.back()
 
-    def handle_script_callback(self):
+    def handle_script_event_leave(self):
         if self is self.manager.stack_peek():
             self.manager.back()
 
@@ -772,6 +764,7 @@ class MenuManager:
         # register itself for printer callbacks
         self.printer.add_object('menu', self)
         self.printer.register_event_handler("klippy:ready", self.handle_ready)
+        self.printer.register_event_handler("menu:script", self.handle_script)
         # register buttons & encoder
         if self.buttons:
             # digital buttons
@@ -870,6 +863,12 @@ class MenuManager:
         reactor = self.printer.get_reactor()
         reactor.register_timer(self.timer_event, reactor.NOW)
 
+    def handle_script(self, ns=None, name=None):
+        if ns and name:
+            item = self.lookup_menuitem(ns, None)
+            if isinstance(item, MenuCommand):
+                item.run_script('event_' + str(name))
+
     def timer_event(self, eventtime):
         self.eventtime = eventtime
         self.timeout_idx = (self.timeout_idx + 1) % 10  # 0.1*10 = 1s
@@ -899,16 +898,6 @@ class MenuManager:
                 self.timer += 1
         else:
             self.timer = 0
-
-    def after(self, starttime, callback, *args):
-        """Helper method for reactor.register_callback.
-        The callback will be executed once after the start time elapses.
-        """
-        def callit(eventtime):
-            callback(eventtime, *args)
-        reactor = self.printer.get_reactor()
-        starttime = max(0., float(starttime))
-        reactor.register_callback(callit, starttime)
 
     def _action_send_event(self, name, event, *args):
         self.send_event("%s:%s" % (str(name), str(event)), *args)
@@ -944,7 +933,11 @@ class MenuManager:
             'running': self.running,
             'rows': self.rows,
             'cols': self.cols,
-            'default': dict(self.defaults)
+            'default': dict(self.defaults),
+            'action_send_event': self._action_send_event,
+            'action_set_default': self._action_set_default,
+            'action_reset_defaults': self._action_reset_defaults
+
         }
 
     def get_context(self, cxt=None):
@@ -961,10 +954,7 @@ class MenuManager:
             'menu': {
                 'eventtime': eventtime,
                 'back': self._action_back,
-                'exit': self._action_exit,
-                'send_event': self._action_send_event,
-                'set_default': self._action_set_default,
-                'reset_defaults': self._action_reset_defaults
+                'exit': self._action_exit
             }
         }
 
