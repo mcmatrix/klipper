@@ -244,7 +244,7 @@ class MenuCommand(object):
         if isinstance(popup, MenuText):
             top = self.manager.stack_peek()
             if top is not popup:
-                popup.populate_items()
+                popup.populate()
                 self.manager.push_container(popup)
                 move_end_printtime = toolhead.get_last_move_time()
                 self.manager.after(
