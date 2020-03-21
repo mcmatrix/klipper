@@ -645,7 +645,7 @@ class MenuText(MenuContainer):
             else:
                 self.selected_row = 0
             for row, line in enumerate(lines):
-                line = self.stripliterals(line)
+                line = self.manager.stripliterals(line)
                 if self._scrollbar:
                     s = line[:self.manager.cols-1].ljust(self.manager.cols-1)
                     if row == self.selected_row:
