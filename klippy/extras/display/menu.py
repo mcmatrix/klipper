@@ -903,7 +903,7 @@ class MenuManager:
         if name and script:
             item = self.lookup_menuitem(name, None)
             if (isinstance(item, MenuContainer)
-                    and item is self.manager.stack_peek()):
+                    and item is self.stack_peek()):
                 item.run_script(script)
 
     def _action_send_event(self, name, event, *args):
