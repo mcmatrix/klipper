@@ -665,10 +665,10 @@ class MenuText(MenuContainer):
 
     # default behaviour for press
     def handle_script_press(self):
-        self.manager.back()
+        self.manager.back(update=False)
 
     def handle_script_close(self):
-        self.manager.back()
+        self.manager.back(update=False)
 
 
 class MenuVSDList(MenuList):
@@ -995,7 +995,7 @@ class MenuManager:
             container.init_selection()
         self.menustack.append(container)
 
-    def stack_pop(self):
+    def stack_pop(self, update=True):
         container = None
         if self.stack_size() > 0:
             container = self.menustack.pop()
@@ -1005,7 +1005,7 @@ class MenuManager:
             if top is not None:
                 if not isinstance(container, MenuContainer):
                     raise error("Wrong type, expected MenuContainer")
-                if not top.is_editing():
+                if not top.is_editing() and update is True:
                     top.update_items()
                     top.init_selection()
                 if isinstance(container, MenuList):
@@ -1090,7 +1090,7 @@ class MenuManager:
         self.back(force)
         return ""
 
-    def back(self, force=False):
+    def back(self, force=False, update=True):
         container = self.stack_peek()
         if self.running and isinstance(container, MenuContainer):
             self.timer = 0
@@ -1102,12 +1102,12 @@ class MenuManager:
                     return
             parent = self.stack_peek(1)
             if isinstance(parent, MenuContainer):
-                self.stack_pop()
+                self.stack_pop(update)
                 index = parent.index_of(container, True)
                 if index is not None:
                     parent.select_at(index)
                 elif parent.selected_item() is None:
-                    parent.select_at(0)
+                    parent.init_selection()
 
             else:
                 self.stack_pop()
