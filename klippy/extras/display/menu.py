@@ -1103,8 +1103,12 @@ class MenuManager:
             parent = self.stack_peek(1)
             if isinstance(parent, MenuContainer):
                 self.stack_pop()
-                index = parent.index_of(container, True) or 0
-                parent.select_at(index)
+                index = parent.index_of(container, True)
+                if index is not None:
+                    parent.select_at(index)
+                elif parent.selected_item() is None:
+                    parent.select_at(0)
+
             else:
                 self.stack_pop()
                 self.running = False
