@@ -109,8 +109,7 @@ class MenuCommand(object):
             'is_editing': self.is_editing(),
             'width': self._width,
             'ns': self.get_ns(),
-            'script_by_name': _get_template,
-            'wait_last_move': self.wait_last_move
+            'script_by_name': _get_template
         })
         return context
 
@@ -210,17 +209,23 @@ class MenuCommand(object):
         def _log():
             _log.state = True
             return ''
+
+        def _wait(name):
+            _wait.name = name
+            return ''
         result = ""
         # init context
         context = self.get_context(cxt)
         _prevent.state = False
         _log.state = False
+        _wait.name = None
         if name in self._script_tpls:
             context.update({
                 'script': {
                     'name': name,
                     'prevent_default': _prevent,
-                    'log_gcode': _log
+                    'log_gcode': _log,
+                    'wait_for_gcode': _wait
                 }
             })
             result = self._script_tpls[name].render(context)
@@ -231,28 +236,26 @@ class MenuCommand(object):
                     "{} -> gcode: {}".format(self.get_ns(), result))
             # run result as gcode
             self.manager.queue_gcode(result)
+            # wait for last gcode
+            if _wait.name is not None:
+                toolhead = self.manager.printer.lookup_object('toolhead')
+                popup = self.manager.lookup_menuitem(_wait.name)
+                if isinstance(popup, MenuText):
+                    if self.manager.stack_peek() is not popup:
+                        popup.populate()
+                        self.manager.push_container(popup)
+                        last_printtime = toolhead.get_last_move_time()
+                        self.manager.after(
+                            last_printtime, popup.run_script_fn('callback'))
+                else:
+                    raise error("{}: wait_for_gcode: '{}' not found".format(
+                                self.get_ns(), name))
             # default behaviour
             if not _prevent.state:
                 _handle = getattr(self, "handle_script_" + name, None)
                 if callable(_handle):
                     _handle()
         return result
-
-    def wait_last_move(self, name):
-        toolhead = self.manager.printer.lookup_object('toolhead')
-        popup = self.manager.lookup_menuitem(name)
-        if isinstance(popup, MenuText):
-            top = self.manager.stack_peek()
-            if top is not popup:
-                popup.populate()
-                self.manager.push_container(popup)
-                move_end_printtime = toolhead.get_last_move_time()
-                self.manager.after(
-                    move_end_printtime, popup.run_script_fn('callback'))
-        else:
-            raise error("{}: wait_last_move: text '{}' not found".format(
-                        self.get_ns(), name))
-        return ""
 
     @property
     def cursor(self):
@@ -674,8 +677,7 @@ class MenuText(MenuContainer):
         self.manager.back()
 
     def handle_script_callback(self):
-        top = self.manager.stack_peek()
-        if self is top:
+        if self is self.manager.stack_peek():
             self.manager.back()
 
 
