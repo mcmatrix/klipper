@@ -244,6 +244,7 @@ class MenuCommand(object):
         if isinstance(popup, MenuText):
             top = self.manager.stack_peek()
             if top is not popup:
+                popup.populate_items()
                 self.manager.push_container(popup)
                 move_end_printtime = toolhead.get_last_move_time()
                 self.manager.after(
@@ -251,6 +252,7 @@ class MenuCommand(object):
         else:
             raise error("{}: wait_last_move: text '{}' not found".format(
                         self.get_ns(), name))
+        return ""
 
     @property
     def cursor(self):
