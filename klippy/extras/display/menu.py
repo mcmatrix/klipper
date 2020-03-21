@@ -239,12 +239,13 @@ class MenuCommand(object):
         return result
 
     def wait_last_move(self, name):
+        toolhead = self.manager.printer.lookup_object('toolhead')
         popup = self.manager.lookup_menuitem(name)
         if isinstance(popup, MenuText):
             top = self.manager.stack_peek()
             if top is not popup:
                 self.manager.push_container(popup)
-                move_end_printtime = self.manager.toolhead.get_last_move_time()
+                move_end_printtime = toolhead.get_last_move_time()
                 self.manager.after(
                     move_end_printtime, popup.run_script_fn('callback'))
         else:
@@ -724,7 +725,6 @@ class MenuManager:
         self.printer = config.get_printer()
         self.pconfig = self.printer.lookup_object('configfile')
         self.gcode = self.printer.lookup_object('gcode')
-        self.toolhead = self.printer.lookup_object('toolhead')
         self.gcode_queue = []
         self.context = {}
         self.defaults = {}
