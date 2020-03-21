@@ -198,7 +198,7 @@ class MenuCommand(object):
         return None
 
     def run_script_fn(self, name, cxt=None, render_only=False):
-        def script_fn():
+        def script_fn(eventime):
             self.run_script(name, cxt, render_only)
         return script_fn
 
