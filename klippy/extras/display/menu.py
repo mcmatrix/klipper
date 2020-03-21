@@ -724,7 +724,7 @@ class MenuManager:
         self.printer = config.get_printer()
         self.pconfig = self.printer.lookup_object('configfile')
         self.gcode = self.printer.lookup_object('gcode')
-        self.toolhead = printer.lookup_object('toolhead')
+        self.toolhead = self.printer.lookup_object('toolhead')
         self.gcode_queue = []
         self.context = {}
         self.defaults = {}
