@@ -620,6 +620,9 @@ class MenuCard(MenuContainer):
         self._scrollbar = manager.asbool(config.get('scrollbar', 'True'))
         self.selected_row = 0
 
+    def _names_aslist(self):
+        return []
+
     def select_next(self):
         self.selected_row += 1
         return None
