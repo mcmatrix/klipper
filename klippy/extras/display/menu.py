@@ -65,9 +65,7 @@ class MenuCommand(object):
         pass
 
     def _name(self):
-        context = self.get_context()
-        return self.manager.stripliterals(self.manager.asflatline(
-            self._name_tpl.render(context)))
+        return self.render_asflat(self._name_tpl)
 
     # override
     def _second_tick(self, eventtime):
@@ -112,6 +110,11 @@ class MenuCommand(object):
             'script_by_name': _get_template
         })
         return context
+
+    def render_asflat(self, tpl, cxt=None):
+        context = self.get_context(cxt)
+        return self.manager.stripliterals(self.manager.asflatline(
+            tpl.render(context)))
 
     def eval_enable(self):
         context = self.get_context()
@@ -220,7 +223,7 @@ class MenuCommand(object):
                     'name': name,
                     'prevent_default': _prevent,
                     'log_gcode': _log,
-                    'push': _push
+                    'push_card': _push
                 }
             })
             result = self._script_tpls[name].render(context)
@@ -231,14 +234,14 @@ class MenuCommand(object):
                     "{} -> gcode: {}".format(self.get_ns(), result))
             # run result as gcode
             self.manager.queue_gcode(result)
-            # push new container
+            # push new card if requested
             if _push.name is not None:
                 popup = self.manager.lookup_menuitem(_push.name)
                 popup.populate()
-                if isinstance(popup, MenuContainer):
+                if isinstance(popup, MenuCard):
                     self.manager.push_container(popup)
                 else:
-                    raise error("{}: container: '{}' not found".format(
+                    raise error("{}: card: '{}' not found".format(
                                 self.get_ns(), name))
             # default behaviour
             if not _prevent.state:
@@ -617,9 +620,11 @@ class MenuList(MenuContainer):
         return ("\n".join(rows), selected_row)
 
 
-class MenuText(MenuContainer):
+class MenuCard(MenuContainer):
     def __init__(self, manager, config):
-        super(MenuText, self).__init__(manager, config)
+        super(MenuCard, self).__init__(manager, config)
+        self._title_tpl = manager.gcode_macro.load_template(
+            config, 'title')
         self._scrollbar = manager.asbool(config.get('scrollbar', 'True'))
         self.selected_row = 0
 
@@ -636,9 +641,18 @@ class MenuText(MenuContainer):
 
     def render_container(self, eventtime):
         rows = []
+        title = ''
         try:
             content = self.run_script("render", render_only=True)
             lines = self.manager.lines_aslist(content)
+            title = self.render_asflat(self._title_tpl)
+            if title:
+                if self._scrollbar:
+                    cntr = ((self.manager.cols - 1) - len(title)) // 2
+                else:
+                    cntr = (self.manager.cols - len(title)) // 2
+                title = ('=' * cntr) + title + ('=' * cntr)
+                lines.insert(0, title)
             if len(lines) and self._scrollbar:
                 self.selected_row = max(0, min(
                     self.selected_row, len(lines)-1))
@@ -665,9 +679,6 @@ class MenuText(MenuContainer):
 
     # default behaviour for press
     def handle_script_press(self):
-        self.manager.back(update=False)
-
-    def handle_script_close(self):
         self.manager.back(update=False)
 
 
@@ -697,7 +708,7 @@ menu_items = {
     'command': MenuCommand,
     'input': MenuInput,
     'list': MenuList,
-    'text': MenuText,
+    'card': MenuCard,
     'vsdlist': MenuVSDList
 }
 
@@ -896,15 +907,15 @@ class MenuManager:
         else:
             self.timer = 0
 
-    cmd_RUN_SCRIPT_help = "Run active container <NAME> script <SCRIPT>."
+    cmd_RUN_SCRIPT_help = "Run active container script <NAME>."
+
     def cmd_RUN_SCRIPT(self, params):
         name = self.gcode.get_str('NAME', params)
-        script = self.gcode.get_str('SCRIPT', params)
-        if name and script:
-            item = self.lookup_menuitem(name, None)
-            if (isinstance(item, MenuContainer)
-                    and item is self.stack_peek()):
-                item.run_script(script)
+        if name:
+            container = self.stack_peek()
+            if self.running and isinstance(container, MenuContainer):
+                self.timer = 0
+                container.run_script(name)
 
     def _action_send_event(self, name, event, *args):
         self.send_event("%s:%s" % (str(name), str(event)), *args)
@@ -1086,8 +1097,8 @@ class MenuManager:
                 else:
                     container.select_next()  # normal
 
-    def _action_back(self, force=False):
-        self.back(force)
+    def _action_back(self, force=False, update=True):
+        self.back(force, update)
         return ""
 
     def back(self, force=False, update=True):
