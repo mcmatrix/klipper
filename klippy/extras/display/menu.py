@@ -104,7 +104,6 @@ class MenuCommand(object):
         # get default menu context
         context = self.manager.get_context(cxt)
         context['menu'].update({
-            'is_editing': self.is_editing(),
             'width': self._width,
             'ns': self.get_ns(),
             'script_by_name': _get_template
@@ -200,10 +199,6 @@ class MenuCommand(object):
         return None
 
     def run_script(self, name, cxt=None, render_only=False):
-        def _prevent():
-            _prevent.state = True
-            return ''
-
         def _log():
             _log.state = True
             return ''
@@ -214,14 +209,12 @@ class MenuCommand(object):
         result = ""
         # init context
         context = self.get_context(cxt)
-        _prevent.state = False
         _log.state = False
         _push.name = None
         if name in self._script_tpls:
             context.update({
                 'script': {
                     'name': name,
-                    'prevent_default': _prevent,
                     'log_gcode': _log,
                     'push_card': _push
                 }
@@ -244,10 +237,9 @@ class MenuCommand(object):
                     raise error("{}: card: '{}' not found".format(
                                 self.get_ns(), name))
             # default behaviour
-            if not _prevent.state:
-                _handle = getattr(self, "handle_script_" + name, None)
-                if callable(_handle):
-                    _handle()
+            _handle = getattr(self, "handle_script_" + name, None)
+            if callable(_handle):
+                _handle()
         return result
 
     @property
