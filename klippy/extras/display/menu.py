@@ -203,20 +203,15 @@ class MenuCommand(object):
             _log.state = True
             return ''
 
-        def _push(name):
-            _push.name = name
-            return ''
         result = ""
         # init context
         context = self.get_context(cxt)
         _log.state = False
-        _push.name = None
         if name in self._script_tpls:
             context.update({
                 'script': {
                     'name': name,
-                    'log_gcode': _log,
-                    'push_card': _push
+                    'log_gcode': _log
                 }
             })
             result = self._script_tpls[name].render(context)
@@ -227,15 +222,6 @@ class MenuCommand(object):
                     "{} -> gcode: {}".format(self.get_ns(), result))
             # run result as gcode
             self.manager.queue_gcode(result)
-            # push new card if requested
-            if _push.name is not None:
-                popup = self.manager.lookup_menuitem(_push.name)
-                popup.populate()
-                if isinstance(popup, MenuCard):
-                    self.manager.push_container(popup)
-                else:
-                    raise error("{}: card: '{}' not found".format(
-                                self.get_ns(), name))
             # default behaviour
             _handle = getattr(self, "handle_script_" + name, None)
             if callable(_handle):
@@ -612,71 +598,6 @@ class MenuList(MenuContainer):
         return ("\n".join(rows), selected_row)
 
 
-class MenuCard(MenuContainer):
-    def __init__(self, manager, config):
-        super(MenuCard, self).__init__(manager, config)
-        self._title_tpl = manager.gcode_macro.load_template(
-            config, 'title')
-        self._scrollbar = manager.asbool(config.get('scrollbar', 'True'))
-        self.selected_row = 0
-
-    def _names_aslist(self):
-        return []
-
-    def select_next(self):
-        self.selected_row += 1
-        return None
-
-    def select_prev(self):
-        if self.selected_row > 0:
-            self.selected_row -= 1
-        else:
-            self.selected_row = 0
-        return None
-
-    def render_container(self, eventtime):
-        rows = []
-        title = ''
-        try:
-            content = self.run_script("render", render_only=True)
-            lines = self.manager.lines_aslist(content)
-            title = self.render_asflat(self._title_tpl)
-            if title:
-                if self._scrollbar:
-                    cntr = ((self.manager.cols - 1) - len(title)) // 2
-                else:
-                    cntr = (self.manager.cols - len(title)) // 2
-                title = ('=' * cntr) + title + ('=' * cntr)
-                lines.insert(0, title)
-            if len(lines) and self._scrollbar:
-                self.selected_row = max(0, min(
-                    self.selected_row, len(lines)-1))
-            else:
-                self.selected_row = 0
-            for row, line in enumerate(lines):
-                line = self.manager.stripliterals(line)
-                if self._scrollbar:
-                    s = line[:self.manager.cols-1].ljust(self.manager.cols-1)
-                    if row == self.selected_row:
-                        s += '*'
-                    elif row == 0:
-                        s += '+'
-                    elif row == len(lines)-1:
-                        s += '+'
-                    else:
-                        s += '|'
-                else:
-                    s = line[:self.manager.cols].ljust(self.manager.cols)
-                rows.append(s)
-        except Exception:
-            logging.exception('Text rendering error')
-        return ("\n".join(rows), self.selected_row)
-
-    # default behaviour for press
-    def handle_script_press(self):
-        self.manager.back(update=False)
-
-
 class MenuVSDList(MenuList):
     def __init__(self, manager, config):
         super(MenuVSDList, self).__init__(manager, config)
@@ -703,7 +624,6 @@ menu_items = {
     'command': MenuCommand,
     'input': MenuInput,
     'list': MenuList,
-    'card': MenuCard,
     'vsdlist': MenuVSDList
 }
 
