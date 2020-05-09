@@ -823,8 +823,8 @@ class MenuManager:
 
     cmd_RUN_SCRIPT_help = "Run active container script <NAME>."
 
-    def cmd_RUN_SCRIPT(self, params):
-        name = self.gcode.get_str('NAME', params)
+    def cmd_RUN_SCRIPT(self, gcmd):
+        name = gcmd.get('NAME', None)
         if name:
             container = self.stack_peek()
             if self.running and isinstance(container, MenuContainer):
