@@ -968,7 +968,6 @@ class MenuManager:
                 return True
         return False
 
-    # TODO
     def press(self, event='click'):
         container = self.stack_peek()
         if self.running and isinstance(container, MenuContainer):
@@ -983,7 +982,7 @@ class MenuManager:
                 container.run_script(event)
 
     def queue_gcode(self, script):
-        if script is None:
+        if not script:
             return
         if not self.gcode_queue:
             reactor = self.printer.get_reactor()
@@ -1011,7 +1010,7 @@ class MenuManager:
                 "Declaration of '%s' hides "
                 "previous menuitem declaration" % (name,))
         self.menuitems[name] = item
-        if isinstance(item, MenuCommand):
+        if isinstance(item, MenuElement):
             parent = item.get_ns('..')
             if parent:
                 if item.index is not None:
