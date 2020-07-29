@@ -685,11 +685,6 @@ class MenuManager:
         self.printer.register_event_handler("klippy:ready", self.handle_ready)
         # register for key events
         menu_keys.MenuKeys(config, self.key_event)
-        # Add MENU commands
-        self.gcode.register_mux_command(
-            "MENU", "RUN", 'script', self.cmd_RUN_SCRIPT,
-            desc=self.cmd_RUN_SCRIPT_help)
-
         # Load local config file in same directory as current module
         self.load_config(os.path.dirname(__file__), 'menu.cfg')
         # Load items from main config
@@ -722,16 +717,6 @@ class MenuManager:
                 self.timer += 1
         else:
             self.timer = 0
-
-    cmd_RUN_SCRIPT_help = "Run active container script <NAME>."
-
-    def cmd_RUN_SCRIPT(self, gcmd):
-        name = gcmd.get('NAME', None)
-        if name:
-            container = self.stack_peek()
-            if self.running and isinstance(container, MenuContainer):
-                self.timer = 0
-                container.run_script(name)
 
     def send_event(self, event, *args):
         return self.printer.send_event("menu:" + str(event), *args)
