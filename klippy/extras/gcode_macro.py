@@ -46,7 +46,7 @@ class TemplateWrapper:
         self.name = name
         self.gcode = self.printer.lookup_object('gcode')
         try:
-            self.template = env.from_string(script)
+            self._template = env.from_string(script)
         except Exception as e:
             msg = "Error loading template '%s': %s" % (
                  name, traceback.format_exception_only(type(e), e)[-1])
@@ -66,6 +66,9 @@ class TemplateWrapper:
             raise self.gcode.error(msg)
     def run_gcode_from_command(self, context=None):
         self.gcode.run_script_from_command(self.render(context))
+    @property
+    def template(self):
+        return self._template
 
 # Main gcode macro template tracking
 class PrinterGCodeMacro:
@@ -78,6 +81,8 @@ class PrinterGCodeMacro:
             script = config.get(option)
         else:
             script = config.get(option, default)
+        return TemplateWrapper(self.printer, self.env, name, script)
+    def create_template(self, name, script):
         return TemplateWrapper(self.printer, self.env, name, script)
 
 def load_config(config):
