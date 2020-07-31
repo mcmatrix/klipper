@@ -570,8 +570,8 @@ class MenuInput(MenuCommand):
         if last_value != self._input_value:
             self._value_changed()
 
-    # default behaviour for gcode
-    def handle_script_gcode(self):
+    # default behaviour on click
+    def handle_script_click(self):
         if not self.is_editing():
             self.start_editing()
         elif self.is_editing():
@@ -963,6 +963,7 @@ class MenuManager:
             if isinstance(current, MenuContainer):
                 self.stack_push(current)
             elif isinstance(current, MenuCommand):
+                current.run_script(event)
                 current.run_script('gcode', event=event)
             else:
                 # current is None, no selection. passthru to container
