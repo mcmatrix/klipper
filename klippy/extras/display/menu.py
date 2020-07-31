@@ -226,7 +226,7 @@ class MenuElement(object):
         if name in self._script_tpls:
             context.update({
                 'script': {
-                    'event': name if event is None else event,
+                    'event': event or name,
                     'log_gcode': _log
                 }
             })
@@ -672,7 +672,8 @@ class MenuManager:
         self.gcode = self.printer.lookup_object('gcode')
         self.gcode_queue = []
         self.context = {}
-        self.defaults = {}
+        self.default = {}
+        self.runtime = {}
         self.root = None
         self._root = config.get('menu_root', '__main')
         self.cols, self.rows = self.display.lcd_chip.get_dimensions()
@@ -754,10 +755,12 @@ class MenuManager:
             'running': self.running,
             'rows': self.rows,
             'cols': self.cols,
-            'default': dict(self.defaults),
+            'default': dict(self.default),
+            'runtime': dict(self.runtime),
             'action_send_event': self._action_send_event,
             'action_set_default': self._action_set_default,
-            'action_reset_defaults': self._action_reset_defaults
+            'action_reset_defaults': self._action_reset_defaults,
+            'action_set_runtime': self._action_set_runtime
         }
 
     def _action_send_event(self, name, event, *args):
@@ -765,9 +768,9 @@ class MenuManager:
         return ""
 
     def _action_set_default(self, name, value):
-        if name in self.defaults:
+        if name in self.default:
             configfile = self.printer.lookup_object('configfile')
-            self.defaults[name] = value
+            self.default[name] = value
             configfile.set('menu', 'default_' + str(name), value)
             configfile.set('menu', 'default_eventtime', self.eventtime)
         else:
@@ -778,6 +781,10 @@ class MenuManager:
         configfile = self.printer.lookup_object('configfile')
         configfile.remove_section('menu')
         configfile.set('menu', 'default_eventtime', self.eventtime)
+        return ""
+
+    def _action_set_runtime(self, name, value):
+        self.runtime[str(name)] = value
         return ""
 
     def _action_back(self, force=False, update=True):
@@ -1049,7 +1056,7 @@ class MenuManager:
             prefix = 'default_'
             for option in cfg.get_prefix_options(prefix):
                 try:
-                    self.defaults[option[len(prefix):]] = ast.literal_eval(
+                    self.default[option[len(prefix):]] = ast.literal_eval(
                         cfg.get(option))
                 except ValueError:
                     raise cfg.error(
