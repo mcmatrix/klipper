@@ -489,8 +489,8 @@ class MenuInput(MenuCommand):
                 and self._input_value is not None
                 and (eventtime - self.__last_change) > 0.250):
             if self._realtime is True:
-                self.run_script('change')
                 self.run_script('gcode', event='change')
+                self.run_script('change')
             self._is_dirty = False
 
     def get_context(self, cxt=None):
@@ -964,8 +964,8 @@ class MenuManager:
             if isinstance(current, MenuContainer):
                 self.stack_push(current)
             elif isinstance(current, MenuCommand):
-                current.run_script(event)
                 current.run_script('gcode', event=event)
+                current.run_script(event)
             else:
                 # current is None, no selection. passthru to container
                 container.run_script(event)
