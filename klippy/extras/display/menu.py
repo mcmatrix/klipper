@@ -8,6 +8,7 @@
 import os, logging, ast
 from string import Template
 from . import menu_keys
+from .. import gcode_macro
 
 
 class sentinel:
@@ -57,12 +58,9 @@ class MenuElement(object):
         self._width = self.manager.cols - len(self._cursor)
         self._script_tpls = {}
         prfx = 'script_'
-        # load scripts from script attribute
+        # load scripts from 'script_*' attribute
         for o in config.get_prefix_options(prfx):
-            script = config.get(o, '')
-            name = o[len(prfx):]
-            self._script_tpls[name] = manager.gcode_macro.create_template(
-                '%s:%s' % (self._ns, o), script)
+            self._load_scripts(config, o, prefix=prfx)
         # init
         self.init()
 
@@ -74,15 +72,18 @@ class MenuElement(object):
         context = self.get_context()
         return self.manager.asflat(self._name_tpl.render(context))
 
-    def _load_scripts(self, config, *argv):
-        # load scripts from custom attributes
-        for name in argv:
+    def _load_scripts(self, config, *args, **kwargs):
+        """Load script(s) from config"""
+
+        prefix = kwargs.get('prefix', '')
+        for arg in args:
+            name = arg[len(prefix):]
             if name in self._script_tpls:
                 logging.info(
                     "Declaration of '%s' hides "
                     "previous script declaration" % (name,))
             self._script_tpls[name] = self.manager.gcode_macro.load_template(
-                config, name, '')
+                config, arg, '')
 
     # override
     def _second_tick(self, eventtime):
@@ -210,11 +211,14 @@ class MenuElement(object):
             return self._script_tpls[name]
         return None
 
-    def run_script(self, name, event=None, context=None, render_only=False):
+    def run_script(self, name, **kwargs):
         def _log():
             _log.state = True
             return ''
 
+        event = kwargs.get('event', None)
+        context = kwargs.get('context', None)
+        render_only = kwargs.get('render_only', False)
         result = ""
         # init context
         context = self.get_context(context)
@@ -222,7 +226,6 @@ class MenuElement(object):
         if name in self._script_tpls:
             context.update({
                 'script': {
-                    'name': name,
                     'event': name if event is None else event,
                     'log_gcode': _log
                 }
@@ -486,7 +489,7 @@ class MenuInput(MenuCommand):
                 and self._input_value is not None
                 and (eventtime - self.__last_change) > 0.250):
             if self._realtime is True:
-                self.run_script('gcode', 'change')
+                self.run_script('gcode', event='change')
             self._is_dirty = False
 
     def get_context(self, cxt=None):
@@ -792,9 +795,8 @@ class MenuManager:
 
     def update_context(self, eventtime):
         # menu default jinja2 context
-        _tpl = self.gcode_macro.create_template("update_context", "")
         self.context = {
-            'printer': _tpl.create_status_wrapper(eventtime),
+            'printer': gcode_macro.GetStatusWrapper(self.printer, eventtime),
             'menu': {
                 'eventtime': eventtime,
                 'back': self._action_back,
@@ -961,7 +963,7 @@ class MenuManager:
             if isinstance(current, MenuContainer):
                 self.stack_push(current)
             elif isinstance(current, MenuCommand):
-                current.run_script('gcode', event)
+                current.run_script('gcode', event=event)
             else:
                 # current is None, no selection. passthru to container
                 container.run_script(event)
