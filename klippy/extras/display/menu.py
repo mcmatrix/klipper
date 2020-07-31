@@ -489,6 +489,7 @@ class MenuInput(MenuCommand):
                 and self._input_value is not None
                 and (eventtime - self.__last_change) > 0.250):
             if self._realtime is True:
+                self.run_script('change')
                 self.run_script('gcode', event='change')
             self._is_dirty = False
 
