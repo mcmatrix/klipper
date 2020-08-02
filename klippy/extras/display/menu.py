@@ -434,14 +434,6 @@ class MenuInput(MenuCommand):
         self._input_max_tpl = manager.gcode_macro.load_template(
             config, 'input_max', '999999.0')
         self._input_step = config.getfloat('input_step', above=0.)
-        # Lets try (input_max - input_min) / input_step > 100
-        # and then enable an input_step2 = 10 * input_step
-        if ((self.manager.asfloat(self._eval_max())
-                - self.manager.asfloat(self._eval_min()))
-                / self._input_step > 100.0):
-            self._input_step2 = 10.0 * self._input_step
-        else:
-            self._input_step2 = 0
 
     def init(self):
         super(MenuInput, self).init()
@@ -520,13 +512,17 @@ class MenuInput(MenuCommand):
     def _reset_value(self):
         self._input_value = None
 
+    def _get_input_step(self, fast_rate=False):
+        return ((10.0 * self._input_step) if fast_rate and (
+                (self._input_max - self._input_min) / self._input_step > 100.0)
+                else self._input_step)
+
     def inc_value(self, fast_rate=False):
         last_value = self._input_value
-        input_step = (self._input_step2 if fast_rate and self._input_step2 > 0
-                      else self._input_step)
         if self._input_value is None:
             return
 
+        input_step = self._get_input_step(fast_rate)
         self._input_value += abs(input_step)
         self._input_value = min(self._input_max, max(
             self._input_min, self._input_value))
@@ -536,11 +532,10 @@ class MenuInput(MenuCommand):
 
     def dec_value(self, fast_rate=False):
         last_value = self._input_value
-        input_step = (self._input_step2 if fast_rate and self._input_step2 > 0
-                      else self._input_step)
         if self._input_value is None:
             return
 
+        input_step = self._get_input_step(fast_rate)
         self._input_value -= abs(input_step)
         self._input_value = min(self._input_max, max(
             self._input_min, self._input_value))
