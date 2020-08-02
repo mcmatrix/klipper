@@ -5,7 +5,7 @@
 # Copyright (C) 2020  Janar Sööt <janar.soot@gmail.com>
 #
 # This file may be distributed under the terms of the GNU GPLv3 license.
-import os, logging, ast
+import os, logging
 from string import Template
 from . import menu_keys
 from .. import gcode_macro
@@ -41,7 +41,8 @@ class MenuElement(object):
                 'Abstract MenuElement cannot be instantiated directly')
         self._manager = manager
         self.cursor = config.get('cursor', '>')
-        self._scroll = manager.asbool(config.get('scroll', 'False'))
+        # scroll is always on
+        self._scroll = True
         self._index = manager.asint(config.get('index', ''), None)
         self._enable_tpl = manager.gcode_macro.load_template(
             config, 'enable', 'True')
@@ -56,11 +57,8 @@ class MenuElement(object):
         self.__last_state = True
         # display width is used and adjusted by cursor size
         self._width = self.manager.cols - len(self._cursor)
+        # menu scripts
         self._script_tpls = {}
-        prfx = 'script_'
-        # load scripts from 'script_*' attribute
-        for o in config.get_prefix_options(prfx):
-            self._load_scripts(config, o, prefix=prfx)
         # init
         self.init()
 
@@ -111,20 +109,11 @@ class MenuElement(object):
 
     # override
     def get_context(self, cxt=None):
-        def _get_template(n, from_ns='.'):
-            _source = self.manager.lookup_menuitem(self.get_ns(from_ns))
-            script = _source.get_script(n)
-            if script is None:
-                raise error(
-                    "{}: script '{}' not found".format(
-                        _source.get_ns(), str(n)))
-            return script.template
         # get default menu context
         context = self.manager.get_context(cxt)
         context['menu'].update({
             'width': self._width,
-            'ns': self.get_ns(),
-            'script_by_name': _get_template
+            'ns': self.get_ns()
         })
         return context
 
@@ -212,30 +201,18 @@ class MenuElement(object):
         return None
 
     def run_script(self, name, **kwargs):
-        def _log():
-            _log.state = True
-            return ''
-
         event = kwargs.get('event', None)
         context = kwargs.get('context', None)
         render_only = kwargs.get('render_only', False)
         result = ""
         # init context
         context = self.get_context(context)
-        _log.state = False
         if name in self._script_tpls:
-            context.update({
-                'script': {
-                    'event': event or name,
-                    'log_gcode': _log
-                }
+            context['menu'].update({
+                'event': event or name
             })
             result = self._script_tpls[name].render(context)
         if not render_only:
-            if _log.state is True:
-                # log result gcode
-                logging.info(
-                    "{} -> gcode: {}".format(self.get_ns(), result))
             # run result as gcode
             self.manager.queue_gcode(result)
             # default behaviour
@@ -451,14 +428,20 @@ class MenuInput(MenuCommand):
     def __init__(self, manager, config,):
         super(MenuInput, self).__init__(manager, config)
         self._realtime = manager.asbool(config.get('realtime', 'false'))
-        self._reverse = manager.asbool(config.get('reverse', 'false'))
         self._input_tpl = manager.gcode_macro.load_template(config, 'input')
         self._input_min_tpl = manager.gcode_macro.load_template(
             config, 'input_min', '-999999.0')
         self._input_max_tpl = manager.gcode_macro.load_template(
             config, 'input_max', '999999.0')
         self._input_step = config.getfloat('input_step', above=0.)
-        self._input_step2 = config.getfloat('input_step2', 0, minval=0.)
+        # Lets try (input_max - input_min) / input_step > 100
+        # and then enable an input_step2 = 10 * input_step
+        if ((self.manager.asfloat(self._eval_max())
+                - self.manager.asfloat(self._eval_min()))
+                / self._input_step > 100.0):
+            self._input_step2 = 10.0 * self._input_step
+        else:
+            self._input_step2 = 0
 
     def init(self):
         super(MenuInput, self).init()
@@ -544,10 +527,7 @@ class MenuInput(MenuCommand):
         if self._input_value is None:
             return
 
-        if(self._reverse is True):
-            self._input_value -= abs(input_step)
-        else:
-            self._input_value += abs(input_step)
+        self._input_value += abs(input_step)
         self._input_value = min(self._input_max, max(
             self._input_min, self._input_value))
 
@@ -561,10 +541,7 @@ class MenuInput(MenuCommand):
         if self._input_value is None:
             return
 
-        if(self._reverse is True):
-            self._input_value += abs(input_step)
-        else:
-            self._input_value -= abs(input_step)
+        self._input_value -= abs(input_step)
         self._input_value = min(self._input_max, max(
             self._input_min, self._input_value))
 
@@ -582,8 +559,7 @@ class MenuInput(MenuCommand):
 class MenuList(MenuContainer):
     def __init__(self, manager, config):
         super(MenuList, self).__init__(manager, config)
-        self._show_title = manager.asbool(config.get('show_title', 'True'))
-        self._load_scripts(config, 'enter_gcode', 'leave_gcode')
+        self._show_title = True
 
     def _names_aslist(self):
         return self.manager.lookup_children(self.get_ns())
@@ -672,8 +648,6 @@ class MenuManager:
         self.gcode = self.printer.lookup_object('gcode')
         self.gcode_queue = []
         self.context = {}
-        self.default = {}
-        self.runtime = {}
         self.root = None
         self._root = config.get('menu_root', '__main')
         self.cols, self.rows = self.display.lcd_chip.get_dimensions()
@@ -694,8 +668,6 @@ class MenuManager:
         self.load_config(os.path.dirname(__file__), 'menu.cfg')
         # Load items from main config
         self.load_menuitems(config)
-        # Load defaults from main config
-        self.load_defaults(config)
         # Load menu root
         self.root = self.lookup_menuitem(self._root)
         # send init event
@@ -754,38 +726,8 @@ class MenuManager:
             'timeout': self.timeout,
             'running': self.running,
             'rows': self.rows,
-            'cols': self.cols,
-            'default': dict(self.default),
-            'runtime': dict(self.runtime),
-            'action_send_event': self._action_send_event,
-            'action_set_default': self._action_set_default,
-            'action_reset_defaults': self._action_reset_defaults,
-            'action_set_runtime': self._action_set_runtime
+            'cols': self.cols
         }
-
-    def _action_send_event(self, name, event, *args):
-        self.send_event("%s:%s" % (str(name), str(event)), *args)
-        return ""
-
-    def _action_set_default(self, name, value):
-        if name in self.default:
-            configfile = self.printer.lookup_object('configfile')
-            self.default[name] = value
-            configfile.set('menu', 'default_' + str(name), value)
-            configfile.set('menu', 'default_eventtime', self.eventtime)
-        else:
-            logging.error("Unknown menu default: '%s'" % str(name))
-        return ""
-
-    def _action_reset_defaults(self):
-        configfile = self.printer.lookup_object('configfile')
-        configfile.remove_section('menu')
-        configfile.set('menu', 'default_eventtime', self.eventtime)
-        return ""
-
-    def _action_set_runtime(self, name, value):
-        self.runtime[str(name)] = value
-        return ""
 
     def _action_back(self, force=False, update=True):
         self.back(force, update)
@@ -818,9 +760,9 @@ class MenuManager:
         top = self.stack_peek()
         if top is not None:
             if isinstance(top, MenuList):
-                top.run_script('leave_gcode')
+                top.run_script('leave')
         if isinstance(container, MenuList):
-            container.run_script('enter_gcode')
+            container.run_script('enter')
         if not container.is_editing():
             container.update_items()
             container.init_selection()
@@ -840,12 +782,12 @@ class MenuManager:
                     top.update_items()
                     top.init_selection()
                 if isinstance(container, MenuList):
-                    container.run_script('leave_gcode')
+                    container.run_script('leave')
                 if isinstance(top, MenuList):
-                    top.run_script('enter_gcode')
+                    top.run_script('enter')
             else:
                 if isinstance(container, MenuList):
-                    container.run_script('leave_gcode')
+                    container.run_script('leave')
         return container
 
     def stack_size(self):
@@ -949,7 +891,7 @@ class MenuManager:
                     and current.is_editing()):
                 return
             if isinstance(container, MenuList):
-                container.run_script('leave_gcode')
+                container.run_script('leave')
             self.send_event('exit', self)
             self.running = False
 
@@ -1041,27 +983,12 @@ class MenuManager:
                 "Cannot load config '%s'" % (filename,))
         if cfg:
             self.load_menuitems(cfg)
-            self.load_defaults(cfg)
         return cfg
 
     def load_menuitems(self, config):
         for cfg in config.get_prefix_sections('menu '):
             item = self.menuitem_from(cfg)
             self.add_menuitem(item.get_ns(), item)
-
-    def load_defaults(self, config):
-        if config.has_section('menu'):
-            cfg = config.getsection('menu')
-            # load default records
-            prefix = 'default_'
-            for option in cfg.get_prefix_options(prefix):
-                try:
-                    self.default[option[len(prefix):]] = ast.literal_eval(
-                        cfg.get(option))
-                except ValueError:
-                    raise cfg.error(
-                        "Option '%s' in '%s' is not a valid literal" % (
-                            option, cfg.get_name()))
 
     def _click_callback(self, eventtime, event):
         if self.is_running():
