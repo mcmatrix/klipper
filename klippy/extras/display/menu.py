@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 # Basic LCD menu support
 #
-# Based on the RaspberryPiLcdMenu from Alan Aufderheide, February 2013
 # Copyright (C) 2020  Janar Sööt <janar.soot@gmail.com>
 #
 # This file may be distributed under the terms of the GNU GPLv3 license.
@@ -612,8 +611,7 @@ class MenuVSDList(MenuList):
                     'type': 'command',
                     'name': self.manager.asliteral(fname),
                     'cursor': '+',
-                    'gcode': "\n".join(gcode),
-                    'scroll': True
+                    'gcode': "\n".join(gcode)
                 }))
 
 
