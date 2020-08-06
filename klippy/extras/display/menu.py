@@ -39,7 +39,7 @@ class MenuElement(object):
             raise error(
                 'Abstract MenuElement cannot be instantiated directly')
         self._manager = manager
-        self.cursor = config.get('cursor', '>')
+        self.cursor = '>'
         # scroll is always on
         self._scroll = True
         self._index = manager.asint(config.get('index', ''), None)
@@ -244,7 +244,7 @@ class MenuContainer(MenuElement):
             raise error(
                 'Abstract MenuContainer cannot be instantiated directly')
         super(MenuContainer, self).__init__(manager, config)
-        self.cursor = config.get('cursor', '>')
+        self.cursor = '>'
         self.__selected = None
         self._allitems = []
         self._names = []
@@ -567,7 +567,6 @@ class MenuList(MenuContainer):
         item = self.manager.menuitem_from({
             'type': 'command',
             'name': self.manager.asliteral(name),
-            'cursor': '>',
             'gcode': '{menu.back()}'
         })
         self.insert_item(item, 0)
@@ -610,7 +609,6 @@ class MenuVSDList(MenuList):
                 self.insert_item(self.manager.menuitem_from({
                     'type': 'command',
                     'name': self.manager.asliteral(fname),
-                    'cursor': '+',
                     'gcode': "\n".join(gcode)
                 }))
 
