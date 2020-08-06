@@ -66,9 +66,6 @@ class TemplateWrapper:
             raise self.gcode.error(msg)
     def run_gcode_from_command(self, context=None):
         self.gcode.run_script_from_command(self.render(context))
-    @property
-    def template(self):
-        return self._template
 
 # Main gcode macro template tracking
 class PrinterGCodeMacro:
