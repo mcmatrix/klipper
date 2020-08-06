@@ -46,7 +46,7 @@ class TemplateWrapper:
         self.name = name
         self.gcode = self.printer.lookup_object('gcode')
         try:
-            self._template = env.from_string(script)
+            self.template = env.from_string(script)
         except Exception as e:
             msg = "Error loading template '%s': %s" % (
                  name, traceback.format_exception_only(type(e), e)[-1])
