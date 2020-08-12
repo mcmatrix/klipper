@@ -51,7 +51,7 @@ class VirtualSD:
             files = self.get_file_list()
             for fname, fsize in files:
                 gcode = [
-                    'M23 /%s' % str(fname)
+                    'SDCARD_PRINT_FILE FILENAME=%s' % str(fname)
                 ]
                 sdfile = item.manager.menuitem_from({
                     'type': 'command',
