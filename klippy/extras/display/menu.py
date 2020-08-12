@@ -593,31 +593,10 @@ class MenuList(MenuContainer):
         return ("\n".join(rows), selected_row)
 
 
-class MenuVSDList(MenuList):
-    def __init__(self, manager, config):
-        super(MenuVSDList, self).__init__(manager, config)
-
-    def _populate(self):
-        super(MenuVSDList, self)._populate()
-        sdcard = self.manager.printer.lookup_object('virtual_sdcard', None)
-        if sdcard is not None:
-            files = sdcard.get_file_list()
-            for fname, fsize in files:
-                gcode = [
-                    'M23 /%s' % str(fname)
-                ]
-                self.insert_item(self.manager.menuitem_from({
-                    'type': 'command',
-                    'name': self.manager.asliteral(fname),
-                    'gcode': "\n".join(gcode)
-                }))
-
-
 menu_items = {
     'command': MenuCommand,
     'input': MenuInput,
-    'list': MenuList,
-    'vsdlist': MenuVSDList
+    'list': MenuList
 }
 
 
