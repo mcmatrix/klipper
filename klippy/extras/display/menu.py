@@ -192,7 +192,7 @@ class MenuElement(object):
 
     def send_event(self, event, *args):
         return self.manager.send_event(
-            "%s:%s" % (self.get_ns(), str(event)), *args)
+            "elem:%s:%s" % (self.get_ns(), str(event)), *args)
 
     def get_script(self, name):
         if name in self._script_tpls:
