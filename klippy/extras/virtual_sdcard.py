@@ -42,22 +42,24 @@ class VirtualSD:
         printer.register_event_handler(
             "menu:init", self.handle_menu_init)
         printer.register_event_handler(
-            "menu:__main __virtual_sdcard:populate",
-            self.handle_sdcard_populate)
+            "menu:__main:populate", self.handle_main_populate)
     def handle_menu_init(self, manager):
         manager.load_config(os.path.dirname(__file__), 'virtual_sdcard.cfg')
-    def handle_sdcard_populate(self, item):
-        if item is not None:
+    def handle_main_populate(self, item):
+        sdmenu = item.manager.lookup_menuitem('__virtual_sdcard', None)
+        if sdmenu is not None:
+            item.insert_item(sdmenu, 2)
             files = self.get_file_list()
             for fname, fsize in files:
                 gcode = [
                     'M23 /%s' % str(fname)
                 ]
-                item.insert_item(item.manager.menuitem_from({
+                sdfile = item.manager.menuitem_from({
                     'type': 'command',
                     'name': item.manager.asliteral(fname),
                     'gcode': "\n".join(gcode)
-                }))
+                })
+                sdmenu.insert_item(sdfile)
     def handle_shutdown(self):
         if self.work_timer is not None:
             self.must_pause_work = True
