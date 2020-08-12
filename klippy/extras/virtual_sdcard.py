@@ -45,9 +45,12 @@ class VirtualSD:
             "menu:__main:populate", self.handle_main_populate)
     def handle_menu_init(self, manager):
         manager.load_config(os.path.dirname(__file__), 'virtual_sdcard.cfg')
+        logging.info("menu init")
     def handle_main_populate(self, item):
+        logging.info("main populate")
         sdmenu = item.manager.lookup_menuitem('__virtual_sdcard', None)
         if sdmenu is not None:
+            logging.info("found sdmenu")
             item.insert_item(sdmenu, 2)
             files = self.get_file_list()
             for fname, fsize in files:
