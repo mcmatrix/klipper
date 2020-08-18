@@ -18,6 +18,39 @@ class error(Exception):
     pass
 
 
+class MenuTimer(object):
+    '''Measure the elapsed time in a code block.'''
+    def __init__(self, printer, name):
+        self.reactor = printer.get_reactor()
+        self.name = name
+        self.start = self.reactor.monotonic()
+        self.lapse = None
+
+    @property
+    def elapsed(self):
+        return self.reactor.monotonic() - self.start
+
+    def checkpoint(self, name):
+        '''Checkpoint will measure time from previous
+        checkpoint or from start.'''
+        elapsed = self.elapsed
+        if self.lapse is not None:
+            lapse = elapsed - self.lapse
+        else:
+            lapse = elapsed
+        self.lapse = elapsed
+        logging.info(
+            '%s %s took %.2f (%.2f) ms',
+            self.name, name, (lapse * 1000), (elapsed * 1000))
+
+    def __enter__(self):
+        self.start = self.reactor.monotonic()
+        return self
+
+    def __exit__(self, type, value, traceback):
+        logging.info('%s took %.2f ms', self.name, (self.elapsed * 1000))
+
+
 class MenuConfig(dict):
     """Wrapper for dict to emulate configfile get_name for namespace.
         __ns - item namespace key, used in item relative paths
@@ -990,6 +1023,9 @@ class MenuManager:
         elif key == 'back':
             self.back()
         self.display.request_redraw()
+
+    def catchtime(self, name):
+        return MenuTimer(self.printer, name)
 
     # Collection of manager class helper methods
 
