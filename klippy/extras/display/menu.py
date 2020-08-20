@@ -8,6 +8,8 @@ import os, logging
 from string import Template
 from . import menu_keys
 from .. import gcode_macro
+import cProfile, pstats
+import StringIO
 
 
 class sentinel:
@@ -16,6 +18,60 @@ class sentinel:
 
 class error(Exception):
     pass
+
+
+class Profiler(object):
+
+    def __init__(self, printer, name=None, fraction=1.0,
+                 sort_by='cumulative', logger=None, verbose=False):
+
+        def get_reactor_time():
+            return self.reactor.monotonic()
+
+        self.reactor = printer.get_reactor()
+        self.name = name or str(self.__class__)
+
+        if fraction > 1.0 or fraction < 0.0:
+            fraction = 1.0
+        self.fraction = fraction
+        self.sort_by = sort_by
+
+        self.logger = logger
+        self.verbose = verbose
+
+        self.stream = StringIO.StringIO()
+        self.profiler = cProfile.Profile(get_reactor_time)
+
+    def __enter__(self, *args):
+        # Start profiling.
+        self.stream.write("\nprofile: {}: enter\n".format(self.name))
+        self.profiler.enable()
+
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        # Stop profiling.
+        self.profiler.disable()
+
+        sort_by = self.sort_by
+        ps = pstats.Stats(self.profiler, stream=self.stream)
+        ps.strip_dirs()
+        if isinstance(sort_by, (tuple, list)):
+            ps.sort_stats(*sort_by)
+        else:
+            ps.sort_stats(sort_by)
+        ps.print_stats(self.fraction)
+
+        self.stream.write("\nprofile: {}: exit\n".format(self.name))
+
+        if self.verbose and self.logger is not None:
+            self.logger.info("%s", self.get_stats())
+
+        return False
+
+    def get_stats(self):
+        value = self.stream.getvalue()
+        return value
 
 
 class MenuTimer(object):
@@ -1026,6 +1082,10 @@ class MenuManager:
 
     def catchtime(self, name):
         return MenuTimer(self.printer, name)
+
+    def profile(self, name, sort_by='cumulative', fraction=1.0, verbose=True):
+        return Profiler(self.printer, name, sort_by=sort_by, fraction=fraction,
+                        logger=logging, verbose=verbose)
 
     # Collection of manager class helper methods
 
