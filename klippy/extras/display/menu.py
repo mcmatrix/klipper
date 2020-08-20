@@ -23,7 +23,9 @@ class error(Exception):
 class Profiler(object):
 
     def __init__(self, printer, name=None, fraction=1.0,
-                 sort_by='cumulative', logger=None, verbose=False):
+                 sort_by='cumulative', logger=None, verbose=False,
+                 print_stats=True, print_callers=False,
+                 print_callees=False):
 
         def get_reactor_time():
             return self.reactor.monotonic()
@@ -38,6 +40,9 @@ class Profiler(object):
 
         self.logger = logger
         self.verbose = verbose
+        self.print_stats = print_stats
+        self.print_callers = print_callers
+        self.print_callees = print_callees
 
         self.stream = StringIO.StringIO()
         self.profiler = cProfile.Profile(get_reactor_time)
@@ -60,7 +65,13 @@ class Profiler(object):
             ps.sort_stats(*sort_by)
         else:
             ps.sort_stats(sort_by)
-        ps.print_stats(self.fraction)
+
+        if self.print_stats:
+            ps.print_stats(self.fraction)
+        if self.print_callers:
+            ps.print_callers(self.fraction)
+        if self.print_callees:
+            ps.print_callees(self.fraction)
 
         self.stream.write("\nprofile: {}: exit\n".format(self.name))
 
@@ -1083,9 +1094,12 @@ class MenuManager:
     def catchtime(self, name):
         return MenuTimer(self.printer, name)
 
-    def profile(self, name, sort_by='cumulative', fraction=1.0, verbose=True):
+    def profile(self, name, sort_by='cumulative', fraction=1.0, verbose=True,
+                print_stats=True, print_callers=False, print_callees=False):
         return Profiler(self.printer, name, sort_by=sort_by, fraction=fraction,
-                        logger=logging, verbose=verbose)
+                        logger=logging, verbose=verbose,
+                        print_stats=print_stats, print_callers=print_callers,
+                        print_callees=print_callees)
 
     # Collection of manager class helper methods
 
