@@ -39,7 +39,7 @@ class MenuElement(object):
                 'Abstract MenuElement cannot be instantiated directly')
         self._manager = manager
         self.cursor = '>'
-        # scroll is always on
+        # scroller is always on
         self._scroll = True
         self._index = manager.asint(config.get('index', ''), None)
         self._enable_tpl = manager.gcode_macro.load_template(
@@ -64,10 +64,6 @@ class MenuElement(object):
     def init(self):
         pass
 
-    def _name(self):
-        context = self.get_context()
-        return self.manager.asflat(self._name_tpl.render(context))
-
     def _load_scripts(self, config, *args, **kwargs):
         """Load script(s) from config"""
 
@@ -82,10 +78,6 @@ class MenuElement(object):
                 config, arg, '')
 
     # override
-    def _second_tick(self, eventtime):
-        pass
-
-    # override
     def is_editing(self):
         return False
 
@@ -95,7 +87,8 @@ class MenuElement(object):
 
     # override
     def is_enabled(self):
-        return self.eval_enable()
+        context = self.get_context()
+        return self.manager.asbool(self._enable_tpl.render(context))
 
     # override
     def start_editing(self):
@@ -115,10 +108,6 @@ class MenuElement(object):
         })
         return context
 
-    def eval_enable(self):
-        context = self.get_context()
-        return self.manager.asbool(self._enable_tpl.render(context))
-
     # Called when a item is selected
     def select(self):
         self.__clear_scroll()
@@ -129,7 +118,6 @@ class MenuElement(object):
         if self.__last_state ^ state:
             self.__last_state = state
             if not self.is_editing():
-                self._second_tick(eventtime)
                 self.__update_scroll(eventtime)
 
     def __clear_scroll(self):
@@ -159,7 +147,9 @@ class MenuElement(object):
         ].ljust(self._width)
 
     def render_name(self, selected=False):
-        s = str(self._name())
+        # render name
+        context = self.get_context()
+        s = self.manager.asflat(self._name_tpl.render(context))
         # scroller
         if self._width > 0:
             self.__scroll_diff = len(s) - self._width
@@ -397,8 +387,8 @@ class MenuContainer(MenuElement):
         return self.select_at(index)
 
     # override
-    def render_container(self, eventtime):
-        return ("", None)
+    def render_container(self, rows, eventtime):
+        return []
 
     def __iter__(self):
         return iter(self._items)
@@ -443,6 +433,10 @@ class MenuInput(MenuCommand):
     def is_editing(self):
         return self._input_value is not None
 
+    def is_enabled(self):
+        context = super(MenuInput, self).get_context()
+        return self.manager.asbool(self._enable_tpl.render(context))
+
     def stop_editing(self):
         if not self.is_editing():
             return
@@ -472,10 +466,6 @@ class MenuInput(MenuCommand):
                 else self._input_value)
         })
         return context
-
-    def eval_enable(self):
-        context = super(MenuInput, self).get_context()
-        return self.manager.asbool(self._enable_tpl.render(context))
 
     def _eval_min(self):
         context = super(MenuInput, self).get_context()
@@ -550,6 +540,7 @@ class MenuInput(MenuCommand):
 class MenuList(MenuContainer):
     def __init__(self, manager, config):
         super(MenuList, self).__init__(manager, config)
+        self._viewport_top = 0
         # create back item
         self._itemBack = self.manager.menuitem_from({
             'type': 'command',
@@ -562,29 +553,44 @@ class MenuList(MenuContainer):
 
     def _populate(self):
         super(MenuList, self)._populate()
+        self._viewport_top = 0
         #  add back as first item
         self.insert_item(self._itemBack, 0)
 
-    def render_container(self, eventtime):
-        rows = []
-        selected_row = None
+    def render_container(self, rows, eventtime):
+        manager = self.manager
+        lines = []
+        selected_row = self.selected
+        # adjust viewport
+        if selected_row is not None:
+            if selected_row >= (self._viewport_top + rows):
+                self._viewport_top = (selected_row - (
+                                      self._viewport_top + rows)) + 1
+            if selected_row < self._viewport_top:
+                self._viewport_top = selected_row
+        else:
+            self._viewport_top = 0
+        # clamps viewport
+        self._viewport_top = max(0, min(self._viewport_top, len(self) - rows))
         try:
-            for row, item in enumerate(self):
+            for row in range(self._viewport_top, self._viewport_top + rows):
                 s = ""
-                selected = (row == self.selected)
+                current = self[row]
+                selected = (row == selected_row)
                 if selected:
-                    item.heartbeat(eventtime)
-                    selected_row = len(rows)
-                name = str(item.render_name(selected))
-                if isinstance(item, MenuList):
-                    s += name[:self.manager.cols-1].ljust(self.manager.cols-1)
+                    current.heartbeat(eventtime)
+                name = str(current.render_name(selected))
+                if isinstance(current, MenuList):
+                    s += name[:manager.cols-1].ljust(manager.cols-1)
                     s += '>'
                 else:
-                    s += name[:self.manager.cols].ljust(self.manager.cols)
-                rows.append(s)
+                    s += name[:manager.cols].ljust(manager.cols)
+
+                line = manager.stripliterals(manager.aslatin(s))
+                lines.append(line.ljust(manager.cols))
         except Exception:
             logging.exception('List rendering error')
-        return ("\n".join(rows), selected_row)
+        return lines
 
 
 class MenuVSDList(MenuList):
@@ -624,7 +630,6 @@ class MenuManager:
         self.menuitems = {}
         self.menustack = []
         self.children = {}
-        self.top_row = 0
         self.display = display
         self.printer = config.get_printer()
         self.pconfig = self.printer.lookup_object('configfile')
@@ -682,7 +687,6 @@ class MenuManager:
 
     def begin(self, eventtime):
         self.menustack = []
-        self.top_row = 0
         self.timer = 0
         if isinstance(self.root, MenuContainer):
             # send begin event
@@ -780,21 +784,7 @@ class MenuManager:
         container = self.stack_peek()
         if self.running and isinstance(container, MenuContainer):
             container.heartbeat(eventtime)
-            content, viewport_row = container.render_container(eventtime)
-            if viewport_row is not None:
-                while viewport_row >= (self.top_row + self.rows):
-                    self.top_row += 1
-                while viewport_row < self.top_row and self.top_row > 0:
-                    self.top_row -= 1
-            else:
-                self.top_row = 0
-            rows = self.aslatin(content).splitlines()
-            for row in range(0, self.rows):
-                try:
-                    text = self.stripliterals(rows[self.top_row + row])
-                except IndexError:
-                    text = ""
-                lines.append(text.ljust(self.cols))
+            lines = container.render_container(self.rows, eventtime)
         return lines
 
     def screen_update_event(self, eventtime):
