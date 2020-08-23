@@ -564,8 +564,7 @@ class MenuList(MenuContainer):
         # adjust viewport
         if selected_row is not None:
             if selected_row >= (self._viewport_top + rows):
-                self._viewport_top = (selected_row - (
-                                      self._viewport_top + rows)) + 1
+                self._viewport_top = (selected_row - rows) + 1
             if selected_row < self._viewport_top:
                 self._viewport_top = selected_row
         else:
