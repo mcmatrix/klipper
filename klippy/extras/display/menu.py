@@ -574,19 +574,19 @@ class MenuList(MenuContainer):
         try:
             for row in range(self._viewport_top, self._viewport_top + rows):
                 s = ""
-                current = self[row]
-                selected = (row == selected_row)
-                if selected:
-                    current.heartbeat(eventtime)
-                name = str(current.render_name(selected))
-                if isinstance(current, MenuList):
-                    s += name[:manager.cols-1].ljust(manager.cols-1)
-                    s += '>'
-                else:
-                    s += name[:manager.cols].ljust(manager.cols)
-
-                line = manager.stripliterals(manager.aslatin(s))
-                lines.append(line.ljust(manager.cols))
+                if row < len(self):
+                    current = self[row]
+                    selected = (row == selected_row)
+                    if selected:
+                        current.heartbeat(eventtime)
+                    name = manager.stripliterals(
+                        manager.aslatin(current.render_name(selected)))
+                    if isinstance(current, MenuList):
+                        s += name[:manager.cols-1].ljust(manager.cols-1)
+                        s += '>'
+                    else:
+                        s += name
+                lines.append(s[:manager.cols].ljust(manager.cols))
         except Exception:
             logging.exception('List rendering error')
         return lines
