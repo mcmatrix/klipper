@@ -42,10 +42,23 @@ class MenuElement(object):
         # scroller is always on
         self._scroll = True
         self._index = manager.asint(config.get('index', ''), None)
-        self._enable_tpl = manager.gcode_macro.load_template(
-            config, 'enable', 'True')
-        self._name_tpl = manager.gcode_macro.load_template(
-            config, 'name')
+        # test enable for static value
+        # in case of static boolean value, don't use template
+        _enable_value = config.get('enable', 'True')
+        self._enable_sta = manager.asbool(_enable_value, None)
+        self._enable_tpl = None
+        if self._enable_sta is None:
+            # non static boolean value, use template
+            self._enable_tpl = manager.gcode_macro.create_template(
+                '%s:enable' % (self.get_ns(), ), _enable_value)
+        # item name template
+        # if item is statically disabled, allow empty name
+        if self._enable_sta is False:
+            self._name_tpl = manager.gcode_macro.load_template(
+                config, 'name', '')
+        else:
+            self._name_tpl = manager.gcode_macro.load_template(
+                config, 'name')
         # item namespace - used in relative paths
         self._ns = str(" ".join(config.get_name().split(' ')[1:])).strip()
         self._last_heartbeat = None
@@ -77,6 +90,12 @@ class MenuElement(object):
             self._script_tpls[name] = self.manager.gcode_macro.load_template(
                 config, arg, '')
 
+    def _eval_enable(self, context):
+        if self._enable_tpl is None:
+            return self._enable_sta
+        else:
+            return self.manager.asbool(self._enable_tpl.render(context))
+
     # override
     def is_editing(self):
         return False
@@ -88,7 +107,7 @@ class MenuElement(object):
     # override
     def is_enabled(self):
         context = self.get_context()
-        return self.manager.asbool(self._enable_tpl.render(context))
+        return self._eval_enable(context)
 
     # override
     def start_editing(self):
@@ -435,7 +454,7 @@ class MenuInput(MenuCommand):
 
     def is_enabled(self):
         context = super(MenuInput, self).get_context()
-        return self.manager.asbool(self._enable_tpl.render(context))
+        return self._eval_enable(context)
 
     def stop_editing(self):
         if not self.is_editing():
