@@ -982,6 +982,17 @@ class MenuManager:
         self.display.request_redraw()
 
     # Collection of manager class helper methods
+    # Possible boolean values in the configuration.
+    BOOLEAN_STATES = {
+        '1': True,
+        'yes': True,
+        'true': True,
+        'on': True,
+        '0': False,
+        'no': False,
+        'false': False,
+        'off': False,
+    }
 
     @classmethod
     def stripliterals(cls, s):
@@ -1015,13 +1026,16 @@ class MenuManager:
         return cls.stripliterals(cls.asflatline(s))
 
     @classmethod
-    def asbool(cls, s):
+    def asbool(cls, s, default=False):
         if isinstance(s, (bool, int, float)):
             return bool(s)
         elif cls.isfloat(s):
             return bool(cls.asfloat(s))
         s = str(s).strip()
-        return s.lower() in ('y', 'yes', 't', 'true', 'on', '1')
+        try:
+            return cls.BOOLEAN_STATES[s.lower()]
+        except KeyError:
+            return default
 
     @classmethod
     def asint(cls, s, default=sentinel):
