@@ -39,6 +39,8 @@ class MenuElement(object):
                 'Abstract MenuElement cannot be instantiated directly')
         self._manager = manager
         self.cursor = '>'
+        # item namespace - used in relative paths
+        self._ns = str(" ".join(config.get_name().split(' ')[1:])).strip()
         # scroller is always on
         self._scroll = True
         self._index = manager.asint(config.get('index', ''), None)
@@ -50,7 +52,7 @@ class MenuElement(object):
         if self._enable_sta is None:
             # non static boolean value, use template
             self._enable_tpl = manager.gcode_macro.create_template(
-                '%s:enable' % (self.get_ns(), ), _enable_value)
+                '%s:enable' % (self._ns, ), _enable_value)
         # item name template
         # if item is statically disabled, allow empty name
         if self._enable_sta is False:
@@ -59,8 +61,6 @@ class MenuElement(object):
         else:
             self._name_tpl = manager.gcode_macro.load_template(
                 config, 'name')
-        # item namespace - used in relative paths
-        self._ns = str(" ".join(config.get_name().split(' ')[1:])).strip()
         self._last_heartbeat = None
         self.__scroll_offs = 0
         self.__scroll_diff = 0
