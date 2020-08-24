@@ -33,7 +33,7 @@ class MenuConfig(dict):
 
 # Scriptable menu element abstract baseclass
 class MenuElement(object):
-    def __init__(self, manager, config):
+    def __init__(self, manager, config, default_name=None):
         if type(self) is MenuElement:
             raise error(
                 'Abstract MenuElement cannot be instantiated directly')
@@ -54,13 +54,12 @@ class MenuElement(object):
             self._enable_tpl = manager.gcode_macro.create_template(
                 '%s:enable' % (self._ns, ), _enable_value)
         # item name template
-        # if item is statically disabled, allow empty name
-        if self._enable_sta is False:
-            self._name_tpl = manager.gcode_macro.load_template(
-                config, 'name', '')
-        else:
+        if default_name is None:
             self._name_tpl = manager.gcode_macro.load_template(
                 config, 'name')
+        else:
+            self._name_tpl = manager.gcode_macro.load_template(
+                config, 'name', default_name)
         self._last_heartbeat = None
         self.__scroll_offs = 0
         self.__scroll_diff = 0
@@ -429,6 +428,14 @@ class MenuCommand(MenuElement):
         self._load_scripts(config, 'gcode')
 
 
+class MenuDisabled(MenuElement):
+    def __init__(self, manager, config):
+        super(MenuDisabled, self).__init__(manager, config, default_name='')
+
+    def is_enabled(self):
+        return False
+
+
 class MenuInput(MenuCommand):
     def __init__(self, manager, config,):
         super(MenuInput, self).__init__(manager, config)
@@ -632,6 +639,7 @@ class MenuVSDList(MenuList):
 
 
 menu_items = {
+    'disabled': MenuDisabled,
     'command': MenuCommand,
     'input': MenuInput,
     'list': MenuList,
