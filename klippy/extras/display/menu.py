@@ -56,7 +56,7 @@ class MenuElement(object):
         # display width is used and adjusted by cursor size
         self._width = self.manager.cols - len(self._cursor)
         # menu scripts
-        self._script_tpls = {}
+        self._scripts = {}
         # init
         self.init()
 
@@ -68,18 +68,18 @@ class MenuElement(object):
         context = self.get_context()
         return self.manager.asflat(self._name_tpl.render(context))
 
-    def _load_scripts(self, config, *args, **kwargs):
-        """Load script(s) from config"""
-
-        prefix = kwargs.get('prefix', '')
-        for arg in args:
-            name = arg[len(prefix):]
-            if name in self._script_tpls:
-                logging.info(
-                    "Declaration of '%s' hides "
-                    "previous script declaration" % (name,))
-            self._script_tpls[name] = self.manager.gcode_macro.load_template(
-                config, arg, '')
+    def _load_script(self, config, name, option=None):
+        """Load script template from config or callback from dict"""
+        if name in self._scripts:
+            logging.info(
+                "Declaration of '%s' hides "
+                "previous script declaration" % (name,))
+        option = option or name
+        if isinstance(config, dict):
+            self._scripts[name] = config.get(option, None)
+        else:
+            self._scripts[name] = self.manager.gcode_macro.load_template(
+                config, option, '')
 
     # override
     def _second_tick(self, eventtime):
@@ -194,9 +194,18 @@ class MenuElement(object):
             "%s:%s" % (self.get_ns(), str(event)), *args)
 
     def get_script(self, name):
-        if name in self._script_tpls:
-            return self._script_tpls[name]
+        if name in self._scripts:
+            return self._scripts[name]
         return None
+
+    def _run_script(self, name, context):
+        _render = getattr(self._scripts[name], 'render', None)
+        # check template
+        if _render is not None and callable(_render):
+            return _render(context)
+        # check callback
+        elif callable(self._scripts[name]):
+            return self._scripts[name](self, context)
 
     def run_script(self, name, **kwargs):
         event = kwargs.get('event', None)
@@ -204,12 +213,12 @@ class MenuElement(object):
         render_only = kwargs.get('render_only', False)
         result = ""
         # init context
-        context = self.get_context(context)
-        if name in self._script_tpls:
+        if name in self._scripts:
+            context = self.get_context(context)
             context['menu'].update({
                 'event': event or name
             })
-            result = self._script_tpls[name].render(context)
+            result = self._run_script(name, context)
         if not render_only:
             # run result as gcode
             self.manager.queue_gcode(result)
@@ -417,7 +426,7 @@ class MenuContainer(MenuElement):
 class MenuCommand(MenuElement):
     def __init__(self, manager, config):
         super(MenuCommand, self).__init__(manager, config)
-        self._load_scripts(config, 'gcode')
+        self._load_script(config, 'gcode')
 
 
 class MenuInput(MenuCommand):
