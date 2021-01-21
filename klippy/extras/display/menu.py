@@ -636,8 +636,7 @@ class MenuList(MenuContainer):
                     selected = (row == selected_row)
                     if selected:
                         current.heartbeat(eventtime)
-                    name = manager.stripliterals(
-                        manager.aslatin(current.render_name(selected)))
+                    name = current.render_name(selected)
                     if isinstance(current, MenuList):
                         s += name[:manager.cols-1].ljust(manager.cols-1)
                         s += '>'
@@ -1049,18 +1048,9 @@ class MenuManager:
         return s
 
     @classmethod
-    def aslatin(cls, s):
-        if isinstance(s, str):
-            return s
-        elif isinstance(s, unicode):
-            return unicode(s).encode('latin-1', 'ignore')
-        else:
-            return str(s)
-
-    @classmethod
-    def asflatline(cls, s):
-        return ''.join(cls.aslatin(s).splitlines())
-
-    @classmethod
     def asflat(cls, s):
-        return cls.stripliterals(cls.asflatline(s))
+        return cls.stripliterals(''.join(cls._string_escape(s).splitlines()))
+
+    @classmethod
+    def _string_escape(cls, s):
+        return str(s.decode('unicode_escape').encode('latin1', 'ignore'))
