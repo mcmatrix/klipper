@@ -15,7 +15,7 @@ class VirtualSD:
         printer.register_event_handler(
             "menu:connect", self.handle_menu_connect)
         printer.register_event_handler(
-            "menu:item:__main __virtual_sdcard:populate",
+            "menu:item:__main __sdcard:populate",
             self.handle_sdcard_populate)
         # sdcard state
         sd = config.get('path')
