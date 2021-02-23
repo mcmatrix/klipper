@@ -241,7 +241,7 @@ class MenuContainer(MenuElement):
             # overwrite class attributes from config
             self._populate_event = config.get(
                 'populate_event', self._populate_event)
-        self.cursor = '>'
+        self._cursor = '>'
         self.__selected = None
         self._allitems = []
         self._names = []
