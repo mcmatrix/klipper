@@ -3326,7 +3326,7 @@ List of actions for menu element:
 #   See above for a description of these parameters.
 #populate_event:
 #   The name of list populate event. It's used only if you need to bind
-#   list item generation with some module.
+#   list items generation with some module.
 #   The default is empty. This parameter is optional.
 
 #[menu some_list some_command]
