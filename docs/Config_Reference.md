@@ -3284,14 +3284,14 @@ Read-only attributes for menu element:
 
 List of actions for menu element:
 * menu.back(force, update): will execute menu back command, optional
-  boolean parameters <force> and <update>.
-  * When <force> is set True then it will also stop editing. Default
+  boolean parameters \<force\> and \<update\>
+  * When \<force\> is set True then it will also stop editing. Default
     value is False
-  * When <update> is set False then parent container items are not
+  * When \<update\> is set False then parent container items are not
     updated. Default value is True
 * menu.exit(force) - will execute menu exit command, optional boolean
-  parameter <force> default value False
-  * When <force> is set True then it will also stop editing. Default
+  parameter \<force\>
+  * When \<force\> is set True then it will also stop editing. Default
     value is False
 
 ```
@@ -3311,8 +3311,6 @@ List of actions for menu element:
 #                 scrollable list.  Add to the list by creating menu
 #                 configurations using "some_list" as a prefix - for
 #                 example: [menu some_list some_item_in_the_list]
-#       vsdlist - same as 'list' but will append files from virtual sdcard
-#                 (will be removed in the future)
 #name:
 #   Name of menu item - evaluated as a template.
 #enable:
@@ -3326,6 +3324,10 @@ List of actions for menu element:
 #name:
 #enable:
 #   See above for a description of these parameters.
+#populate_event:
+#   The name of list populate event. It's used only if you need to bind
+#   list item generation with some module.
+#   The default is empty. This parameter is optional.
 
 #[menu some_list some_command]
 #type: command

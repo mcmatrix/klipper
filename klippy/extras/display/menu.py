@@ -177,10 +177,6 @@ class MenuElement(object):
             name = ' '.join([str(self._ns), name[1:]])
         return name.strip()
 
-    def send_event(self, event, *args):
-        return self.manager.send_event(
-            "item:%s:%s" % (self.get_ns(), str(event)), *args)
-
     def get_script(self, name):
         if name in self._scripts:
             return self._scripts[name]
@@ -240,7 +236,12 @@ class MenuContainer(MenuElement):
                 'Abstract MenuContainer cannot be instantiated directly')
         super(MenuContainer, self).__init__(manager, config, **kwargs)
         self._populate_cb = kwargs.get('populate', None)
-        self._cursor = '>'
+        self._populate_event = kwargs.get('populate_event', None)
+        if config is not None:
+            # overwrite class attributes from config
+            self._populate_event = config.get(
+                'populate_event', self._populate_event)
+        self.cursor = '>'
         self.__selected = None
         self._allitems = []
         self._names = []
@@ -343,7 +344,9 @@ class MenuContainer(MenuElement):
         if self._populate_cb is not None and callable(self._populate_cb):
             self._populate_cb(self)
         # send populate event
-        self.send_event('populate', self)
+        if self._populate_event:
+            self.manager.send_event(
+                "populate:%s" % str(self._populate_event), self)
 
     def update_items(self):
         _a = [(item, name) for item, name in self._allitems
@@ -713,8 +716,8 @@ class MenuManager:
         reactor.register_timer(self.timer_event, reactor.NOW)
 
     def handle_connect(self):
-        # send connect event
-        self.send_event('connect', self)
+        # send init event
+        self.send_event('init', self)
 
     def timer_event(self, eventtime):
         self.timeout_check(eventtime)
