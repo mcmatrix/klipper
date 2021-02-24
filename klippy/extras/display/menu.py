@@ -29,10 +29,12 @@ class MenuElement(object):
         self._index = kwargs.get('index', None)
         self._enable = kwargs.get('enable', True)
         self._name = kwargs.get('name', None)
+        self._event_source = kwargs.get('event_source', None)
         self._enable_tpl = self._name_tpl = None
         if config is not None:
             # overwrite class attributes from config
             self._index = config.getint('index', self._index)
+            self._event_source = config.get('event_source', self._event_source)
             self._name_tpl = manager.gcode_macro.load_template(
                 config, 'name', self._name)
             try:
@@ -177,6 +179,12 @@ class MenuElement(object):
             name = ' '.join([str(self._ns), name[1:]])
         return name.strip()
 
+    def send_event(self, event, *args):
+        sender = (self._event_source if self._event_source
+                  else self.get_ns())
+        return self.manager.send_event(
+            "%s:%s" % (str(event), str(sender)), *args)
+
     def get_script(self, name):
         if name in self._scripts:
             return self._scripts[name]
@@ -236,11 +244,6 @@ class MenuContainer(MenuElement):
                 'Abstract MenuContainer cannot be instantiated directly')
         super(MenuContainer, self).__init__(manager, config, **kwargs)
         self._populate_cb = kwargs.get('populate', None)
-        self._populate_event = kwargs.get('populate_event', None)
-        if config is not None:
-            # overwrite class attributes from config
-            self._populate_event = config.get(
-                'populate_event', self._populate_event)
         self._cursor = '>'
         self.__selected = None
         self._allitems = []
@@ -344,9 +347,7 @@ class MenuContainer(MenuElement):
         if self._populate_cb is not None and callable(self._populate_cb):
             self._populate_cb(self)
         # send populate event
-        if self._populate_event:
-            self.manager.send_event(
-                "populate:%s" % str(self._populate_event), self)
+        self.send_event('populate', self)
 
     def update_items(self):
         _a = [(item, name) for item, name in self._allitems

@@ -3318,16 +3318,17 @@ List of actions for menu element:
 #index:
 #   Position where an item needs to be inserted in list. By default
 #   the item is added at the end.
+#event_source:
+#   Allows overwriting the default event source name.
+#   Menu events are used internally to interact with event listeners.
+#   The default is empty. This parameter is optional.
+
 
 #[menu some_list]
 #type: list
 #name:
 #enable:
 #   See above for a description of these parameters.
-#populate_event:
-#   The name of the list populate event. It's used only if you need to bind
-#   list items generation with a module.
-#   The default is empty. This parameter is optional.
 
 #[menu some_list some_command]
 #type: command
