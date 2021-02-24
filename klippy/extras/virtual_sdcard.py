@@ -13,8 +13,6 @@ class VirtualSD:
         printer.register_event_handler("klippy:shutdown", self.handle_shutdown)
         # Register menu handlers
         printer.register_event_handler(
-            "menu:init", self.handle_menu_init)
-        printer.register_event_handler(
             "menu:populate:__vsdfiles", self.handle_sdcard_populate)
         # sdcard state
         sd = config.get('path')
@@ -54,8 +52,6 @@ class VirtualSD:
                          readpos, repr(data[:readcount]),
                          self.file_position, repr(data[readcount:]))
     # menu handlers
-    def handle_menu_init(self, manager):
-        manager.load_config(os.path.dirname(__file__), 'virtual_sdcard.cfg')
     def handle_sdcard_populate(self, item):
         if item is not None:
             files = self.get_file_list()

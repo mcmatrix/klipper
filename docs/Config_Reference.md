@@ -3318,8 +3318,8 @@ List of actions for menu element:
 #index:
 #   Position where an item needs to be inserted in list. By default
 #   the item is added at the end.
-#event_source:
-#   Allows overwriting the default event source name.
+#event_sender:
+#   Allows overwriting the default event sender name.
 #   Menu events are used internally to interact with event listeners.
 #   The default is empty. This parameter is optional.
 

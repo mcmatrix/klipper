@@ -29,12 +29,12 @@ class MenuElement(object):
         self._index = kwargs.get('index', None)
         self._enable = kwargs.get('enable', True)
         self._name = kwargs.get('name', None)
-        self._event_source = kwargs.get('event_source', None)
+        self._event_sender = kwargs.get('event_sender', None)
         self._enable_tpl = self._name_tpl = None
         if config is not None:
             # overwrite class attributes from config
             self._index = config.getint('index', self._index)
-            self._event_source = config.get('event_source', self._event_source)
+            self._event_sender = config.get('event_sender', self._event_sender)
             self._name_tpl = manager.gcode_macro.load_template(
                 config, 'name', self._name)
             try:
@@ -180,7 +180,7 @@ class MenuElement(object):
         return name.strip()
 
     def send_event(self, event, *args):
-        sender = (self._event_source if self._event_source
+        sender = (self._event_sender if self._event_sender
                   else self.get_ns())
         return self.manager.send_event(
             "%s:%s" % (str(event), str(sender)), *args)
@@ -699,8 +699,6 @@ class MenuManager:
         # register itself for printer callbacks
         self.printer.add_object('menu', self)
         self.printer.register_event_handler(
-            "klippy:ready", self.handle_ready)
-        self.printer.register_event_handler(
             "klippy:connect", self.handle_connect)
         # register for key events
         menu_keys.MenuKeys(config, self.key_event)
@@ -711,14 +709,10 @@ class MenuManager:
         # Load menu root
         self.root = self.lookup_menuitem(self._root)
 
-    def handle_ready(self):
+    def handle_connect(self):
         # start timer
         reactor = self.printer.get_reactor()
         reactor.register_timer(self.timer_event, reactor.NOW)
-
-    def handle_connect(self):
-        # send init event
-        self.send_event('init', self)
 
     def timer_event(self, eventtime):
         self.timeout_check(eventtime)
