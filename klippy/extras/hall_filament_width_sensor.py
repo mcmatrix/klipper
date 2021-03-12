@@ -147,10 +147,14 @@ class HallFilamentWidthSensor:
                     percentage = round(self.nominal_filament_dia**2
                                        / self.filament_width**2 * 100)
                     self.gcode.run_script("M221 S" + str(percentage))
+                    self.report_extrude_multiplier(percentage)
                 else:
                     self.gcode.run_script("M221 S100")
+                    self.report_extrude_multiplier(100)
+
         else:
             self.gcode.run_script("M221 S100")
+            self.report_extrude_multiplier(100)
             self.filament_array = []
 
         if self.is_active:
@@ -172,6 +176,7 @@ class HallFilamentWidthSensor:
         gcmd.respond_info("Filament width measurements cleared!")
         # Set extrude multiplier to 100%
         self.gcode.run_script_from_command("M221 S100")
+        self.report_extrude_multiplier(100)
 
     def cmd_M405(self, gcmd):
         response = "Filament width sensor Turned On"
@@ -197,6 +202,7 @@ class HallFilamentWidthSensor:
             self.filament_array = []
             # Set extrude multiplier to 100%
             self.gcode.run_script_from_command("M221 S100")
+            self.report_extrude_multiplier(100)
         gcmd.respond_info(response)
 
     def cmd_Get_Raw_Values(self, gcmd):
@@ -219,6 +225,11 @@ class HallFilamentWidthSensor:
     def cmd_log_disable(self, gcmd):
         self.is_log = False
         gcmd.respond_info("Filament width logging Turned Off")
+
+    def report_extrude_multiplier(self, percentage):
+        if self.is_log:
+            # Report extruder multiplier change to the host
+            self.gcode.respond_info("Extrude multiplier: %d" % (percentage, ))
 
 def load_config(config):
     return HallFilamentWidthSensor(config)
