@@ -180,10 +180,10 @@ class MenuElement(object):
         return name.strip()
 
     def send_event(self, event, *args):
-        sender = (self._event_sender if self._event_sender
-                  else self.get_ns())
-        return self.manager.send_event(
-            "%s:%s" % (str(event), str(sender)), *args)
+        if self._event_sender:
+            return self.manager.send_event(
+                "%s:%s" % (str(event), str(self._event_sender)), *args)
+        return []
 
     def get_script(self, name):
         if name in self._scripts:
