@@ -8,9 +8,8 @@
       
       
       
-      
       <link rel="icon" href="img/favicon.ico">
-      <meta name="generator" content="mkdocs-1.2.2, mkdocs-material-7.2.0">
+      <meta name="generator" content="mkdocs-1.2.3, mkdocs-material-8.1.3">
     
     
       
@@ -18,10 +17,10 @@
       
     
     
-      <link rel="stylesheet" href="assets/stylesheets/main.fe914879.min.css">
+      <link rel="stylesheet" href="assets/stylesheets/main.edf004c2.min.css">
       
         
-        <link rel="stylesheet" href="assets/stylesheets/palette.ba0d045b.min.css">
+        <link rel="stylesheet" href="assets/stylesheets/palette.e6a45f82.min.css">
         
       
     
@@ -31,21 +30,19 @@
         
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
         <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,400,400i,700%7CRoboto+Mono&display=fallback">
-        <style>:root{--md-text-font-family:"Roboto";--md-code-font-family:"Roboto Mono"}</style>
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
       
-    
     
     
       <link rel="stylesheet" href="_klipper3d/css/extra.css">
     
+    <script>__md_scope=new URL(".",location),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
-
   
 
 
   
-
   
 
 
@@ -68,9 +65,8 @@
     <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="white" data-md-color-accent="blue">
   
     
-    <script>function __prefix(e){return new URL(".",location).pathname+"."+e}function __get(e,t=localStorage){return JSON.parse(t.getItem(__prefix(e)))}</script>
     
-      <script>var palette=__get("__palette");if(null!==palette&&"object"==typeof palette.color)for(var key in palette.color)document.body.setAttribute("data-md-color-"+key,palette.color[key])</script>
+      <script>var palette=__md_get("__palette");if(palette&&"object"==typeof palette.color)for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)</script>
     
     <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
     <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
@@ -87,7 +83,10 @@
       
     </div>
     
-      <header class="md-header" data-md-component="header">
+    
+      
+
+<header class="md-header" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
     <a href="." title="Klipper documentation" class="md-header__button md-logo" aria-label="Klipper documentation" data-md-component="logo">
       
@@ -137,12 +136,61 @@
       </form>
     
     
+      <div class="md-header__option">
+        <div class="md-select">
+          
+          <button class="md-header__button md-icon" aria-label="Select language">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M16.36 14c.08-.66.14-1.32.14-2 0-.68-.06-1.34-.14-2h3.38c.16.64.26 1.31.26 2s-.1 1.36-.26 2m-5.15 5.56c.6-1.11 1.06-2.31 1.38-3.56h2.95a8.03 8.03 0 0 1-4.33 3.56M14.34 14H9.66c-.1-.66-.16-1.32-.16-2 0-.68.06-1.35.16-2h4.68c.09.65.16 1.32.16 2 0 .68-.07 1.34-.16 2M12 19.96c-.83-1.2-1.5-2.53-1.91-3.96h3.82c-.41 1.43-1.08 2.76-1.91 3.96M8 8H5.08A7.923 7.923 0 0 1 9.4 4.44C8.8 5.55 8.35 6.75 8 8m-2.92 8H8c.35 1.25.8 2.45 1.4 3.56A8.008 8.008 0 0 1 5.08 16m-.82-2C4.1 13.36 4 12.69 4 12s.1-1.36.26-2h3.38c-.08.66-.14 1.32-.14 2 0 .68.06 1.34.14 2M12 4.03c.83 1.2 1.5 2.54 1.91 3.97h-3.82c.41-1.43 1.08-2.77 1.91-3.97M18.92 8h-2.95a15.65 15.65 0 0 0-1.38-3.56c1.84.63 3.37 1.9 4.33 3.56M12 2C6.47 2 2 6.5 2 12a10 10 0 0 0 10 10 10 10 0 0 0 10-10A10 10 0 0 0 12 2z"/></svg>
+          </button>
+          <div class="md-select__inner">
+            <ul class="md-select__list">
+              
+                <li class="md-select__item">
+                  <a href="/" hreflang="en" class="md-select__link">
+                    English
+                  </a>
+                </li>
+                
+                <li class="md-select__item">
+                  <a href="/zh/" hreflang="zh" class="md-select__link">
+                    简体中文
+                  </a>
+                </li>
+                
+                <li class="md-select__item">
+                  <a href="/zh-Hant/" hreflang="zh-Hant" class="md-select__link">
+                    繁體中文
+                  </a>
+                </li>
+                
+                <li class="md-select__item">
+                  <a href="/hu/" hreflang="hu" class="md-select__link">
+                    Magyar
+                  </a>
+                </li>
+                
+                <li class="md-select__item">
+                  <a href="/it/" hreflang="it" class="md-select__link">
+                    Italiano
+                  </a>
+                </li>
+                
+                <li class="md-select__item">
+                  <a href="/fr/" hreflang="fr" class="md-select__link">
+                    Français
+                  </a>
+                </li>
+                
+            </ul>
+          </div>
+        </div>
+      </div>
+    
     
       <label class="md-header__button md-icon" for="__search">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.516 6.516 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5z"/></svg>
       </label>
-      
-<div class="md-search" data-md-component="search" role="dialog">
+      <div class="md-search" data-md-component="search" role="dialog">
   <label class="md-search__overlay" for="__search"></label>
   <div class="md-search__inner" role="search">
     <form class="md-search__form" name="search">
@@ -180,8 +228,7 @@
     
     
       <div class="md-header__source">
-        
-<a href="https://github.com/Klipper3d/klipper/" title="Go to repository" class="md-source" data-md-component="source">
+        <a href="https://github.com/Klipper3d/klipper/" title="Go to repository" class="md-source" data-md-component="source">
   <div class="md-source__icon md-icon">
     
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 496 512"><path d="M165.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6zm-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3zm44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9zM244.8 8C106.1 8 0 113.3 0 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C428.2 457.8 496 362.9 496 252 496 113.3 383.5 8 244.8 8zM97.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1zm-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7zm32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1zm-11.4-14.7c-1.6 1-1.6 3.6 0 5.9 1.6 2.3 4.3 3.3 5.6 2.3 1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2z"/></svg>
@@ -193,11 +240,14 @@
       </div>
     
   </nav>
+  
 </header>
     
     <div class="md-container" data-md-component="container">
       
       
+        
+          
         
       
       <main class="md-main" data-md-component="main">
@@ -222,8 +272,7 @@
   </label>
   
     <div class="md-nav__source">
-      
-<a href="https://github.com/Klipper3d/klipper/" title="Go to repository" class="md-source" data-md-component="source">
+      <a href="https://github.com/Klipper3d/klipper/" title="Go to repository" class="md-source" data-md-component="source">
   <div class="md-source__icon md-icon">
     
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 496 512"><path d="M165.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6zm-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3zm44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9zM244.8 8C106.1 8 0 113.3 0 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C428.2 457.8 496 362.9 496 252 496 113.3 383.5 8 244.8 8zM97.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1zm-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7zm32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1zm-11.4-14.7c-1.6 1-1.6 3.6 0 5.9 1.6 2.3 4.3 3.3 5.6 2.3 1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2z"/></svg>
@@ -341,10 +390,14 @@
       
         <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_7" type="checkbox" id="__nav_7" checked>
       
-      <label class="md-nav__link" for="__nav_7">
-        Installation and Configuration
-        <span class="md-nav__icon md-icon"></span>
-      </label>
+      
+      
+      
+        <label class="md-nav__link" for="__nav_7">
+          Installation and Configuration
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
       <nav class="md-nav" aria-label="Installation and Configuration" data-md-level="1">
         <label class="md-nav__title" for="__nav_7">
           <span class="md-nav__icon md-icon"></span>
@@ -353,6 +406,7 @@
         <ul class="md-nav__list" data-md-scrollfix>
           
             
+              
   
   
   
@@ -363,8 +417,10 @@
     </li>
   
 
+            
           
             
+              
   
   
   
@@ -374,10 +430,14 @@
       
         <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_7_2" type="checkbox" id="__nav_7_2" >
       
-      <label class="md-nav__link" for="__nav_7_2">
-        Configuration Reference
-        <span class="md-nav__icon md-icon"></span>
-      </label>
+      
+      
+      
+        <label class="md-nav__link" for="__nav_7_2">
+          Configuration Reference
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
       <nav class="md-nav" aria-label="Configuration Reference" data-md-level="2">
         <label class="md-nav__title" for="__nav_7_2">
           <span class="md-nav__icon md-icon"></span>
@@ -386,6 +446,7 @@
         <ul class="md-nav__list" data-md-scrollfix>
           
             
+              
   
   
   
@@ -396,8 +457,10 @@
     </li>
   
 
+            
           
             
+              
   
   
   
@@ -408,14 +471,17 @@
     </li>
   
 
+            
           
         </ul>
       </nav>
     </li>
   
 
+            
           
             
+              
   
   
   
@@ -426,8 +492,10 @@
     </li>
   
 
+            
           
             
+              
   
   
     
@@ -439,10 +507,14 @@
       
         <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_7_4" type="checkbox" id="__nav_7_4" checked>
       
-      <label class="md-nav__link" for="__nav_7_4">
-        Bed Level
-        <span class="md-nav__icon md-icon"></span>
-      </label>
+      
+      
+      
+        <label class="md-nav__link" for="__nav_7_4">
+          Bed Level
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
       <nav class="md-nav" aria-label="Bed Level" data-md-level="2">
         <label class="md-nav__title" for="__nav_7_4">
           <span class="md-nav__icon md-icon"></span>
@@ -451,6 +523,7 @@
         <ul class="md-nav__list" data-md-scrollfix>
           
             
+              
   
   
   
@@ -461,8 +534,10 @@
     </li>
   
 
+            
           
             
+              
   
   
   
@@ -473,8 +548,10 @@
     </li>
   
 
+            
           
             
+              
   
   
   
@@ -485,8 +562,10 @@
     </li>
   
 
+            
           
             
+              
   
   
   
@@ -497,8 +576,10 @@
     </li>
   
 
+            
           
             
+              
   
   
   
@@ -509,8 +590,10 @@
     </li>
   
 
+            
           
             
+              
   
   
     
@@ -534,6 +617,7 @@
       </a>
       
         
+
 <nav class="md-nav md-nav--secondary" aria-label="Table of contents">
   
   
@@ -604,9 +688,22 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#the-relative-reference-index" class="md-nav__link">
-    The Relative Reference Index
+  <a href="#configuring-the-zero-reference-position" class="md-nav__link">
+    Configuring the zero reference position
   </a>
+  
+    <nav class="md-nav" aria-label="Configuring the zero reference position">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-deprecated-relative_reference_index" class="md-nav__link">
+    The deprecated relative_reference_index
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
         
@@ -641,6 +738,19 @@
   <a href="#profiles" class="md-nav__link">
     Profiles
   </a>
+  
+    <nav class="md-nav" aria-label="Profiles">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#loading-the-default-profile" class="md-nav__link">
+    Loading the default profile
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
         
@@ -677,8 +787,10 @@
     </li>
   
 
+            
           
             
+              
   
   
   
@@ -689,14 +801,31 @@
     </li>
   
 
+            
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="Axis_Twist_Compensation.html" class="md-nav__link">
+        Axis Twist Compensation
+      </a>
+    </li>
+  
+
+            
           
         </ul>
       </nav>
     </li>
   
 
+            
           
             
+              
   
   
   
@@ -706,10 +835,14 @@
       
         <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_7_5" type="checkbox" id="__nav_7_5" >
       
-      <label class="md-nav__link" for="__nav_7_5">
-        Resonance Compensation
-        <span class="md-nav__icon md-icon"></span>
-      </label>
+      
+      
+      
+        <label class="md-nav__link" for="__nav_7_5">
+          Resonance Compensation
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
       <nav class="md-nav" aria-label="Resonance Compensation" data-md-level="2">
         <label class="md-nav__title" for="__nav_7_5">
           <span class="md-nav__icon md-icon"></span>
@@ -718,6 +851,7 @@
         <ul class="md-nav__list" data-md-scrollfix>
           
             
+              
   
   
   
@@ -728,8 +862,10 @@
     </li>
   
 
+            
           
             
+              
   
   
   
@@ -740,14 +876,17 @@
     </li>
   
 
+            
           
         </ul>
       </nav>
     </li>
   
 
+            
           
             
+              
   
   
   
@@ -758,8 +897,10 @@
     </li>
   
 
+            
           
             
+              
   
   
   
@@ -770,8 +911,10 @@
     </li>
   
 
+            
           
             
+              
   
   
   
@@ -781,10 +924,14 @@
       
         <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_7_8" type="checkbox" id="__nav_7_8" >
       
-      <label class="md-nav__link" for="__nav_7_8">
-        Command templates
-        <span class="md-nav__icon md-icon"></span>
-      </label>
+      
+      
+      
+        <label class="md-nav__link" for="__nav_7_8">
+          Command templates
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
       <nav class="md-nav" aria-label="Command templates" data-md-level="2">
         <label class="md-nav__title" for="__nav_7_8">
           <span class="md-nav__icon md-icon"></span>
@@ -793,6 +940,7 @@
         <ul class="md-nav__list" data-md-scrollfix>
           
             
+              
   
   
   
@@ -803,8 +951,10 @@
     </li>
   
 
+            
           
             
+              
   
   
   
@@ -815,14 +965,17 @@
     </li>
   
 
+            
           
         </ul>
       </nav>
     </li>
   
 
+            
           
             
+              
   
   
   
@@ -833,8 +986,10 @@
     </li>
   
 
+            
           
             
+              
   
   
   
@@ -845,8 +1000,10 @@
     </li>
   
 
+            
           
             
+              
   
   
   
@@ -857,20 +1014,38 @@
     </li>
   
 
+            
           
             
+              
   
   
   
     <li class="md-nav__item">
-      <a href="skew_correction.html" class="md-nav__link">
+      <a href="Skew_Correction.html" class="md-nav__link">
         Skew correction
       </a>
     </li>
   
 
+            
           
             
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="Exclude_Object.html" class="md-nav__link">
+        Exclude Objects
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
   
   
   
@@ -881,6 +1056,7 @@
     </li>
   
 
+            
           
         </ul>
       </nav>
@@ -901,10 +1077,14 @@
       
         <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_8" type="checkbox" id="__nav_8" >
       
-      <label class="md-nav__link" for="__nav_8">
-        Developer Documentation
-        <span class="md-nav__icon md-icon"></span>
-      </label>
+      
+      
+      
+        <label class="md-nav__link" for="__nav_8">
+          Developer Documentation
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
       <nav class="md-nav" aria-label="Developer Documentation" data-md-level="1">
         <label class="md-nav__title" for="__nav_8">
           <span class="md-nav__icon md-icon"></span>
@@ -913,6 +1093,7 @@
         <ul class="md-nav__list" data-md-scrollfix>
           
             
+              
   
   
   
@@ -923,8 +1104,10 @@
     </li>
   
 
+            
           
             
+              
   
   
   
@@ -935,8 +1118,10 @@
     </li>
   
 
+            
           
             
+              
   
   
   
@@ -947,8 +1132,10 @@
     </li>
   
 
+            
           
             
+              
   
   
   
@@ -959,8 +1146,10 @@
     </li>
   
 
+            
           
             
+              
   
   
   
@@ -971,8 +1160,10 @@
     </li>
   
 
+            
           
             
+              
   
   
   
@@ -983,8 +1174,10 @@
     </li>
   
 
+            
           
             
+              
   
   
   
@@ -995,8 +1188,10 @@
     </li>
   
 
+            
           
             
+              
   
   
   
@@ -1007,8 +1202,10 @@
     </li>
   
 
+            
           
             
+              
   
   
   
@@ -1019,18 +1216,21 @@
     </li>
   
 
+            
           
             
+              
   
   
   
     <li class="md-nav__item">
       <a href="Packaging.html" class="md-nav__link">
-        Packaging klipper
+        Packaging Klipper
       </a>
     </li>
   
 
+            
           
         </ul>
       </nav>
@@ -1051,10 +1251,14 @@
       
         <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_9" type="checkbox" id="__nav_9" >
       
-      <label class="md-nav__link" for="__nav_9">
-        Device Specific Documents
-        <span class="md-nav__icon md-icon"></span>
-      </label>
+      
+      
+      
+        <label class="md-nav__link" for="__nav_9">
+          Device Specific Documents
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
       <nav class="md-nav" aria-label="Device Specific Documents" data-md-level="1">
         <label class="md-nav__title" for="__nav_9">
           <span class="md-nav__icon md-icon"></span>
@@ -1063,6 +1267,7 @@
         <ul class="md-nav__list" data-md-scrollfix>
           
             
+              
   
   
   
@@ -1073,8 +1278,10 @@
     </li>
   
 
+            
           
             
+              
   
   
   
@@ -1085,8 +1292,10 @@
     </li>
   
 
+            
           
             
+              
   
   
   
@@ -1097,20 +1306,24 @@
     </li>
   
 
+            
           
             
+              
   
   
   
     <li class="md-nav__item">
-      <a href="beaglebone.html" class="md-nav__link">
+      <a href="Beaglebone.html" class="md-nav__link">
         Beaglebone
       </a>
     </li>
   
 
+            
           
             
+              
   
   
   
@@ -1121,8 +1334,24 @@
     </li>
   
 
+            
           
             
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="Bootloader_Entry.html" class="md-nav__link">
+        Bootloader Entry
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
   
   
   
@@ -1133,8 +1362,24 @@
     </li>
   
 
+            
           
             
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="CANBUS_Troubleshooting.html" class="md-nav__link">
+        CANBUS Troubleshooting
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
   
   
   
@@ -1145,21 +1390,39 @@
     </li>
   
 
+            
           
             
+              
   
   
   
     <li class="md-nav__item">
-      <a href="HallFilamentWidthSensor.html" class="md-nav__link">
+      <a href="Hall_Filament_Width_Sensor.html" class="md-nav__link">
         Hall filament width sensor
       </a>
     </li>
   
 
+            
           
         </ul>
       </nav>
+    </li>
+  
+
+    
+      
+      
+      
+
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="Sponsors.html" class="md-nav__link">
+        Sponsors
+      </a>
     </li>
   
 
@@ -1176,6 +1439,7 @@
                 <div class="md-sidebar__scrollwrap">
                   <div class="md-sidebar__inner">
                     
+
 <nav class="md-nav md-nav--secondary" aria-label="Table of contents">
   
   
@@ -1246,9 +1510,22 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#the-relative-reference-index" class="md-nav__link">
-    The Relative Reference Index
+  <a href="#configuring-the-zero-reference-position" class="md-nav__link">
+    Configuring the zero reference position
   </a>
+  
+    <nav class="md-nav" aria-label="Configuring the zero reference position">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-deprecated-relative_reference_index" class="md-nav__link">
+    The deprecated relative_reference_index
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
         
@@ -1283,6 +1560,19 @@
   <a href="#profiles" class="md-nav__link">
     Profiles
   </a>
+  
+    <nav class="md-nav" aria-label="Profiles">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#loading-the-default-profile" class="md-nav__link">
+    Loading the default profile
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
         
@@ -1324,23 +1614,23 @@
             <article class="md-content__inner md-typeset">
               
                 
-                  <a href="https://github.com/Klipper3d/klipper/blob/master/docs/Bed_Mesh.md" title="Edit this page" class="md-content__button md-icon">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20.71 7.04c.39-.39.39-1.04 0-1.41l-2.34-2.34c-.37-.39-1.02-.39-1.41 0l-1.84 1.83 3.75 3.75M3 17.25V21h3.75L17.81 9.93l-3.75-3.75L3 17.25z"/></svg>
-                  </a>
-                
-                
-                <h1 id="bed-mesh">Bed Mesh<a class="headerlink" href="#bed-mesh" title="Permanent link">&para;</a></h1>
-<p>The Bed Mesh module may be used to compensate for bed surface irregularties to
-achieve a better first layer across the entire bed.  It should be noted that
-software based correction will not achieve perfect results, it can only
+<a href="https://github.com/Klipper3d/klipper/blob/master/docs/Bed_Mesh.md" title="Edit this page" class="md-content__button md-icon">
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20.71 7.04c.39-.39.39-1.04 0-1.41l-2.34-2.34c-.37-.39-1.02-.39-1.41 0l-1.84 1.83 3.75 3.75M3 17.25V21h3.75L17.81 9.93l-3.75-3.75L3 17.25z"/></svg>
+</a>
+
+
+<h1 id="bed-mesh">Bed Mesh<a class="headerlink" href="#bed-mesh" title="Permanent link">&para;</a></h1>
+<p>The Bed Mesh module may be used to compensate for bed surface irregularities
+to achieve a better first layer across the entire bed.  It should be noted
+that software based correction will not achieve perfect results, it can only
 approximate the shape of the bed.  Bed Mesh also cannot compensate for
 mechanical and electrical issues.  If an axis is skewed or a probe is not
 accurate then the bed_mesh module will not receive accurate results from
 the probing process.</p>
 <p>Prior to Mesh Calibration you will need to be sure that your Probe's
 Z-Offset is calibrated.  If using an endstop for Z homing it will need
-to be calibrated as well.  See <a href="Probe_Calibrate.html">Probe_Calibrate</a>
-and Z_ENDSTOP_CALIBRATE in <a href="Manual_Level.html">Manual_Level</a> for more
+to be calibrated as well.  See <a href="Probe_Calibrate.html">Probe Calibrate</a>
+and Z_ENDSTOP_CALIBRATE in <a href="Manual_Level.html">Manual Level</a> for more
 information.</p>
 <h2 id="basic-configuration">Basic Configuration<a class="headerlink" href="#basic-configuration" title="Permanent link">&para;</a></h2>
 <h3 id="rectangular-beds">Rectangular Beds<a class="headerlink" href="#rectangular-beds" title="Permanent link">&para;</a></h3>
@@ -1349,9 +1639,9 @@ bed and a probe with an x-offset of 24 mm and y-offset of 5 mm.</p>
 <div class="highlight"><pre><span></span><code>[bed_mesh]
 speed: 120
 horizontal_move_z: 5
-mesh_min: 35,6
+mesh_min: 35, 6
 mesh_max: 240, 198
-probe_count: 5,3
+probe_count: 5, 3
 </code></pre></div>
 
 <ul>
@@ -1365,23 +1655,23 @@ probe_count: 5,3
   The Z coordinate the probe rises to prior to traveling between points.</li>
 </ul>
 <ul>
-<li><code>mesh_min: 35,6</code><br>
+<li><code>mesh_min: 35, 6</code><br>
   <em>Required</em><br>
   The first probed coordinate, nearest to the origin.  This coordinate
   is relative to the probe's location.</li>
 </ul>
 <ul>
-<li><code>mesh_max: 240,198</code><br>
+<li><code>mesh_max: 240, 198</code><br>
   <em>Required</em><br>
   The probed coordinate farthest farthest from the origin.  This is not
   necessarily the last point probed, as the probing process occurs in a
-  zig-zag fashion.  As with <code>mesh_min</code>, this coordiante is relative to
+  zig-zag fashion.  As with <code>mesh_min</code>, this coordinate is relative to
   the probe's location.</li>
 </ul>
 <ul>
-<li><code>probe_count: 5,3</code><br>
-  <em>Default Value: 3,3</em><br>
-  The number of points to probe on each axis, specified as x,y integer
+<li><code>probe_count: 5, 3</code><br>
+  <em>Default Value: 3, 3</em><br>
+  The number of points to probe on each axis, specified as X, Y integer
   values.  In this example 5 points will be probed along the X axis, with
   3 points along the Y axis, for a total of 15 probed points.  Note that
   if you wanted a square grid, for example 3x3, this could be specified
@@ -1402,7 +1692,7 @@ and 5 mm on Y.</p>
 speed: 120
 horizontal_move_z: 5
 mesh_radius: 75
-mesh_origin: 0,0
+mesh_origin: 0, 0
 round_probe_count: 5
 </code></pre></div>
 
@@ -1414,10 +1704,10 @@ round_probe_count: 5
   a radius larger than 76 would move the tool beyond the range of the printer.</li>
 </ul>
 <ul>
-<li><code>mesh_origin: 0,0</code><br>
-  <em>Default Value: 0,0</em><br>
+<li><code>mesh_origin: 0, 0</code><br>
+  <em>Default Value: 0, 0</em><br>
   The center point of the mesh.  This coordinate is relative to the probe's
-  location. While the default is 0,0, it may be useful to adjust the origin
+  location. While the default is 0, 0, it may be useful to adjust the origin
   in an effort to probe a larger portion of the bed.  See the illustration
   below.</li>
 </ul>
@@ -1430,7 +1720,7 @@ round_probe_count: 5
   that the center of the mesh is probed.</li>
 </ul>
 <p>The illustration below shows how the probed points are generated.  As you can see,
-setting the <code>mesh_origin</code> to (-10, 0) allows us to specifiy a larger mesh radius
+setting the <code>mesh_origin</code> to (-10, 0) allows us to specify a larger mesh radius
 of 85.</p>
 <p><img alt="bedmesh_round_basic" src="img/bedmesh_round_basic.svg" /></p>
 <h2 id="advanced-configuration">Advanced Configuration<a class="headerlink" href="#advanced-configuration" title="Permanent link">&para;</a></h2>
@@ -1438,7 +1728,7 @@ of 85.</p>
 example will build upon the basic rectangular bed configuration shown above.
 Each of the advanced options apply to round beds in the same manner.</p>
 <h3 id="mesh-interpolation">Mesh Interpolation<a class="headerlink" href="#mesh-interpolation" title="Permanent link">&para;</a></h3>
-<p>While its possible to sample the probed matrix directly using simple bilinear
+<p>While its possible to sample the probed matrix directly using simple bi-linear
 interpolation to determine the Z-Values between probed points, it is often
 useful to interpolate extra points using more advanced interpolation algorithms
 to increase mesh density.  These algorithms add curvature to the mesh,
@@ -1447,21 +1737,21 @@ lagrange and bicubic interpolation to accomplish this.</p>
 <div class="highlight"><pre><span></span><code>[bed_mesh]
 speed: 120
 horizontal_move_z: 5
-mesh_min: 35,6
+mesh_min: 35, 6
 mesh_max: 240, 198
-probe_count: 5,3
-mesh_pps: 2,3
+probe_count: 5, 3
+mesh_pps: 2, 3
 algorithm: bicubic
 bicubic_tension: 0.2
 </code></pre></div>
 
 <ul>
-<li><code>mesh_pps: 2,3</code><br>
-  <em>Default Value: 2,2</em><br>
+<li><code>mesh_pps: 2, 3</code><br>
+  <em>Default Value: 2, 2</em><br>
   The <code>mesh_pps</code> option is shorthand for Mesh Points Per Segment.  This
   option specifies how many points to interpolate for each segment along
-  the x and y axes.  Consider a 'segment' to be the space between each
-  probed point. Like <code>probe_count</code>, <code>mesh_pps</code> is specified as an x,y
+  the X and Y axes.  Consider a 'segment' to be the space between each
+  probed point. Like <code>probe_count</code>, <code>mesh_pps</code> is specified as an X, Y
   integer pair, and also may be specified a single integer that is applied
   to both axes.  In this example there are 4 segments along the X axis
   and 2 segments along the Y axis.  This evaluates to 8 interpolated
@@ -1492,16 +1782,16 @@ bicubic_tension: 0.2
 interpolated mesh.</p>
 <p><img alt="bedmesh_interpolated" src="img/bedmesh_interpolated.svg" /></p>
 <h3 id="move-splitting">Move Splitting<a class="headerlink" href="#move-splitting" title="Permanent link">&para;</a></h3>
-<p>Bed Mesh works by intercepting gcode move commands and applying a transform
-to their Z coordinate. Long moves must be and split into smaller moves
-to correctly follow the shape of the bed. The options below control the
-splitting behavior.</p>
+<p>Bed Mesh works by intercepting gcode move commands and applying a
+transform to their Z coordinate. Long moves must be split into smaller
+moves to correctly follow the shape of the bed. The options below
+control the splitting behavior.</p>
 <div class="highlight"><pre><span></span><code>[bed_mesh]
 speed: 120
 horizontal_move_z: 5
-mesh_min: 35,6
+mesh_min: 35, 6
 mesh_max: 240, 198
-probe_count: 5,3
+probe_count: 5, 3
 move_check_distance: 5
 split_delta_z: .025
 </code></pre></div>
@@ -1529,7 +1819,7 @@ split_delta_z: .025
 <p>Generally the default values for these options are sufficient, in fact the
 default value of 5mm for the <code>move_check_distance</code> may be overkill. However an
 advanced user may wish to experiment with these options in an effort to squeeze
-out the optimial first layer.</p>
+out the optimal first layer.</p>
 <h3 id="mesh-fade">Mesh Fade<a class="headerlink" href="#mesh-fade" title="Permanent link">&para;</a></h3>
 <p>When "fade" is enabled Z adjustment is phased out over a distance defined
 by the configuration.  This is accomplished by applying small adjustments
@@ -1543,9 +1833,9 @@ As such, fade is disabled by default.</p>
 <div class="highlight"><pre><span></span><code>[bed_mesh]
 speed: 120
 horizontal_move_z: 5
-mesh_min: 35,6
+mesh_min: 35, 6
 mesh_max: 240, 198
-probe_count: 5,3
+probe_count: 5, 3
 fade_start: 1
 fade_end: 10
 fade_target: 0
@@ -1576,41 +1866,63 @@ fade_target: 0
   example,  lets assume your homing position on the bed is an outlier, its
   .2 mm lower than the average probed height of the bed.  If the <code>fade_target</code>
   is 0, fade will shrink the print by an average of .2 mm across the bed.  By
-  setting the <code>fade_target</code> to .2, the homed area will expand by .2 mm, however
-  the rest of the bed will have an accurately sized.  Generally its a good idea
+  setting the <code>fade_target</code> to .2, the homed area will expand by .2 mm, however,
+  the rest of the bed will be accurately sized.  Generally its a good idea
   to leave <code>fade_target</code> out of the configuration so the average height of the
   mesh is used, however it may be desirable to manually adjust the fade target
   if one wants to print on a specific portion of the bed.</li>
 </ul>
-<h3 id="the-relative-reference-index">The Relative Reference Index<a class="headerlink" href="#the-relative-reference-index" title="Permanent link">&para;</a></h3>
-<p>Most probes are suceptible to drift, ie: inaccuracies in probing introduced by
-heat or interference.  This can make calculating the probe's z-offset
-challenging, particuarly at different bed temperatures.  As such, some printers
-use an endstop for homing the Z axis, and a probe for calibrating the mesh.
-These printers can benefit from configuring the relative reference index.</p>
+<h3 id="configuring-the-zero-reference-position">Configuring the zero reference position<a class="headerlink" href="#configuring-the-zero-reference-position" title="Permanent link">&para;</a></h3>
+<p>Many probes are susceptible to "drift", ie: inaccuracies in probing introduced
+by heat or interference.  This can make calculating the probe's z-offset
+challenging, particularly at different bed temperatures.  As such, some
+printers use an endstop for homing the Z axis and a probe for calibrating the
+mesh. In this configuration it is possible offset the mesh so that the (X, Y)
+<code>reference position</code> applies zero adjustment.  The <code>reference postion</code> should
+be the location on the bed where a
+<a href="./Manual_Level#calibrating-a-z-endstop">Z_ENDSTOP_CALIBRATE</a>
+paper test is performed.  The bed_mesh module provides the
+<code>zero_reference_position</code> option for specifying this coordinate:</p>
 <div class="highlight"><pre><span></span><code>[bed_mesh]
 speed: 120
 horizontal_move_z: 5
-mesh_min: 35,6
+mesh_min: 35, 6
 mesh_max: 240, 198
-probe_count: 5,3
-relative_reference_index: 7
+zero_reference_position: 125, 110
+probe_count: 5, 3
 </code></pre></div>
 
 <ul>
-<li><code>relative_reference_index: 7</code><br>
+<li><code>zero_reference_position:</code><br>
   <em>Default Value: None (disabled)</em><br>
-  When the probed points are generated they are each assigned an index.  You
-  can look up this index in klippy.log or by using BED_MESH_OUTPUT (see the
-  section on Bed Mesh GCodes below for more information).  If you assign an
-  index to the <code>relative_reference_index</code> option, the value probed at this
-  coordinate will replace the probe's z_offset.  This effectively makes
-  this coordinate the "zero" reference for the mesh.</li>
+  The <code>zero_reference_position</code> expects an (X, Y) coordinate matching that
+  of the <code>reference position</code> described above.  If the coordinate lies within
+  the mesh then the mesh will be offset so the reference position applies zero
+  adjustment.  If the coordinate lies outside of the mesh then the coordinate
+  will be probed after calibration, with the resulting z-value used as the
+  z-offset.  Note that this coordinate must NOT be in a location specified as
+  a <code>faulty_region</code> if a probe is necessary.</li>
 </ul>
-<p>When using the relative reference index, you should choose the index nearest
-to the spot on the bed where Z endstop calibration was done.  Note that
-when looking up the index using the log or BED_MESH_OUTPUT, you should use
-the coordinates listed under the "Probe" header to find the correct index.</p>
+<h4 id="the-deprecated-relative_reference_index">The deprecated relative_reference_index<a class="headerlink" href="#the-deprecated-relative_reference_index" title="Permanent link">&para;</a></h4>
+<p>Existing configurations using the <code>relative_reference_index</code> option must be
+updated to use the <code>zero_reference_position</code>.  The response to the
+<a href="#output">BED_MESH_OUTPUT PGP=1</a> gcode command will include the (X, Y)
+coordinate associated with the index;  this position may be used as the value for
+the <code>zero_reference_position</code>. The output will look similar to the following:</p>
+<div class="highlight"><pre><span></span><code>// bed_mesh: generated points
+// Index | Tool Adjusted | Probe
+// 0 | (1.0, 1.0) | (24.0, 6.0)
+// 1 | (36.7, 1.0) | (59.7, 6.0)
+// 2 | (72.3, 1.0) | (95.3, 6.0)
+// 3 | (108.0, 1.0) | (131.0, 6.0)
+... (additional generated points)
+// bed_mesh: relative_reference_index 24 is (131.5, 108.0)
+</code></pre></div>
+
+<p><em>Note:  The above output is also printed in <code>klippy.log</code> during initialization.</em></p>
+<p>Using the example above we see that the <code>relative_reference_index</code> is
+printed along with its coordinate.  Thus the <code>zero_reference_position</code>
+is <code>131.5, 108</code>.</p>
 <h3 id="faulty-regions">Faulty Regions<a class="headerlink" href="#faulty-regions" title="Permanent link">&para;</a></h3>
 <p>It is possible for some areas of a bed to report inaccurate results when
 probing due to a "fault" at specific locations.  The best example of this
@@ -1628,9 +1940,9 @@ will be averaged and inserted in the mesh as the Z value at the generated
 <div class="highlight"><pre><span></span><code>[bed_mesh]
 speed: 120
 horizontal_move_z: 5
-mesh_min: 35,6
+mesh_min: 35, 6
 mesh_max: 240, 198
-probe_count: 5,3
+probe_count: 5, 3
 faulty_region_1_min: 130.0, 0.0
 faulty_region_1_max: 145.0, 40.0
 faulty_region_2_min: 225.0, 0.0
@@ -1658,7 +1970,7 @@ are identified in green.</p>
 <p><img alt="bedmesh_interpolated" src="img/bedmesh_faulty_regions.svg" /></p>
 <h2 id="bed-mesh-gcodes">Bed Mesh Gcodes<a class="headerlink" href="#bed-mesh-gcodes" title="Permanent link">&para;</a></h2>
 <h3 id="calibration">Calibration<a class="headerlink" href="#calibration" title="Permanent link">&para;</a></h3>
-<p><code>BED_MESH_CALIBRATE PROFILE=name METHOD=[manual | automatic] [&lt;probe_parameter&gt;=&lt;value&gt;]
+<p><code>BED_MESH_CALIBRATE PROFILE=&lt;name&gt; METHOD=[manual | automatic] [&lt;probe_parameter&gt;=&lt;value&gt;]
  [&lt;mesh_parameter&gt;=&lt;value&gt;]</code><br>
 <em>Default Profile:  default</em><br>
 <em>Default Method:  automatic if a probe is detected, otherwise manual</em></p>
@@ -1683,28 +1995,40 @@ following parameters are available:</p>
 </ul>
 </li>
 <li>All beds:<ul>
-<li><code>RELATIVE_REFERNCE_INDEX</code></li>
-<li><code>ALGORITHM</code>
-See the configuration documentation above for details on how each parameter
-applies to the mesh.</li>
+<li><code>ALGORITHM</code></li>
 </ul>
 </li>
 </ul>
+<p>See the configuration documentation above for details on how each parameter
+applies to the mesh.</p>
 <h3 id="profiles">Profiles<a class="headerlink" href="#profiles" title="Permanent link">&para;</a></h3>
-<p><code>BED_MESH_PROFILE SAVE=name LOAD=name REMOVE=name</code></p>
+<p><code>BED_MESH_PROFILE SAVE=&lt;name&gt; LOAD=&lt;name&gt; REMOVE=&lt;name&gt;</code></p>
 <p>After a BED_MESH_CALIBRATE has been performed, it is possible to save the
 current mesh state into a named profile.  This makes it possible to load
 a mesh without re-probing the bed.  After a profile has been saved using
-<code>BED_MESH_PROFILE SAVE=name</code> the <code>SAVE_CONFIG</code> gcode may be executed
+<code>BED_MESH_PROFILE SAVE=&lt;name&gt;</code> the <code>SAVE_CONFIG</code> gcode may be executed
 to write the profile to printer.cfg.</p>
-<p>Profiles can be loaded by executing <code>BED_MESH_PROFILE LOAD=name</code>.</p>
+<p>Profiles can be loaded by executing <code>BED_MESH_PROFILE LOAD=&lt;name&gt;</code>.</p>
 <p>It should be noted that each time a BED_MESH_CALIBRATE occurs, the current
-state is automatically saved to the <em>default</em> profile.  If this profile
-exists it is automatically loaded when Klipper starts.  If this behavior
-is not desirable the <em>default</em> profile can be removed as follows:</p>
+state is automatically saved to the <em>default</em> profile. The <em>default</em> profile can be removed as follows:</p>
 <p><code>BED_MESH_PROFILE REMOVE=default</code></p>
 <p>Any other saved profile can be removed in the same fashion, replacing
 <em>default</em> with the named profile you wish to remove.</p>
+<h4 id="loading-the-default-profile">Loading the default profile<a class="headerlink" href="#loading-the-default-profile" title="Permanent link">&para;</a></h4>
+<p>Previous versions of <code>bed_mesh</code> always loaded the profile named <em>default</em>
+on startup if it was present.  This behavior has been removed in favor of
+allowing the user to determine when a profile is loaded.  If a user wishes to
+load the <code>default</code> profile it is recommended to add
+<code>BED_MESH_PROFILE LOAD=default</code> to either their <code>START_PRINT</code> macro or their
+slicer's "Start G-Code" configuration, whichever is applicable.</p>
+<p>Alternatively the old behavior of loading a profile at startup can be
+restored with a <code>[delayed_gcode]</code>:</p>
+<div class="highlight"><pre><span></span><code><span class="k">[delayed_gcode bed_mesh_init]</span>
+<span class="na">initial_duration</span><span class="o">:</span><span class="w"> </span><span class="s">.01</span>
+<span class="na">gcode</span><span class="o">:</span>
+<span class="w">  </span><span class="na">BED_MESH_PROFILE LOAD</span><span class="o">=</span><span class="s">default</span>
+</code></pre></div>
+
 <h3 id="output">Output<a class="headerlink" href="#output" title="Permanent link">&para;</a></h3>
 <p><code>BED_MESH_OUTPUT PGP=[0 | 1]</code></p>
 <p>Outputs the current mesh state to the terminal.  Note that the mesh itself
@@ -1744,11 +2068,6 @@ should be specified relative to the primary extruder.  That is, a positive
 X offset should be specified if the secondary extruder is mounted to the
 right of the primary extruder, and a positive Y offset should be specified
 if the secondary extruder is mounted "behind" the primary extruder.</p>
-                
-              
-              
-                
-
 
               
             </article>
@@ -1762,8 +2081,7 @@ if the secondary extruder is mounted "behind" the primary extruder.</p>
         
       </main>
       
-        
-<footer class="md-footer">
+        <footer class="md-footer">
   
     <nav class="md-footer__inner md-grid" aria-label="Footer">
       
@@ -1802,14 +2120,15 @@ if the secondary extruder is mounted "behind" the primary extruder.</p>
   
   <div class="md-footer-meta md-typeset">
     <div class="md-footer-meta__inner md-grid">
-      <div class="md-footer-copyright">
-        
-        Made with
-        <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
-          Material for MkDocs
-        </a>
-        
-      </div>
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
       
     </div>
   </div>
@@ -1819,10 +2138,10 @@ if the secondary extruder is mounted "behind" the primary extruder.</p>
     <div class="md-dialog" data-md-component="dialog">
       <div class="md-dialog__inner md-typeset"></div>
     </div>
-    <script id="__config" type="application/json">{"base": ".", "features": ["navigation.top", "search.suggest", "search.highlight", "search.share"], "translations": {"clipboard.copy": "Copy to clipboard", "clipboard.copied": "Copied to clipboard", "search.config.lang": "en", "search.config.pipeline": "trimmer, stopWordFilter", "search.config.separator": "[\\s\\-]+", "search.placeholder": "Search", "search.result.placeholder": "Type to start searching", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.term.missing": "Missing", "select.version.title": "Select version"}, "search": "assets/javascripts/workers/search.53c85856.min.js", "version": null}</script>
+    <script id="__config" type="application/json">{"base": ".", "features": ["navigation.top", "search.suggest", "search.highlight", "search.share"], "translations": {"clipboard.copy": "Copy to clipboard", "clipboard.copied": "Copied to clipboard", "search.config.lang": "en", "search.config.pipeline": "trimmer, stopWordFilter", "search.config.separator": "[\\s\\-]+", "search.placeholder": "Search", "search.result.placeholder": "Type to start searching", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.term.missing": "Missing", "select.version.title": "Select version"}, "search": "assets/javascripts/workers/search.0bbba5b5.min.js"}</script>
     
     
-      <script src="assets/javascripts/bundle.716f8af4.min.js"></script>
+      <script src="assets/javascripts/bundle.e1a181d9.min.js"></script>
       
     
   </body>
